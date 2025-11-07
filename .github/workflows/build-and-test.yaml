@@ -1,0 +1,59 @@
+name: Build & Test
+on:
+  push:
+    branches:
+      - '**'
+    paths-ignore:
+      - README.md
+      - LICENSE
+      - ".github/**/*"
+  pull_request:
+    branches:
+      - '**'
+    paths-ignore:
+      - README.md
+      - LICENSE
+      - ".github/**/*"
+jobs:
+  run:
+    name: Build and Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: 17
+
+      - name: Validate Wrapper
+        uses: gradle/actions/wrapper-validation@v3
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.minecraft/assets
+            .gradle
+            build/.gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Lint
+        run: chmod u+x ./gradlew && ./gradlew checkstyleMain
+
+      - name: Unit Tests
+        run: ./gradlew test
+
+      - name: Build
+        run: ./gradlew build
