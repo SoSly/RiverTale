@@ -6,7 +6,8 @@
   "refmap": "rivertale.refmap.json",
   "mixins": [
     "MultiNoiseBiomeSourceMixin",
-    "NoiseBasedAquiferMixin"
+    "NoiseBasedAquiferMixin",
+    "NoiseChunkMixin"
   ],
   "client": [
   ],
