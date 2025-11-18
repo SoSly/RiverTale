@@ -7,12 +7,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Initial project structure
-- Basic mod setup for Minecraft 1.20.1 with Forge 47.1.100
-- Development infrastructure (build system, checkstyle, CI/CD)
-
-## [0.1.0-alpha] - TBD
-
-### Added
-- Project initialization
+### Removed
+- Vanilla rivers should no longer generate

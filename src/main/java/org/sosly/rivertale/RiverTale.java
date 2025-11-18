@@ -1,16 +1,12 @@
 package org.sosly.rivertale;
 
 import com.mojang.logging.LogUtils;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
-import org.sosly.rivertale.command.RiverTaleDebugCommand;
 
 @Mod(RiverTale.MOD_ID)
 public class RiverTale {
@@ -24,8 +20,6 @@ public class RiverTale {
 
         modEventBus.addListener(this::setup);
         modEventBus.addListener(this::onLoadComplete);
-
-        MinecraftForge.EVENT_BUS.register(this);
     }
 
     private void setup(final FMLCommonSetupEvent event) {
@@ -36,10 +30,5 @@ public class RiverTale {
 
     private void onLoadComplete(final FMLLoadCompleteEvent event) {
         LOGGER.info("RiverTale loaded");
-    }
-
-    @SubscribeEvent
-    public void onRegisterCommands(RegisterCommandsEvent event) {
-        RiverTaleDebugCommand.register(event.getDispatcher());
     }
 }

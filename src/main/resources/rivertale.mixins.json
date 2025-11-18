@@ -5,9 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "rivertale.refmap.json",
   "mixins": [
-    "MultiNoiseBiomeSourceMixin",
-    "NoiseBasedAquiferMixin",
-    "NoiseChunkMixin"
+    "MultiNoiseBiomeSourceMixin"
   ],
   "client": [
   ],

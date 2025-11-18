@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Mixin(MultiNoiseBiomeSource.class)
@@ -27,7 +28,6 @@ public abstract class MultiNoiseBiomeSourceMixin {
         new ResourceLocation("minecraft", "frozen_river")
     );
 
-    private static boolean loggedOnce = false;
     private Climate.ParameterList<Holder<Biome>> cachedFiltered = null;
 
     @Shadow
@@ -40,24 +40,48 @@ public abstract class MultiNoiseBiomeSourceMixin {
             return;
         }
 
-        Climate.ParameterList<Holder<Biome>> original = cir.getReturnValue();
-        cachedFiltered = new Climate.ParameterList<>(
-            original.values().stream()
-                .filter(pair -> {
-                    Holder<Biome> biome = pair.getSecond();
-                    if (!biome.unwrapKey().isPresent()) {
-                        return true;
+        RiverTale.LOGGER.info("RiverTale: Removing river biomes from world generation...");
+
+        AtomicBoolean progressRunning = new AtomicBoolean(true);
+        Thread progressThread = new Thread(() -> {
+            try {
+                while (progressRunning.get()) {
+                    Thread.sleep(2000);
+                    if (progressRunning.get()) {
+                        System.out.print(".");
                     }
-                    ResourceKey<Biome> key = biome.unwrapKey().get();
-                    boolean isRiver = key.equals(RIVER) || key.equals(FROZEN_RIVER);
-                    if (isRiver && !loggedOnce) {
-                        RiverTale.LOGGER.info("RiverTale: Removed river biomes from world generation");
-                        loggedOnce = true;
-                    }
-                    return !isRiver;
-                })
-                .collect(Collectors.toList())
-        );
-        cir.setReturnValue(cachedFiltered);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        progressThread.setDaemon(true);
+        progressThread.start();
+
+        try {
+            Climate.ParameterList<Holder<Biome>> original = cir.getReturnValue();
+            cachedFiltered = new Climate.ParameterList<>(
+                original.values().stream()
+                    .filter(pair -> {
+                        Holder<Biome> biome = pair.getSecond();
+                        if (!biome.unwrapKey().isPresent()) {
+                            return true;
+                        }
+                        ResourceKey<Biome> key = biome.unwrapKey().get();
+                        return !key.equals(RIVER) && !key.equals(FROZEN_RIVER);
+                    })
+                    .collect(Collectors.toList())
+            );
+            cir.setReturnValue(cachedFiltered);
+        } finally {
+            progressRunning.set(false);
+            try {
+                progressThread.join(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            System.out.println();
+            RiverTale.LOGGER.info("RiverTale: River biomes removed successfully");
+        }
     }
 }
