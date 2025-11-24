@@ -105,9 +105,12 @@ public class ContinentCacheManager {
         continentId = result.getContinentId();
         ContinentalData data = result.getContinentalData();
 
-        continentCache.put(continentId, data);
+        ContinentalData existing = continentCache.putIfAbsent(continentId, data);
+        if (existing != null) {
+            data = existing;
+        }
         for (RegionKey visitedRegion : result.getVisitedRegions()) {
-            regionCache.put(visitedRegion, continentId);
+            regionCache.putIfAbsent(visitedRegion, continentId);
         }
 
         savedData.setDirty();

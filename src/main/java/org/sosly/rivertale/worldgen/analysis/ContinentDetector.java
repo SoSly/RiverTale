@@ -135,7 +135,7 @@ public class ContinentDetector {
             bestPoint = refineWithHeightSearch(bestPoint, continentsFunction, level);
         }
 
-        ContinentId continentId = computeContinentId(bestPoint);
+        ContinentId continentId = computeContinentId(visitedRegions);
         ContinentalData data = new ContinentalData(bestPoint, maxDepth, highPointCount, totalSamples);
 
         return new ContinentDetectionResult(data, visitedRegions, continentId);
@@ -213,12 +213,20 @@ public class ContinentDetector {
         return null;
     }
 
-    private ContinentId computeContinentId(BlockPos center) {
-        int quantizedX = (center.getX() / 64) * 64;
-        int quantizedZ = (center.getZ() / 64) * 64;
+    private ContinentId computeContinentId(Set<RegionKey> visitedRegions) {
+        RegionKey minRegion = visitedRegions.stream()
+            .min((a, b) -> {
+                int cmpX = Integer.compare(a.getRegionX(), b.getRegionX());
+                if (cmpX != 0) {
+                    return cmpX;
+                }
+                return Integer.compare(a.getRegionZ(), b.getRegionZ());
+            })
+            .orElseThrow();
+
         long hash = 17;
-        hash = hash * 31 + quantizedX;
-        hash = hash * 31 + quantizedZ;
+        hash = hash * 31 + minRegion.getRegionX();
+        hash = hash * 31 + minRegion.getRegionZ();
         return new ContinentId(hash);
     }
 }
