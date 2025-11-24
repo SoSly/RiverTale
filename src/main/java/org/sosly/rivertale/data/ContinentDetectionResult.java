@@ -2,6 +2,7 @@ package org.sosly.rivertale.data;
 
 import net.minecraft.core.BlockPos;
 
+import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -20,6 +21,14 @@ public class ContinentDetectionResult {
         this.continentId = continentId;
     }
 
+    public static ContinentDetectionResult empty() {
+        return new ContinentDetectionResult(null, Collections.emptySet(), ContinentId.OCEAN);
+    }
+
+    public boolean isOcean() {
+        return continentId.isOcean();
+    }
+
     public ContinentalData getContinentalData() {
         return continentalData;
     }
@@ -33,6 +42,9 @@ public class ContinentDetectionResult {
     }
 
     public BlockPos getCenter() {
+        if (continentalData == null) {
+            return null;
+        }
         return continentalData.getCenter();
     }
 }

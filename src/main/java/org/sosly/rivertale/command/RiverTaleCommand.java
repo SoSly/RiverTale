@@ -8,13 +8,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.data.ContinentalData;
-import org.sosly.rivertale.worldgen.analysis.ContinentalnessCalculator;
 import org.sosly.rivertale.worldgen.cache.ContinentCacheManager;
 
 @Mod.EventBusSubscriber
@@ -25,6 +25,51 @@ public class RiverTaleCommand {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
 
         dispatcher.register(Commands.literal("rivertale")
+            .then(Commands.literal("c")
+                .executes(context -> {
+                    CommandSourceStack source = context.getSource();
+                    ServerLevel level = source.getLevel();
+                    BlockPos pos = BlockPos.containing(source.getPosition());
+
+                    int terrainHeight = level.getChunkSource().getGenerator().getBaseHeight(
+                        pos.getX(), pos.getZ(),
+                        Heightmap.Types.WORLD_SURFACE_WG,
+                        level, level.getChunkSource().randomState()
+                    );
+
+                    RandomState randomState = level.getChunkSource().randomState();
+                    NoiseRouter router = randomState.router();
+
+                    DensityFunction.SinglePointContext ctxSea =
+                        new DensityFunction.SinglePointContext(pos.getX(), 63, pos.getZ());
+                    DensityFunction.SinglePointContext ctxTerrain =
+                        new DensityFunction.SinglePointContext(pos.getX(), terrainHeight, pos.getZ());
+
+                    double depthAtSea = router.depth().compute(ctxSea);
+                    double depthAtTerrain = router.depth().compute(ctxTerrain);
+                    double erosion = router.erosion().compute(ctxSea);
+                    double continents = router.continents().compute(ctxSea);
+                    double ridges = router.ridges().compute(ctxSea);
+
+                    source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
+                    source.sendSuccess(() -> Component.literal(String.format("Values at %d, %d:", pos.getX(), pos.getZ()))
+                        .withStyle(ChatFormatting.WHITE), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Terrain Height: %d", terrainHeight))
+                        .withStyle(ChatFormatting.WHITE), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Depth at Sea Level: %.3f", depthAtSea))
+                        .withStyle(ChatFormatting.WHITE), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Depth at Terrain: %.3f", depthAtTerrain))
+                        .withStyle(ChatFormatting.WHITE), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Erosion: %.3f", erosion))
+                        .withStyle(ChatFormatting.WHITE), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Continents: %.3f", continents))
+                        .withStyle(ChatFormatting.WHITE), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Ridges: %.3f", ridges))
+                        .withStyle(ChatFormatting.WHITE), false);
+
+                    return 1;
+                })
+            )
             .then(Commands.literal("evaluate")
                 .executes(context -> {
                     CommandSourceStack source = context.getSource();
@@ -39,39 +84,38 @@ public class RiverTaleCommand {
 
                     RandomState randomState = level.getChunkSource().randomState();
                     NoiseRouter router = randomState.router();
+                    DensityFunction continentsFunction = router.continents();
                     DensityFunction depthFunction = router.depth();
-                    DensityFunction erosionFunction = router.erosion();
 
                     DensityFunction.SinglePointContext ctx =
                         new DensityFunction.SinglePointContext(pos.getX(), 63, pos.getZ());
 
-                    double depth = depthFunction.compute(ctx);
-                    double erosion = erosionFunction.compute(ctx);
-                    final double continentalness = ContinentalnessCalculator.calculateContinentalness(depth, erosion);
-                    final double finalDepth = depth;
-                    final double finalErosion = erosion;
+                    double continentalness = continentsFunction.compute(ctx);
 
                     source.sendSuccess(() -> Component.literal("Continentalness: ")
                         .withStyle(ChatFormatting.GOLD)
-                        .append(Component.literal(String.format("%.3f ", continentalness))
-                            .withStyle(ChatFormatting.WHITE))
-                        .append(Component.literal(String.format("(depth: %.3f, erosion: %.3f)", finalDepth, finalErosion))
-                            .withStyle(ChatFormatting.GRAY)), false);
+                        .append(Component.literal(String.format("%.3f", continentalness))
+                            .withStyle(ChatFormatting.WHITE)), false);
 
                     source.sendSuccess(() -> Component.literal("Searching for continental center (cached detection)...")
                         .withStyle(ChatFormatting.GRAY), false);
 
-                    ContinentalData continentalData = cacheManager.getContinentalData(pos, depthFunction, erosionFunction);
+                    ContinentalData continentalData = cacheManager.getContinentalData(pos, continentsFunction, depthFunction);
 
-                    source.sendSuccess(() -> Component.literal("Estimated Continental Center: ")
-                        .withStyle(ChatFormatting.GOLD)
-                        .append(Component.literal(String.format("%d %d ",
-                            continentalData.getCenter().getX(), continentalData.getCenter().getZ()))
-                            .withStyle(ChatFormatting.WHITE))
-                        .append(Component.literal(String.format("(max: %.3f, high points: %d/%d)",
-                            continentalData.getMaxContinentalness(), continentalData.getHighPointCount(),
-                            continentalData.getTotalSamples()))
-                            .withStyle(ChatFormatting.GRAY)), false);
+                    if (continentalData == null) {
+                        source.sendSuccess(() -> Component.literal("No continent found (position is in ocean)")
+                            .withStyle(ChatFormatting.AQUA), false);
+                    } else {
+                        source.sendSuccess(() -> Component.literal("Estimated Continental Center: ")
+                            .withStyle(ChatFormatting.GOLD)
+                            .append(Component.literal(String.format("%d %d ",
+                                continentalData.getCenter().getX(), continentalData.getCenter().getZ()))
+                                .withStyle(ChatFormatting.WHITE))
+                            .append(Component.literal(String.format("(maxDepth: %.3f, high points: %d/%d)",
+                                continentalData.getMaxContinentalness(), continentalData.getHighPointCount(),
+                                continentalData.getTotalSamples()))
+                                .withStyle(ChatFormatting.GRAY)), false);
+                    }
 
                     Component interpretation = getInterpretation(continentalness);
                     source.sendSuccess(() -> Component.literal("Interpretation: ")

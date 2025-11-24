@@ -55,40 +55,53 @@ public class ContinentCacheManager {
      * Get continental data for a position, using cache when possible.
      *
      * @param pos position to query
-     * @param depthFunction Lithosphere's depth density function
-     * @param erosionFunction Lithosphere's erosion density function
-     * @return continental data with center and statistics
+     * @param continentsFunction Lithosphere's continents density function (for boundaries)
+     * @param depthFunction Lithosphere's depth density function (for finding peaks)
+     * @return continental data with center and statistics, or null if position is in ocean
      */
     public ContinentalData getContinentalData(BlockPos pos,
-                                               DensityFunction depthFunction,
-                                               DensityFunction erosionFunction) {
+                                               DensityFunction continentsFunction,
+                                               DensityFunction depthFunction) {
         RegionKey region = RegionKey.fromBlockPos(pos);
         ContinentId continentId = regionCache.get(region);
 
         if (continentId != null) {
+            if (continentId.isOcean()) {
+                return null;
+            }
             ContinentalData cached = continentCache.get(continentId);
             if (cached != null) {
                 return cached;
             }
         }
 
-        return computeAndCache(pos, depthFunction, erosionFunction);
+        return computeAndCache(pos, continentsFunction, depthFunction);
     }
 
     private synchronized ContinentalData computeAndCache(BlockPos pos,
-                                                          DensityFunction depthFunction,
-                                                          DensityFunction erosionFunction) {
+                                                          DensityFunction continentsFunction,
+                                                          DensityFunction depthFunction) {
         RegionKey region = RegionKey.fromBlockPos(pos);
         ContinentId continentId = regionCache.get(region);
 
         if (continentId != null) {
+            if (continentId.isOcean()) {
+                return null;
+            }
             ContinentalData cached = continentCache.get(continentId);
             if (cached != null) {
                 return cached;
             }
         }
 
-        ContinentDetectionResult result = detector.detectContinent(pos, depthFunction, erosionFunction, level);
+        ContinentDetectionResult result = detector.detectContinent(pos, continentsFunction, depthFunction, level);
+
+        if (result.isOcean()) {
+            regionCache.put(region, ContinentId.OCEAN);
+            savedData.setDirty();
+            return null;
+        }
+
         continentId = result.getContinentId();
         ContinentalData data = result.getContinentalData();
 
