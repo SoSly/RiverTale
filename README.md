@@ -1,40 +1,30 @@
 # RiverTale
 
-![Minecraft 1.20.1](https://img.shields.io/badge/Minecraft-1.20.1-green.svg)
-![Forge](https://img.shields.io/badge/Forge-47.1.100-blue.svg)
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Version](https://img.shields.io/badge/Version-0.1.0--alpha-red.svg)
+[![Build](https://github.com/SoSly/RiverTale/actions/workflows/build.yml/badge.svg)](https://github.com/SoSly/RiverTale/actions/workflows/build.yml)
+![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green)
+[![Forge](https://img.shields.io/badge/Forge-47.1.100-orange)](https://files.minecraftforge.net/)
+[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+![Version](https://img.shields.io/github/v/release/SoSly/RiverTale?include_prereleases&color=yellow)
 
-**RiverTale** fixes how rivers flow in Minecraft. Currently, rivers just go wherever they want. RiverTale makes rivers flow realistically from high elevation towards the ocean, including elevation changes, basins, and natural water flow patterns.
+Vanilla Minecraft rivers are canals—arbitrary water channels that cut across continents from ocean to ocean, telling you nothing about the world. RiverTale makes rivers *mean* something. A river exists because the landscape demands it. Following it downstream leads to the sea because that's where gravity takes water.
 
-## Status
+## Vision
 
-**This mod is in early alpha development.** Expect bugs, incomplete features, and breaking changes.
+Rivers are consequences of terrain, not decorations imposed on it. A player standing in a river should be able to look around, see the landscape, and understand *why* the river is here. Narrow streams in the highlands widen as tributaries join, becoming broad rivers that empty into the ocean. Rivers are maps drawn by the terrain itself.
 
-## Features
+## Current Features
 
-Currently in development:
-- Realistic river generation from high points to ocean
-- Elevation-based water flow
-- River basins and natural pooling
-- Integration with vanilla terrain generation
+None yet. This mod is in early development.
 
 ## Requirements
 
-- Minecraft 1.20.1
-- Forge 47.1.100 or higher
-- Java 17
-
-## Installation
-
-1. Download the latest release from [CurseForge](#) or [Modrinth](#)
-2. Place the mod JAR in your `mods` folder
-3. Launch Minecraft with Forge
+- **Minecraft:** 1.20.1
+- **Forge:** 47.1.100 or higher
 
 ## Development
 
-See [ROADMAP.md](ROADMAP.md) for planned features and [CHANGELOG.md](CHANGELOG.md) for version history.
+Track what's coming in the [roadmap](ROADMAP.md) or see what's changed in the [changelog](CHANGELOG.md).
 
 ## License
 
-This mod is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+MIT—See [LICENSE](LICENSE) for details
