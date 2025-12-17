@@ -1,6 +1,7 @@
 package org.sosly.rivertale.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -15,6 +16,9 @@ import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.data.ContinentalData;
+import org.sosly.rivertale.poc.carve.CarveConfig;
+import org.sosly.rivertale.poc.carve.ChannelCarver;
+import org.sosly.rivertale.poc.carve.RiverCarveExecutor;
 import org.sosly.rivertale.worldgen.cache.ContinentCacheManager;
 
 @Mod.EventBusSubscriber
@@ -128,6 +132,73 @@ public class RiverTaleCommand {
 
                     return 1;
                 })
+            )
+            .then(Commands.literal("poc")
+                .then(Commands.literal("carve")
+                    .then(Commands.argument("entryX", IntegerArgumentType.integer())
+                        .then(Commands.argument("entryZ", IntegerArgumentType.integer())
+                            .then(Commands.argument("exitX", IntegerArgumentType.integer())
+                                .then(Commands.argument("exitZ", IntegerArgumentType.integer())
+                                    .then(Commands.argument("distanceToOcean", IntegerArgumentType.integer(0))
+                                        .then(Commands.argument("width", IntegerArgumentType.integer(CarveConfig.MIN_WIDTH, CarveConfig.MAX_WIDTH))
+                                            .executes(context -> {
+                                                CommandSourceStack source = context.getSource();
+                                                ServerLevel level = source.getLevel();
+
+                                                int entryX = IntegerArgumentType.getInteger(context, "entryX");
+                                                int entryZ = IntegerArgumentType.getInteger(context, "entryZ");
+                                                int exitX = IntegerArgumentType.getInteger(context, "exitX");
+                                                int exitZ = IntegerArgumentType.getInteger(context, "exitZ");
+                                                int distanceToOcean = IntegerArgumentType.getInteger(context, "distanceToOcean");
+                                                int width = IntegerArgumentType.getInteger(context, "width");
+
+                                                int targetElevation = CarveConfig.SEA_LEVEL + (distanceToOcean * CarveConfig.ELEVATION_PER_CELL);
+                                                source.sendSuccess(() -> Component.literal(String.format(
+                                                    "Starting carve: (%d, %d) → (%d, %d), target Y=%d, width=%d",
+                                                    entryX, entryZ, exitX, exitZ, targetElevation, width))
+                                                    .withStyle(ChatFormatting.YELLOW), false);
+
+                                                RiverCarveExecutor executor = new RiverCarveExecutor(
+                                                    level, entryX, entryZ, exitX, exitZ, distanceToOcean, width
+                                                );
+
+                                                long startTime = System.currentTimeMillis();
+                                                executor.execute();
+                                                long endTime = System.currentTimeMillis();
+                                                long elapsed = endTime - startTime;
+
+                                                int channelDepth = ChannelCarver.calculateChannelDepth(width);
+
+                                                source.sendSuccess(() -> Component.literal("River carved successfully!")
+                                                    .withStyle(ChatFormatting.GREEN), false);
+                                                source.sendSuccess(() -> Component.literal(String.format("Entry: (%d, %d) → Exit: (%d, %d)",
+                                                    entryX, entryZ, exitX, exitZ))
+                                                    .withStyle(ChatFormatting.WHITE), false);
+                                                source.sendSuccess(() -> Component.literal(String.format("Target elevation: Y=%d (distanceToOcean=%d)",
+                                                    targetElevation, distanceToOcean))
+                                                    .withStyle(ChatFormatting.AQUA), false);
+                                                source.sendSuccess(() -> Component.literal(String.format("Width: %d blocks, Depth: %d blocks",
+                                                    width, channelDepth))
+                                                    .withStyle(ChatFormatting.YELLOW), false);
+                                                source.sendSuccess(() -> Component.literal(String.format("Blocks removed: %,d",
+                                                    executor.getBlocksRemoved()))
+                                                    .withStyle(ChatFormatting.GRAY), false);
+                                                source.sendSuccess(() -> Component.literal(String.format("Blocks placed: %,d",
+                                                    executor.getBlocksPlaced()))
+                                                    .withStyle(ChatFormatting.GRAY), false);
+                                                source.sendSuccess(() -> Component.literal(String.format("Elapsed time: %,dms",
+                                                    elapsed))
+                                                    .withStyle(ChatFormatting.DARK_GRAY), false);
+
+                                                return 1;
+                                            })
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
             )
         );
     }

@@ -2,7 +2,7 @@
 type: poc
 validates: "[[River Terrain System]]"
 assumption: "The Default River feature can carve visually correct river channels given CBN-style inputs"
-status: pending
+status: success
 ---
 
 ## Goal
@@ -130,8 +130,77 @@ If carving produces unusable results, we need to revisit:
 
 ## Results
 
-*Not yet run.*
+### Test Runs
+
+**Test 1: Wide river at terrain elevation**
+```
+Entry: (400, -100) → Exit: (300, 0)
+Target elevation: Y=91 (distanceToOcean=7)
+Width: 24 blocks, Depth: 6 blocks
+Blocks removed: 859,053
+Blocks placed: 15,191,976
+Elapsed time: 7,063ms
+```
+
+**Test 2: Long river with high target elevation**
+```
+Entry: (700, -100) → Exit: (300, 0)
+Target elevation: Y=99 (distanceToOcean=9)
+Width: 8 blocks, Depth: 4 blocks
+Blocks removed: 66,382
+Blocks placed: 134,341,341
+Elapsed time: 40,034ms
+```
+
+### Visual Quality Assessment
+
+**Rating: Good**
+
+Rivers are clearly recognizable as intentional terrain features. The meandering path creates natural-looking curves. Channel cross-sections are rounded, not rectangular. Valley walls and embankments slope gradually.
+
+### Technical Correctness Assessment
+
+**Rating: Success**
+
+- Stone placed correctly for embankments and riverbed
+- Parabolic depth profile produces rounded channels
+- No floating blocks observed
+- Slopes calculated correctly based on distance from channel
+
+### Performance Assessment
+
+**Rating: Acceptable (with caveats)**
+
+Performance is dominated by embankment volume, not river length. A 141-block river in flat terrain completes in ~7 seconds. A 414-block river requiring massive embankment (134M blocks) takes ~40 seconds. This is acceptable for a debug command but highlights that embankment calculation needs optimization for production worldgen.
+
+### Implementation Notes
+
+Several issues were discovered and fixed during testing:
+
+1. **Heightmap off-by-one**: `level.getHeight()` returns the Y of the first air block, not the surface block. Solution: subtract 1 from heightmap queries.
+
+2. **Operation order matters**: Embankments must be placed before carving, otherwise the carving creates low spots that embankment then tries to fill.
+
+3. **Search radius explosion**: Initial implementation used `VALLEY_SLOPE × MAX_VALLEY_RISE` for search radius, resulting in 900+ block radius and billions of heightmap queries. Solution: cap search extension to 60 blocks.
+
+4. **Valley skipping channel**: Valley carver initially skipped positions within the channel, leaving blocks above water surface uncarved. Solution: let valley carver handle all positions, using water surface as floor within channel.
 
 ## Conclusions
 
-*Pending results.*
+**The assumption is validated.** The channel carving algorithm produces visually correct river channels when given CBN-style inputs. The core terrain modification logic works correctly:
+
+- Rounded channel cross-sections via parabolic depth profile
+- Valley carving removes terrain above target elevation with gradual slopes
+- Embankment building fills terrain below target elevation with stone
+- Path interpolation with noise-based meandering creates natural curves
+- Riverbed stone placement provides correct material for surface rules
+
+**Ready for integration.** The algorithm can be adapted for worldgen context, where:
+- Heightmap queries are replaced by direct block access during generation
+- Block updates are batched or eliminated (no neighbor notifications needed)
+- Per-chunk processing replaces whole-river processing
+
+**Future improvements identified:**
+- Embankment aggressiveness could be tuned (currently fills large areas)
+- Performance optimization for production use
+- Consider capping maximum embankment height to prevent excessive filling
