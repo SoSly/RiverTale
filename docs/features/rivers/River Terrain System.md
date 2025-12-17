@@ -1,5 +1,15 @@
 The Cell-based Network (CBN) determines WHERE rivers flow—which cells connect, flow direction, distance to ocean. The River Terrain System determines HOW rivers appear in the world—terrain modification that creates river valleys and channels before Minecraft applies surface decoration.
 
+## Key Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| River-authoritative terrain | Rivers dictate elevation; terrain is carved or filled to match | Guarantees rivers descend toward ocean regardless of local terrain noise. Alternative (terrain-authoritative) would cause rivers to pool or reverse in valleys. |
+| Feature-based architecture | Subcells select features by type; features handle terrain modification | Extensible—new features (waterfalls, rapids) register without changing core logic. Alternative (monolithic carver) would require extensive conditionals. |
+| Inject at buildSurface HEAD | Mixin runs before vanilla surface rules | Surface rules automatically apply biome materials (grass, sand) to our modifications. Alternative injection points would require manual surface handling. |
+| Stone for embankments | Fill with `defaultBlock` (stone) | Surface rules only decorate stone. Using dirt or other blocks would leave embankments visually distinct from natural terrain. |
+| Deterministic feature selection | Seeded noise picks features from eligible set | Same world seed = identical rivers. No exploration-order artifacts. |
+
 ## The Core Problem
 
 Minecraft's terrain doesn't know about rivers. Density functions shape continents, mountains, and valleys based on noise—but rivers need to follow drainage networks that span thousands of blocks. A river 50 cells from the ocean needs to be higher than one 10 cells away, regardless of what the terrain happens to be doing.
@@ -20,11 +30,48 @@ River terrain modification happens at a specific moment in Minecraft's chunk gen
 4. **CARVERS** — Caves carved
 5. **FEATURES** — Vegetation, structures, water placement
 
-This timing is critical for two reasons:
+This timing matters because **surface rules see our modifications.** When we carve a valley or build an embankment, the modified terrain exists before surface rules run. Vanilla surface rules examine terrain and apply appropriate materials—grass on dirt in plains, sand in deserts, gravel in mountains. Our embankments receive the same treatment automatically. We place stone; surface rules add the grass on top.
 
-**Surface rules see our modifications.** When we carve a valley or build an embankment, the modified terrain exists before surface rules run. Vanilla surface rules examine terrain and apply appropriate materials—grass on dirt in plains, sand in deserts, gravel in mountains. Our embankments get the same treatment automatically. We place stone; surface rules add the grass on top.
+## Configuration
 
-**Caves respect our riverbeds.** Cave carvers run after our modifications. They see our river channels as existing terrain and carve around them (mostly). A cave might still intersect a river, but it won't systematically undermine every riverbed.
+These parameters control terrain modification behavior. They affect newly generated terrain only.
+
+| Parameter | Default | Range | Effect |
+|-----------|---------|-------|--------|
+| `elevationPerCell` | 4 | 1-10 | Blocks of elevation rise per cell inland from ocean |
+| `minChannelDepth` | 3 | 1-5 | Minimum blocks carved below water surface |
+| `maxChannelDepth` | 8 | 5-20 | Maximum blocks carved below water surface |
+| `minWidth` | 2 | 2-5 | Narrowest possible river (source streams) |
+| `maxWidth` | 40 | 10-80 | Widest possible river (continental rivers) |
+| `embankmentSlope` | 40 | 20-100 | Horizontal distance over which embankments rise |
+| `valleySlope` | 30 | 10-50 | Horizontal distance over which valley walls rise |
+| `meanderScale` | 0.3 | 0.0-1.0 | Lateral displacement magnitude for river curves |
+
+Channel depth scales with river width: wider rivers carve deeper channels within the min/max range.
+
+## Cell Data Consumption
+
+This system consumes cell data from the Cell-based Network. See `Cell-based Networks.md` "What cells provide" (lines 356-372) for the complete interface.
+
+**Fields we use:**
+
+| Field | Type | How We Use It |
+|-------|------|---------------|
+| `riverPath` | List of subcell coordinates | Determines which subcells contain river segments and in what order |
+| `distanceToOcean` | int | Calculates target elevation: `sea_level + (distance × elevationPerCell)` |
+| `classification` | enum (LAND/OCEAN/COASTAL) | COASTAL cells terminate rivers at the coastline subcell, not an edge |
+| `primaryOutput` | FlowDirection | Determines exit edge for path interpolation |
+| `isBasin` | boolean | Basin cells are terminuses—rivers end in a pool, not at ocean |
+
+**Fields we don't directly use:**
+
+- `density` — Cell-based Networking uses this for flow calculation; we use the resulting `riverPath`
+- `secondaryOutputs` — Creates additional river sources, but each source is a separate path we process independently
+- `upstreamCount` — Width calculation uses this, but that logic lives in a layer between CBN and terrain modification (not documented here)
+
+**Cache availability:**
+
+Cell data is computed and cached during chunk generation before our mixin runs. If a cell isn't cached (shouldn't happen in normal flow), the query triggers computation. This adds latency to the first chunk touching that cell but doesn't break correctness.
 
 ## Feature-Based Architecture
 
@@ -86,25 +133,6 @@ Two features must exist for the system to function:
 
 Without these, rivers cannot be generated. All other features are optional extensions.
 
-### Planned Features
-
-Future features will register into this system:
-
-| Feature | Type | Selection Criteria |
-|---------|------|-------------------|
-| Spring | Source | Default source in temperate biomes |
-| Glacial Melt | Source | Source in cold/mountain biomes |
-| Source Lake | Source | Rare; small pond at river origin |
-| Rapids | Midstream | Moderate elevation drop (6-10 blocks per subcell) |
-| Waterfall | Midstream | Steep elevation drop (10+ blocks per subcell) |
-| Midstream Lake | Midstream | Rare; minimal elevation drop, wide valley |
-| Confluence Lake | Confluence | Rare; weighted higher with 3+ inlets |
-| Estuary | Mouth | Coastal mouth in flat terrain |
-| Delta | Mouth | Coastal mouth with sediment deposits |
-| Bay | Mouth | Coastal mouth in hilly terrain |
-
-These features are not required for initial implementation. The architecture supports adding them by registering new feature handlers.
-
 ## Default River Feature
 
 The Default River feature handles standard midstream subcells. It implements the baseline terrain modification that all rivers share.
@@ -140,32 +168,66 @@ Terrain modification removes any block in its path—stone, dirt, existing featu
 
 ## Confluence Feature
 
-The Confluence feature handles subcells where two or more rivers merge. It must solve a geometric problem: multiple entry points flowing to a single exit.
+The Confluence feature handles subcells where two or more rivers merge. It solves the geometric problem of routing multiple entry points to a single exit.
 
-### Merging Paths
+### Merge Point Calculation
 
-Each inlet has a defined entry point at the subcell edge. The confluence must:
+When multiple inlets arrive (potentially from opposing directions), the merge point is calculated deterministically:
 
-1. Route each inlet path toward a merge point within the subcell
-2. Carve appropriate channels for each inlet based on its width
-3. Combine the paths into a single channel leading to the exit
-4. Widen the post-merge channel to reflect accumulated flow
+```
+merge_x = weighted_average(inlet_x_positions, inlet_widths)
+merge_z = weighted_average(inlet_z_positions, inlet_widths)
 
-The merge point location uses weighted averaging of inlet positions, biased toward the exit direction.
+// Bias toward exit
+bias = 0.3
+merge_x = merge_x + bias × (exit_x - merge_x)
+merge_z = merge_z + bias × (exit_z - merge_z)
+```
+
+Wider inlets have more influence on merge point position. The bias toward the exit prevents merge points from landing awkwardly far from the outflow.
+
+The specific algorithm doesn't matter as much as its determinism—the same inputs must produce the same merge point every time.
+
+### Multi-Inlet Handling
+
+For each inlet:
+
+1. Route a path from inlet entry point to the merge point
+2. Carve a channel appropriate to that inlet's width
+3. Apply the same valley/embankment logic as Default River
+
+All inlet paths terminate at the merge point. From there, a single channel continues to the exit.
+
+| Inlet Count | Merge Behavior |
+|-------------|----------------|
+| 2 inlets | Standard Y-junction |
+| 3 inlets | Three paths converging to central point |
 
 ### Width Handling
 
-At a confluence, width follows the "max plus bonus" rule:
+Post-merge width follows the "max plus bonus" rule:
 
 ```
-post_merge_width = max(inlet_widths) + small_bonus
+post_merge_width = max(inlet_widths) + width_bonus
 ```
 
-The widest incoming river dominates. The bonus reflects additional flow from the merger without causing unrealistic growth.
+The widest incoming river dominates. The bonus (typically 10-20% of the second-widest inlet) reflects additional flow without causing unrealistic growth.
 
 ### Channel Shape
 
-The confluence carves a wider area than a standard segment to accommodate the merging flows. The transition from multiple channels to single channel should be gradual, not abrupt.
+The confluence carves a wider area than standard segments to accommodate the merging flows:
+
+```
+confluence_area = circle(merge_point, radius = post_merge_width × 1.5)
+```
+
+This creates a natural "pooling" effect where rivers meet before narrowing back to the exit channel. The transition from multiple channels to single channel should be gradual, not abrupt.
+
+### Elevation at Confluence
+
+All inlets must arrive at the same elevation—the confluence's target elevation. Both Pass 1 and Pass 2 rivers share elevation context (Pass 2 inherits baseline from parent Pass 1 cell), so steep drops from pass differences alone shouldn't occur.
+
+For steep elevation differences between inlets from other factors (unusual terrain, basin edges), the higher inlet's final subcells use gradual descent to reach the confluence elevation. Future waterfall features will replace this with vertical drops where appropriate.
 
 ## River Elevation
 
@@ -300,19 +362,6 @@ There is no inter-chunk communication during terrain modification. Determinism g
 
 **Feature selection is cheap.** Evaluating conditions and rolling weighted noise is trivial compared to terrain modification.
 
-## Configuration
-
-| Parameter | Default | Effect |
-|-----------|---------|--------|
-| `elevationPerCell` | 4 | Blocks of rise per cell inland |
-| `minWidth` | 2 | Narrowest possible river |
-| `maxWidth` | 40 | Widest possible river |
-| `carveDepth` | 5 | Blocks below water surface to carve |
-| `embankmentWidth` | 40 | How wide embankment slopes extend |
-| `meanderScale` | 0.3 | How much rivers curve (0 = straight) |
-
-Configuration affects newly generated terrain only.
-
 ## Pillar Verification
 
 ### Rivers Are Consequences
@@ -346,3 +395,22 @@ Terrain modification uses cached CBN data and seeded noise for feature selection
 - Place water blocks (feature generation's job)
 - Apply surface materials (surface rules do this automatically)
 - Implement advanced features like Rapids, Waterfalls, or Lakes (future registrations)
+
+---
+
+## Appendix: Future Features
+
+These features are not required for initial implementation. They register into the feature-based architecture when implemented.
+
+| Feature | Type | Selection Criteria |
+|---------|------|-------------------|
+| Spring | Source | Default source in temperate biomes |
+| Glacial Melt | Source | Source in cold/mountain biomes |
+| Source Lake | Source | Rare; small pond at river origin |
+| Rapids | Midstream | Moderate elevation drop (6-10 blocks per subcell) |
+| Waterfall | Midstream | Steep elevation drop (10+ blocks per subcell) |
+| Midstream Lake | Midstream | Rare; minimal elevation drop, wide valley |
+| Confluence Lake | Confluence | Rare; weighted higher with 3+ inlets |
+| Estuary | Mouth | Coastal mouth in flat terrain |
+| Delta | Mouth | Coastal mouth with sediment deposits |
+| Bay | Mouth | Coastal mouth in hilly terrain |
