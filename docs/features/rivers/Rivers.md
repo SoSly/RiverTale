@@ -1,3 +1,9 @@
+---
+level: 2
+parent: "[[RiverTale]]"
+status: review
+---
+
 Rivers are the arteries of a landscape. They carry water from highlands to sea, shape the terrain they flow through, and serve as natural highways for travel and trade. A river tells you where you are: upstream means highlands, downstream means ocean.
 
 ## Vanilla Minecraft
@@ -25,7 +31,11 @@ Later, you need to find high ground for a mountain base. You remember that narro
 
 Rivers are infrastructure the world provides for free.
 
-### Rivers as Consequences
+### Foundation Mapping
+
+How rivers satisfy each design pillar:
+
+#### Rivers as Consequences
 
 Rivers exist because the terrain demands them. They don't appear randomly—they emerge from the shape of the land.
 
@@ -47,7 +57,7 @@ Rivers exist because the terrain demands them. They don't appear randomly—they
 
 If someone asks "why is there a river here?", the answer is visible in the landscape.
 
-### Rivers as Legible
+#### Rivers as Legible
 
 Rivers encode geographic information. A player can read the landscape by reading the river.
 
@@ -68,7 +78,7 @@ Rivers encode geographic information. A player can read the landscape by reading
 
 A player can use rivers to navigate without a map. This is the core fantasy.
 
-### Rivers as Coherent
+#### Rivers as Coherent
 
 Rivers follow consistent rules everywhere. A river segment generated today connects correctly to a river segment generated next week in an adjacent chunk.
 
@@ -90,6 +100,23 @@ Rivers follow consistent rules everywhere. A river segment generated today conne
 | Finding inland resources | Random exploration | Tributaries guide you into continental interior |
 
 Players can trust rivers. That trust enables new gameplay strategies.
+
+### Observable States
+
+River properties encode geographic information. Players who pay attention can read the world at a glance.
+
+| Property | What You See | What It Means |
+|----------|--------------|---------------|
+| Width | Narrow stream | Near source, inland, highland terrain |
+| Width | Wide river | Far downstream, coastal, many tributaries joined |
+| Elevation | River at high altitude | Continental interior, far from ocean |
+| Elevation | River at sea level | Near coast, approaching terminus |
+| Direction | Water flowing one way | Downstream points toward ocean; upstream toward highlands |
+| Tributaries | Streams joining from side valleys | You're at a drainage junction; larger river system ahead |
+| Termination | River meets ocean | You've reached the coast |
+| Termination | River flows into inland lake | Endorheic basin; terrain slopes inward from all directions |
+
+A player can answer "where am I?" and "which way to the ocean?" by observing any river segment.
 
 ## Generation Requirements
 
