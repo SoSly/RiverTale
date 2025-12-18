@@ -8,5 +8,5 @@ public interface DensityProvider {
 
     double[][] sampleSubcellDensities(int worldX, int worldZ, int cellSize);
 
-    boolean isOcean(double density);
+    boolean isOcean(int worldX, int worldZ);
 }
