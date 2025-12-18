@@ -1,5 +1,8 @@
 package org.sosly.rivertale.worldgen.river;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -8,7 +11,9 @@ import java.util.Set;
 
 public class RiverCellManager {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(RiverCellManager.class);
     private static final double DENSITY_EPSILON = 0.01;
+    private static final int MAX_RECURSION_DEPTH = 1000;
 
     public static RiverCell createCell(RiverCellKey key, ContinentsDensityProvider provider, long worldSeed) {
         double[][] subcellDensities = provider.sampleSubcellDensities(key.worldX(), key.worldZ(), RiverCellKey.getCellSize(key.pass()));
@@ -137,6 +142,42 @@ public class RiverCellManager {
         long seed = key.cellX() * 31L + key.cellZ() * 17L + key.pass() * 7L;
         Random rng = new Random(seed ^ worldSeed);
         return tied.get(rng.nextInt(tied.size()));
+    }
+
+    public static int getDistanceToOcean(RiverCell cell, ContinentsDensityProvider provider, long worldSeed) {
+        return getDistanceToOceanRecursive(cell, provider, worldSeed, 0);
+    }
+
+    private static int getDistanceToOceanRecursive(RiverCell cell, ContinentsDensityProvider provider, long worldSeed, int depth) {
+        if (cell.getDistanceToOcean() >= 0) {
+            return cell.getDistanceToOcean();
+        }
+
+        CellClassification classification = cell.getClassification();
+        if (classification == CellClassification.OCEAN || classification == CellClassification.COASTAL || cell.isBasin()) {
+            cell.setDistanceToOcean(0);
+            return 0;
+        }
+
+        if (depth > MAX_RECURSION_DEPTH) {
+            LOGGER.warn("Distance calculation exceeded max depth at cell {}", cell.getKey());
+            return depth;
+        }
+
+        if (!cell.isParticipating() || cell.getPrimaryOutput() == FlowDirection.NONE) {
+            cell.setDistanceToOcean(0);
+            return 0;
+        }
+
+        FlowDirection primaryOutput = cell.getPrimaryOutput();
+        RiverCellKey downstreamKey = primaryOutput.neighbor(cell.getKey());
+        RiverCell downstreamCell = createCell(downstreamKey, provider, worldSeed);
+
+        int downstreamDistance = getDistanceToOceanRecursive(downstreamCell, provider, worldSeed, depth + 1);
+        int distance = 1 + downstreamDistance;
+
+        cell.setDistanceToOcean(distance);
+        return distance;
     }
 
     private record NeighborInfo(FlowDirection direction, double density) {}

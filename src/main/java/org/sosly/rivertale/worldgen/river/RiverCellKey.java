@@ -2,7 +2,7 @@ package org.sosly.rivertale.worldgen.river;
 
 public record RiverCellKey(int cellX, int cellZ, int pass) {
 
-    private static final int BASE_CELL_SIZE = 4096;
+    private static final int BASE_CELL_SIZE = 896;
     private static final int SUBDIVISION_FACTOR = 7;
     private static final int MINIMUM_CELL_SIZE = 128;
 
