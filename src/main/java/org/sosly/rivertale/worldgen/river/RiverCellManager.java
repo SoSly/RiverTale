@@ -16,6 +16,8 @@ public class RiverCellManager {
     private static final int MAX_RECURSION_DEPTH = 1000;
 
     public static RiverCell createCell(RiverCellKey key, ContinentsDensityProvider provider, long worldSeed) {
+        long startTime = System.nanoTime();
+
         double[][] subcellDensities = provider.sampleSubcellDensities(key.worldX(), key.worldZ(), RiverCellKey.getCellSize());
         double density = provider.getAveragedDensity(key.worldX(), key.worldZ(), RiverCellKey.getCellSize());
         CellClassification classification = classifyCell(key, provider);
@@ -26,6 +28,9 @@ public class RiverCellManager {
         if (participating && classification == CellClassification.LAND) {
             computeFlow(cell, provider, worldSeed);
         }
+
+        long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
+        LOGGER.debug("Cell ({}, {}) created in {}ms [{}]", key.cellX(), key.cellZ(), elapsedMs, classification);
 
         return cell;
     }

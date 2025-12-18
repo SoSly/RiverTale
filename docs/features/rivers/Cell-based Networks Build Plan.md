@@ -561,39 +561,27 @@ load(tag):
 
 **Cache Integration with Thread Safety:**
 
-Multiple chunk generation threads may query cells simultaneously. `RiverCellManager` must handle concurrent access safely:
+Multiple chunk generation threads may query cells simultaneously. Use `ConcurrentHashMap.computeIfAbsent` for thread-safe deduplication:
 
 ```
-RiverCellManager:
-    computing = concurrent map of RiverCellKey → Future<RiverCell>
+RiverCellSavedData:
+    cells = ConcurrentHashMap<RiverCellKey, RiverCell>
 
-    getCell(key):
-        // Fast path: already cached
-        cached = savedData.get(key)
-        if cached != null:
-            return cached
-
-        // Slow path: compute with deduplication
-        future = computing.computeIfAbsent(key, k => async computeCell(k))
-
-        try:
-            result = future.get()
-            savedData.put(key, result)
-            savedData.setDirty()
-            computing.remove(key)
-            return result
-        catch exception:
-            computing.remove(key)
-            throw "Cell computation failed for {key}"
+    getOrCompute(key, computeFunction):
+        return cells.computeIfAbsent(key, k => {
+            cell = computeFunction.apply(k)
+            setDirty()
+            return cell
+        })
 ```
 
 When two threads query the same uncached cell:
-1. First thread creates a future and starts computation
-2. Second thread gets the same future and blocks waiting
+1. First thread enters computeIfAbsent and starts computation
+2. Second thread blocks on the same key's segment lock
 3. When computation completes, both threads receive the result
 4. Only one computation happens per cell
 
-`ConcurrentHashMap` handles the cell map. `setDirty()` is safe since SavedData's dirty flag is a simple boolean.
+**Why not Futures?** Empirical testing showed cell computation averages ~40-45ms. At this speed, `ConcurrentHashMap`'s segment locking is acceptable and the code is much simpler than managing Futures, executors, and cleanup. `setDirty()` is safe since SavedData's dirty flag is a simple boolean.
 
 **Integration with Phase 2 command:**
 
