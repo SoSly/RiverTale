@@ -119,8 +119,8 @@ public class RiverCarveExecutor {
 
         elapsedMs = System.currentTimeMillis() - startTime;
         double msPerChunk = chunksLoaded > 0 ? (double) elapsedMs / chunksLoaded : 0;
-        LOGGER.info("Carve complete: placed {} blocks, removed {} blocks in {}ms ({:.1f}ms/chunk)",
-            blocksPlaced, blocksRemoved, elapsedMs, msPerChunk);
+        LOGGER.info("Carve complete: placed {} blocks, removed {} blocks in {}ms ({}ms/chunk)",
+            blocksPlaced, blocksRemoved, elapsedMs, String.format("%.1f", msPerChunk));
     }
 
     private Set<ChunkPos> calculateRequiredChunks(List<RiverPathInterpolator.PathPoint> pathPoints) {

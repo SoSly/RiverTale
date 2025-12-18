@@ -2,7 +2,7 @@
 type: poc
 validates: "[[River Terrain System]]"
 assumption: "Water source blocks can fill carved river channels and remain stable"
-status: pending
+status: complete
 ---
 
 ## Goal
@@ -19,74 +19,83 @@ This PoC assumes a channel has already been carved (either by the Carving PoC or
 
 ## Approach
 
-Create a command that fills a carved channel with water:
+Create a command that fills a carved channel with water, using identical parameters to the carve command:
 
 ```
-/rivertale poc fill <startX> <startZ> <endX> <endZ> <waterElevation> <width>
+/rivertale poc fill <entryX> <entryZ> at <entryDist> <direction> <exitX> <exitZ> at <exitDist> acc <accumulation>
 ```
 
 ### Input Parameters
 
-| Parameter | Type | Purpose |
-|-----------|------|---------|
-| `startX`, `startZ` | int | Starting point of fill region |
-| `endX`, `endZ` | int | Ending point of fill region |
-| `waterElevation` | int | Y level for water surface |
-| `width` | int | Width of the fill region (should match carved channel) |
+These mirror the carve command exactly, ensuring the fill follows the same path:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `entryX`, `entryZ` | int | Entry point world coordinates (where water flows in) |
+| `entryDist` | int | Entry distance from ocean; derives elevation via `SEA_LEVEL + (dist × ELEVATION_PER_CELL)` |
+| `direction` | string | Initial heading (north/south/east/west) before curving toward exit |
+| `exitX`, `exitZ` | int | Exit point world coordinates (where water flows out) |
+| `exitDist` | int | Exit distance from ocean (typically < entryDist since water flows downhill) |
+| `accumulation` | int | Water accumulation factor; drives width via logarithmic formula |
 
 ### What the Command Does
 
-1. **Scan the fill region**: For each column within `width` blocks of the path from start to end
-2. **Place water**: At each column, place water source blocks from `waterElevation` down to the riverbed (first solid block)
-3. **Report statistics**: Water blocks placed, columns processed, elapsed time
+1. **Reconstruct the path**: Create a `RiverPathInterpolator` with identical parameters and seed as the carve command. Call `generatePath()` to get the exact same `PathPoint` list with Bezier curve, meander noise, and catenary elevations.
+2. **Pre-load chunks**: Force-load all chunks within the fill radius (same as carve).
+3. **For each PathPoint along the path**:
+   - Get `targetElevation` (water surface Y at this point)
+   - Get derived `width` from the interpolator
+   - For each column within the channel width: place water source blocks from `targetElevation` down to the first solid block (riverbed)
+4. **Report statistics**: Water blocks placed, path points processed, elapsed time
 
 ### Test Scenarios
 
-**Prerequisites**: Each scenario requires a carved channel. Use the Carving PoC first, or manually create test channels.
+**Prerequisites**: Each scenario requires a carved channel. Run the carve command first, then the fill command with identical parameters.
 
-**Basic fill:**
+**Basic fill (reuse carving tests):**
 
-| Scenario | Setup | Expected Result |
-|----------|-------|-----------------|
-| Simple channel | Carved channel at Y=70, flat terrain | Water fills channel, level with banks |
-| Deep channel | 8-block deep channel | Water fills to surface level, not to riverbed |
-| Wide channel | 30-block wide river | Water fills entire width uniformly |
+| Scenario | Carve Command | Fill Command | Expected Result |
+|----------|---------------|--------------|-----------------|
+| Flat river | `/rivertale poc carve 0 0 at 4 north 10 10 at 4 acc 1` | `/rivertale poc fill 0 0 at 4 north 10 10 at 4 acc 1` | Water fills wide, flat channel uniformly |
+| Steep descent | `/rivertale poc carve 0 0 at 15 north 200 -200 at 5 acc 1` | `/rivertale poc fill 0 0 at 15 north 200 -200 at 5 acc 1` | Water follows catenary elevation from Y=123 → Y=83 |
+| Wide river | `/rivertale poc carve 600 0 at 6 north 800 -200 at 5 acc 5` | `/rivertale poc fill 600 0 at 6 north 800 -200 at 5 acc 5` | Water fills 29-block-wide channel |
 
 **Terrain interactions:**
 
 | Scenario | Setup | Expected Result |
 |----------|-------|-----------------|
-| Embankment section | Channel carved into embankment (terrain below water level) | Water contained by embankment walls |
-| Valley section | Channel carved into valley (terrain above water level) | Water fills channel floor only |
-| Mixed | Channel transitions between embankment and valley | Consistent water level throughout |
+| Embankment section | Carve with high entry elevation over low terrain | Water contained by embankment walls |
+| Valley section | Carve with elevation matching terrain | Water fills channel floor only |
+| Mixed | Carve a long river that transitions terrain types | Water level follows catenary, no discontinuities |
 
 **Edge cases:**
 
 | Scenario | Setup | Expected Result |
 |----------|-------|-----------------|
-| Cave intersection | Channel carved above a cave | Water should NOT drain into cave (riverbed blocks the cave) |
-| Open cave | Carved channel with exposed cave | Document behavior—may need riverbed sealing |
-| Ocean connection | Channel ending at ocean level | Water should merge seamlessly with ocean |
-| Multi-chunk | 200+ block channel spanning chunks | No water level discontinuities at chunk borders |
+| Cave intersection | Carve over terrain with caves below | Water should NOT drain (riverbed seals caves) |
+| Open cave | Carve channel where cave mouth is exposed | Document behavior—may need additional sealing |
+| Ocean connection | Carve with exitDist=0 (sea level) | Water merges seamlessly with ocean |
+| Multi-chunk | Any 200+ block river | No water level discontinuities at chunk borders |
 
 ### What to Observe
 
 **Water behavior:**
-- Water surface is flat at target elevation
+- Water surface follows catenary curve from entry to exit elevation
 - No water flowing over banks (embankments contain it)
 - No water draining out (riverbed is solid)
 - Water updates complete (no flowing water animations that don't resolve)
 
 **Visual inspection:**
-- Water reaches all parts of the carved channel
+- Water reaches all parts of the carved channel (follows Bezier curve path)
 - No dry spots within the channel bounds
-- Water level consistent from start to end
+- Water level descends smoothly along the river (catenary, not stepped)
 - Smooth connection to any existing water bodies
 
 **Technical verification:**
 - Water blocks are source blocks, not flowing
-- F3 shows correct water level at various points
+- F3 shows correct water level at various points along the path
 - After waiting 30+ seconds, water hasn't changed (stable)
+- Water elevation matches `targetElevation` from PathPoint at each position
 
 ## Success Criteria
 
@@ -113,12 +122,59 @@ If water placement fails:
 
 This PoC should run AFTER the River Channel Carving PoC. A carved channel is prerequisite for meaningful water testing.
 
-Alternatively, manually dig a test channel to isolate water placement from carving.
+**Critical**: Use identical command parameters for carve and fill. The fill command reconstructs the exact same path using `RiverPathInterpolator` with the world seed—different parameters will produce water in the wrong location.
+
+```
+# These must match exactly:
+/rivertale poc carve 0 0 at 6 north 200 -200 at 4 acc 5
+/rivertale poc fill  0 0 at 6 north 200 -200 at 4 acc 5
+```
 
 ## Results
 
-*Not yet run.*
+**Test run** (674-block river, 30 blocks wide, 20 block elevation drop):
+
+```
+/rivertale poc carve 425 -69 at 5 east 331 -735 at 0 acc 9
+/rivertale poc fill 425 -69 at 5 east 331 -735 at 0 acc 9
+```
+
+**Output:**
+```
+Filling river: (425,-69) → (331,-735) width=30 depth=9
+Pre-loading 229 chunks...
+Starting fill: (425, -69) Y=83 → (331, -735) Y=63, direction=EAST, acc=9
+Calculated width=30, depth=9
+Fill complete: placed 243,222 water blocks across 674 path points in 1230ms (5.4ms/chunk)
+```
+
+**Observations:**
+
+| Criterion | Result |
+|-----------|--------|
+| Water fills channel | Yes |
+| Water follows catenary elevation | Yes |
+| Water stable after 60 seconds | Yes |
+| No draining | Yes |
+| Contained by embankments | Yes |
+| Multi-chunk consistency | Yes |
+| Performance | Good (1.2s for 674-block river) |
+
+**Known issue:** Where the water surface drops from one Y-level to the next along the catenary, Minecraft water physics creates sharp horizontal "steps." Source blocks at the same Y-level fill in any gaps between them, resulting in squared-off transitions rather than smooth gradients. This is a fundamental Minecraft limitation—water surfaces can only exist at discrete Y levels.
+
+**Potential mitigation:** Use flowing water blocks at elevation transitions instead of source blocks. Flowing water has a natural cascading appearance that may look more organic. Worth exploring post-PoC.
 
 ## Conclusions
 
-*Pending results.*
+**Assumption validated.** Water source blocks can fill carved river channels and remain stable.
+
+The fill command successfully:
+- Reconstructs the exact carved path using identical parameters
+- Queries actual terrain (not theoretical geometry) for organic shorelines
+- Places water from riverbed to target elevation at each column
+- Handles multi-chunk rivers without discontinuities
+
+**For production implementation:**
+1. The terrain-query approach works well for shoreline edges
+2. Elevation transitions need attention—consider flowing water or other techniques to soften the Y-level steps
+3. Performance is acceptable but could be optimized by batching block updates or using chunk-level operations
