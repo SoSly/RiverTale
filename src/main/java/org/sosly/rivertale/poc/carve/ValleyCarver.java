@@ -2,19 +2,18 @@ package org.sosly.rivertale.poc.carve;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class ValleyCarver {
-    public static int getValleyFloorAtOffset(int lateralOffset, int halfWidth, int waterSurfaceY, int valleySlope) {
+    public static int getValleyFloorAtOffset(int lateralOffset, int halfWidth, int waterSurfaceY) {
         if (lateralOffset <= halfWidth) {
             return waterSurfaceY;
         }
 
         int distanceBeyondChannel = lateralOffset - halfWidth;
-        int slopeHeight = distanceBeyondChannel / valleySlope;
+        int slopeHeight = distanceBeyondChannel / CarveConfig.BANK_SLOPE;
 
         return waterSurfaceY + slopeHeight;
     }
@@ -28,9 +27,9 @@ public class ValleyCarver {
             for (int dz = -maxSearchRadius; dz <= maxSearchRadius; dz++) {
                 int lateralOffset = (int) Math.round(Math.sqrt(dx * dx + dz * dz));
 
-                int valleyFloorY = getValleyFloorAtOffset(lateralOffset, halfWidth, waterSurfaceY, CarveConfig.VALLEY_SLOPE);
+                int valleyFloorY = getValleyFloorAtOffset(lateralOffset, halfWidth, waterSurfaceY);
                 BlockPos columnPos = new BlockPos(centerX + dx, 0, centerZ + dz);
-                int terrainHeight = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, columnPos.getX(), columnPos.getZ()) - 1;
+                int terrainHeight = level.getHeight(CarveConfig.TERRAIN_HEIGHTMAP, columnPos.getX(), columnPos.getZ()) - 1;
 
                 if (terrainHeight <= valleyFloorY) {
                     continue;

@@ -8,18 +8,35 @@ public class RiverPathInterpolator {
     private final int entryZ;
     private final int exitX;
     private final int exitZ;
-    private final int distanceToOcean;
+    private final int entryY;
+    private final int exitY;
+    private final double controlX;
+    private final double controlZ;
     private final int width;
+    private final double slope;
     private final long seed;
 
-    public RiverPathInterpolator(int entryX, int entryZ, int exitX, int exitZ, int distanceToOcean, int width, long seed) {
+    public RiverPathInterpolator(int entryX, int entryZ, int exitX, int exitZ, int entryDist, int exitDist, CardinalDirection direction, int accumulation, long seed) {
         this.entryX = entryX;
         this.entryZ = entryZ;
         this.exitX = exitX;
         this.exitZ = exitZ;
-        this.distanceToOcean = distanceToOcean;
-        this.width = width;
+        this.entryY = CarveConfig.SEA_LEVEL + entryDist * CarveConfig.ELEVATION_PER_CELL;
+        this.exitY = CarveConfig.SEA_LEVEL + exitDist * CarveConfig.ELEVATION_PER_CELL;
         this.seed = seed;
+
+        double totalDist = Math.sqrt((exitX - entryX) * (exitX - entryX) + (exitZ - entryZ) * (exitZ - entryZ));
+        double controlDist = totalDist * CarveConfig.BEZIER_CONTROL_RATIO;
+        this.controlX = entryX + direction.dx * controlDist;
+        this.controlZ = entryZ + direction.dz * controlDist;
+
+        double run = totalDist;
+        double fall = Math.abs(entryY - exitY);
+        this.slope = (run > 0) ? fall / run : 0;
+
+        double baseWidth = CarveConfig.MIN_WIDTH + CarveConfig.WIDTH_PER_ACC_LOG * Math.log1p(accumulation);
+        double slopeModifier = 1.0 / (1.0 + slope * CarveConfig.SLOPE_WIDTH_FACTOR);
+        this.width = Math.max(CarveConfig.MIN_WIDTH, Math.min(CarveConfig.MAX_WIDTH, (int) Math.round(baseWidth * slopeModifier)));
     }
 
     public List<PathPoint> generatePath() {
@@ -28,31 +45,45 @@ public class RiverPathInterpolator {
         double pathLength = Math.sqrt(dx * dx + dz * dz);
 
         if (pathLength < 1) {
-            return List.of(new PathPoint(entryX, entryZ, calculateTargetElevation(), 0.0));
+            return List.of(new PathPoint(entryX, entryZ, entryY, 0.0));
         }
-
-        double dirX = dx / pathLength;
-        double dirZ = dz / pathLength;
-        double perpX = -dirZ;
-        double perpZ = dirX;
 
         int numPoints = (int) Math.ceil(pathLength);
         List<PathPoint> points = new ArrayList<>(numPoints);
 
         for (int i = 0; i <= numPoints; i++) {
             double t = i / (double) numPoints;
-            double baseX = entryX + t * dx;
-            double baseZ = entryZ + t * dz;
+
+            double baseX = (1 - t) * (1 - t) * entryX + 2 * (1 - t) * t * controlX + t * t * exitX;
+            double baseZ = (1 - t) * (1 - t) * entryZ + 2 * (1 - t) * t * controlZ + t * t * exitZ;
+
+            double tangentX = 2 * (1 - t) * (controlX - entryX) + 2 * t * (exitX - controlX);
+            double tangentZ = 2 * (1 - t) * (controlZ - entryZ) + 2 * t * (exitZ - controlZ);
+            double len = Math.sqrt(tangentX * tangentX + tangentZ * tangentZ);
+
+            double perpX = 0;
+            double perpZ = 0;
+            if (len > 0) {
+                perpX = -tangentZ / len;
+                perpZ = tangentX / len;
+            }
 
             double offset = calculateMeanderOffset(baseX, baseZ, t);
             int x = (int) Math.round(baseX + perpX * offset);
             int z = (int) Math.round(baseZ + perpZ * offset);
 
-            int targetElevation = calculateTargetElevation();
+            int targetElevation = calculateCatenaryElevation(t);
             points.add(new PathPoint(x, z, targetElevation, t));
         }
 
         return points;
+    }
+
+    private int calculateCatenaryElevation(double t) {
+        double linear = entryY + t * (exitY - entryY);
+        double elevDiff = Math.abs(entryY - exitY);
+        double sag = elevDiff * CarveConfig.CATENARY_RATIO * t * (1.0 - t);
+        return (int) Math.round(linear - sag);
     }
 
     private double calculateMeanderOffset(double x, double z, double t) {
@@ -88,8 +119,12 @@ public class RiverPathInterpolator {
         return h;
     }
 
-    private int calculateTargetElevation() {
-        return CarveConfig.SEA_LEVEL + (distanceToOcean * CarveConfig.ELEVATION_PER_CELL);
+    public int getWidth() {
+        return width;
+    }
+
+    public double getSlope() {
+        return slope;
     }
 
     public record PathPoint(int x, int z, int targetElevation, double normalizedT) {}
