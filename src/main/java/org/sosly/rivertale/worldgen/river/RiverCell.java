@@ -19,7 +19,7 @@ public class RiverCell {
 
     private FlowDirection primaryOutput;
     private Set<FlowDirection> secondaryOutputs;
-    private int distanceToOcean;
+    private int distanceToTerminus;
     private boolean isBasin;
     private List<int[]> riverPath;
 
@@ -32,7 +32,7 @@ public class RiverCell {
         this.participating = participating;
         this.primaryOutput = FlowDirection.NONE;
         this.secondaryOutputs = new HashSet<>();
-        this.distanceToOcean = -1;
+        this.distanceToTerminus = -1;
         this.isBasin = false;
         this.riverPath = null;
     }
@@ -73,12 +73,12 @@ public class RiverCell {
         this.secondaryOutputs = secondaryOutputs;
     }
 
-    public int getDistanceToOcean() {
-        return distanceToOcean;
+    public int getDistanceToTerminus() {
+        return distanceToTerminus;
     }
 
-    public void setDistanceToOcean(int distanceToOcean) {
-        this.distanceToOcean = distanceToOcean;
+    public void setDistanceToTerminus(int distanceToTerminus) {
+        this.distanceToTerminus = distanceToTerminus;
     }
 
     public boolean isBasin() {
@@ -125,7 +125,7 @@ public class RiverCell {
         }
         tag.put("secondaryOutputs", secondaryList);
 
-        tag.putInt("distanceToOcean", distanceToOcean);
+        tag.putInt("distanceToTerminus", distanceToTerminus);
         tag.putBoolean("isBasin", isBasin);
 
         if (riverPath != null) {
@@ -171,7 +171,7 @@ public class RiverCell {
         }
         cell.setSecondaryOutputs(secondaryOutputs);
 
-        cell.setDistanceToOcean(tag.getInt("distanceToOcean"));
+        cell.setDistanceToTerminus(tag.getInt("distanceToTerminus"));
         cell.setBasin(tag.getBoolean("isBasin"));
 
         if (tag.contains("riverPath")) {

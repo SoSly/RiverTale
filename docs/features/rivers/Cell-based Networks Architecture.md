@@ -375,7 +375,7 @@ Once a cell knows its inputs, outputs, distance, and upstream count, it provides
 
 - Input edge centers (where water enters)
 - Output edge center (where water exits)
-- Distance to ocean (for elevation calculation)
+- Distance to terminus (for elevation calculation)
 - Upstream count (for width calculation)
 - Whether this cell is a source (no inputs, higher than all neighbors)
 - Whether this cell is a basin terminus (no outputs, not ocean)
@@ -401,7 +401,7 @@ Cell-based Networks provides connectivity data. A separate river carving and dec
 - Participation flag
 - Primary output direction (N/S/E/W or none)
 - Secondary output directions (for tributary sources)
-- Distance to ocean
+- Distance to terminus
 - Basin terminus flag
 
 Upstream feeder count is not cached. It's computed on demand via limited-depth traversal each time it's needed. This keeps the count accurate regardless of exploration order, and the computation is cheap (only a few steps up).

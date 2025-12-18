@@ -114,7 +114,7 @@ A class containing:
 - `participating`: boolean (immutable)
 - `primaryOutput`: FlowDirection
 - `secondaryOutputs`: Set of FlowDirection
-- `distanceToOcean`: int (defaults to -1, meaning uncalculated)
+- `distanceToTerminus`: int (defaults to -1, meaning uncalculated)
 - `isBasin`: boolean
 - `riverPath`: List of subcell coordinates (set by Phase 8)
 
@@ -173,7 +173,7 @@ Cell (3, -7):
   Participating: true
   Output: SOUTH
   Inputs: NORTH, WEST
-  Distance to ocean: 12
+  Distance to terminus: 12
 ```
 
 If a cell is not participating, the output is simplified:
@@ -199,7 +199,7 @@ Cell (2, 8):
   Classification: COASTAL
   Participating: true
   Inputs: WEST
-  Distance to ocean: 0
+  Distance to terminus: 0
   River mouth at subcell: (3, 4)
 ```
 
@@ -480,7 +480,7 @@ Update `/rivertale cell` to show classification, output direction, and inputs. T
 
 ---
 
-### Phase 6: Distance to Ocean
+### Phase 6: Distance to Terminus
 
 **Goal:** Implement lazy recursive distance calculation.
 
@@ -491,22 +491,22 @@ Update `/rivertale cell` to show classification, output direction, and inputs. T
 **Algorithm:**
 
 ```
-getDistanceToOcean(cell):
-    if cell.distanceToOcean >= 0:
-        return cell.distanceToOcean  // cached
+getDistanceToTerminus(cell):
+    if cell.distanceToTerminus >= 0:
+        return cell.distanceToTerminus  // cached
 
     // All terminuses have distance 0
     if cell.classification in [OCEAN, COASTAL, LAKE, LAKESHORE]:
-        cell.distanceToOcean = 0
+        cell.distanceToTerminus = 0
         return 0
 
     if cell.isBasin:
-        cell.distanceToOcean = 0
+        cell.distanceToTerminus = 0
         return 0
 
     downstream = getCell(cell.primaryOutput.neighbor(cell.key))
-    cell.distanceToOcean = 1 + getDistanceToOcean(downstream)
-    return cell.distanceToOcean
+    cell.distanceToTerminus = 1 + getDistanceToTerminus(downstream)
+    return cell.distanceToTerminus
 ```
 
 **Recursion Safety:**
@@ -516,7 +516,7 @@ The acyclic guarantee from the design doc ensures recursion terminates. Flow alw
 ```
 MAX_RECURSION_DEPTH = 1000
 
-getDistanceToOcean(cell, depth):
+getDistanceToTerminus(cell, depth):
     if depth > MAX_RECURSION_DEPTH:
         log warning "Distance calculation exceeded max depth at {cell.key}"
         return depth
@@ -527,7 +527,7 @@ This catches bugs during development without infinite loops.
 
 **Integration with Phase 2 command:**
 
-Update `/rivertale cell` to include "Distance to ocean" in the output. This value comes from `getDistanceToOcean()` and represents how many cells away from a terminus (ocean or basin) this cell is.
+Update `/rivertale cell` to include "Distance to terminus" in the output. This value comes from `getDistanceToTerminus()` and represents how many cells away from a terminus (ocean or basin) this cell is.
 
 **Validation:**
 1. Run `/rivertale cell` on a coastal cell
@@ -915,7 +915,7 @@ upstreamDepthLimit = 3             // how many cells upstream to count for width
 | 3 | `/rivertale locate` command exists with stub responses |
 | 4 | Density values appear correctly in cell info |
 | 5 | Output direction points toward lower density neighbor; locate commands work |
-| 6 | Distance to ocean increases inland |
+| 6 | Distance to terminus increases inland |
 | 7 | Cells persist across save/load; no race conditions during parallel generation |
 | 8 | River paths determined within cells; paths connect input to output edges |
 | 9 | Upstream count reflects feeder topology |
@@ -934,7 +934,7 @@ Once the cell-based network is complete, it provides the following data to downs
 - `classification` - LAND, OCEAN, COASTAL, LAKE, or LAKESHORE
 - `primaryOutput` - direction water exits (N/S/E/W or NONE)
 - `secondaryOutputs` - additional exit directions for new river sources
-- `distanceToOcean` - cell count to nearest terminus (0 for all terminus types and basins)
+- `distanceToTerminus` - cell count to nearest terminus (0 for all terminus types and basins)
 - `upstreamCount` - feeders within limited depth
 - `isBasin` - true if this cell is a basin terminus (endorheic, no outlet)
 - `riverPath` - list of subcell coordinates the river passes through (for LAND, COASTAL, and LAKESHORE cells)
@@ -1076,7 +1076,7 @@ Pass 1 - Cell (3, -7):
   Participating: true
   Output: SOUTH
   Inputs: NORTH, WEST
-  Distance to ocean: 12
+  Distance to terminus: 12
 
 Pass 2 - Cell (24, -56):
   Center: (12544, -28416)
@@ -1085,7 +1085,7 @@ Pass 2 - Cell (24, -56):
   Participating: true
   Output: EAST
   Inputs: NORTH
-  Distance to ocean: 9
+  Distance to terminus: 9
 ```
 
 **Worldgen Integration Updates:**

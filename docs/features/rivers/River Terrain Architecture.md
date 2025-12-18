@@ -64,7 +64,7 @@ This system consumes cell data from the Cell-based Network. See `Cell-based Netw
 | Field | Type | How We Use It |
 |-------|------|---------------|
 | `riverPath` | List of subcell coordinates | Determines which subcells contain river segments and in what order |
-| `distanceToOcean` | int | Calculates target elevation: `sea_level + (distance × elevationPerCell)` |
+| `distanceToTerminus` | int | Calculates target elevation: `sea_level + (distance × elevationPerCell)` |
 | `classification` | enum (LAND/OCEAN/COASTAL) | COASTAL cells terminate rivers at the coastline subcell, not an edge |
 | `primaryOutput` | FlowDirection | Determines exit edge for path interpolation |
 | `isBasin` | boolean | Basin cells are terminuses—rivers end in a pool, not at ocean |

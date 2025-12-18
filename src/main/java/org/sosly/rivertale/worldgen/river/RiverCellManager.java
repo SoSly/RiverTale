@@ -149,18 +149,18 @@ public class RiverCellManager {
         return tied.get(rng.nextInt(tied.size()));
     }
 
-    public static int getDistanceToOcean(RiverCell cell, ContinentsDensityProvider provider, long worldSeed) {
-        return getDistanceToOceanRecursive(cell, provider, worldSeed, 0);
+    public static int getDistanceToTerminus(RiverCell cell, ContinentsDensityProvider provider, long worldSeed) {
+        return getDistanceToTerminusRecursive(cell, provider, worldSeed, 0);
     }
 
-    private static int getDistanceToOceanRecursive(RiverCell cell, ContinentsDensityProvider provider, long worldSeed, int depth) {
-        if (cell.getDistanceToOcean() >= 0) {
-            return cell.getDistanceToOcean();
+    private static int getDistanceToTerminusRecursive(RiverCell cell, ContinentsDensityProvider provider, long worldSeed, int depth) {
+        if (cell.getDistanceToTerminus() >= 0) {
+            return cell.getDistanceToTerminus();
         }
 
         CellClassification classification = cell.getClassification();
         if (classification == CellClassification.OCEAN || classification == CellClassification.COASTAL || cell.isBasin()) {
-            cell.setDistanceToOcean(0);
+            cell.setDistanceToTerminus(0);
             return 0;
         }
 
@@ -170,7 +170,7 @@ public class RiverCellManager {
         }
 
         if (!cell.isParticipating() || cell.getPrimaryOutput() == FlowDirection.NONE) {
-            cell.setDistanceToOcean(0);
+            cell.setDistanceToTerminus(0);
             return 0;
         }
 
@@ -178,10 +178,10 @@ public class RiverCellManager {
         RiverCellKey downstreamKey = primaryOutput.neighbor(cell.getKey());
         RiverCell downstreamCell = createCell(downstreamKey, provider, worldSeed);
 
-        int downstreamDistance = getDistanceToOceanRecursive(downstreamCell, provider, worldSeed, depth + 1);
+        int downstreamDistance = getDistanceToTerminusRecursive(downstreamCell, provider, worldSeed, depth + 1);
         int distance = 1 + downstreamDistance;
 
-        cell.setDistanceToOcean(distance);
+        cell.setDistanceToTerminus(distance);
         return distance;
     }
 

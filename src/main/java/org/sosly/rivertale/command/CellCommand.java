@@ -52,8 +52,8 @@ public class CellCommand {
                     source.sendSuccess(() -> Component.literal(String.format("  Classification: %s", classification))
                         .withStyle(ChatFormatting.WHITE), false);
 
-                    int distance = RiverCellManager.getDistanceToOcean(cell, provider, worldSeed);
-                    source.sendSuccess(() -> Component.literal(String.format("  Distance to ocean: %d", distance))
+                    int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed);
+                    source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                         .withStyle(ChatFormatting.WHITE), false);
                     return 1;
                 }
@@ -86,8 +86,8 @@ public class CellCommand {
                         .withStyle(ChatFormatting.WHITE), false);
                 }
 
-                int distance = RiverCellManager.getDistanceToOcean(cell, provider, worldSeed);
-                source.sendSuccess(() -> Component.literal(String.format("  Distance to ocean: %d", distance))
+                int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed);
+                source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                     .withStyle(ChatFormatting.WHITE), false);
 
                 return 1;
