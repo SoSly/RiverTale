@@ -44,26 +44,25 @@ public class RiverTaleCommand {
                     DensityFunction.SinglePointContext ctxSea =
                         new DensityFunction.SinglePointContext(pos.getX(), 63, pos.getZ());
 
-                    double depth = router.depth().compute(ctxTerrain);
-                    double erosion = router.erosion().compute(ctxTerrain);
-                    double continentsTerrain = router.continents().compute(ctxTerrain);
                     double continentsSea = router.continents().compute(ctxSea);
-                    double ridges = router.ridges().compute(ctxTerrain);
+                    double continentsTerrain = router.continents().compute(ctxTerrain);
+                    double depthSea = router.depth().compute(ctxSea);
+                    double depthTerrain = router.depth().compute(ctxTerrain);
+                    double erosionSea = router.erosion().compute(ctxSea);
+                    double erosionTerrain = router.erosion().compute(ctxTerrain);
+                    double ridgesSea = router.ridges().compute(ctxSea);
+                    double ridgesTerrain = router.ridges().compute(ctxTerrain);
 
                     source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
-                    source.sendSuccess(() -> Component.literal(String.format("Values at %d, %d:", pos.getX(), pos.getZ()))
+                    source.sendSuccess(() -> Component.literal(String.format("Noise at (%d, %d), terrain height %d:", pos.getX(), pos.getZ(), terrainHeight))
+                        .withStyle(ChatFormatting.YELLOW), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Continents: %.3f at y=63, %.3f at y=%d", continentsSea, continentsTerrain, terrainHeight))
                         .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Terrain Height: %d", terrainHeight))
+                    source.sendSuccess(() -> Component.literal(String.format("  Depth: %.3f at y=63, %.3f at y=%d", depthSea, depthTerrain, terrainHeight))
                         .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Depth: %.3f", depth))
+                    source.sendSuccess(() -> Component.literal(String.format("  Erosion: %.3f at y=63, %.3f at y=%d", erosionSea, erosionTerrain, terrainHeight))
                         .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Erosion: %.3f", erosion))
-                        .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Continents (y=TH): %.3f", continentsTerrain))
-                        .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Continents (y=63): %.3f", continentsSea))
-                        .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Ridges: %.3f", ridges))
+                    source.sendSuccess(() -> Component.literal(String.format("  Ridges: %.3f at y=63, %.3f at y=%d", ridgesSea, ridgesTerrain, terrainHeight))
                         .withStyle(ChatFormatting.WHITE), false);
 
                     return 1;

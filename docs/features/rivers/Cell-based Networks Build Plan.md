@@ -19,6 +19,7 @@ These decisions were made during planning and supersede any conflicting details 
 | Minimum cell size | 128 blocks | Prevents subdivision from creating cells too small for meaningful flow |
 | Number of passes | 2 | Main rivers + regional rivers. Simpler, faster generation |
 | Density source | Abstracted | Design provider interface, implement Lithosphere adapter first |
+| Density formula | continents + (depth × 0.1) | Continents for ocean direction, depth for terrain-following |
 | Cache persistence | SavedData | Consistent with existing ContinentCacheSavedData pattern |
 | Debug visualization | Early | Add in Phase 2 for visual debugging throughout development |
 | Density equality threshold | 0.01 | Prevents floating-point noise from causing unexpected flow |
@@ -38,9 +39,9 @@ Note: 4096/7 = 585.14 blocks per Pass 2 subcell. The non-integer size is accepta
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                       DensityProvider                           │
-│  - Interface: getDensity(x, z, samples) -> double               │
-│  - LithosphereDensityProvider: depth * 0.7 + erosion * 0.3      │
-│  - VanillaDensityProvider: continentalness (future)             │
+│  - Interface: getDensity(x, z) -> double                        │
+│  - ContinentsDensityProvider: continents + (depth * 0.1)        │
+│    Works for both vanilla and Lithosphere                       │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -346,22 +347,59 @@ Could not find a basin within 10000 blocks.
 
 **Goal:** Implement the abstracted density interface with support for both Lithosphere and vanilla Minecraft.
 
-**⚠️ IMPLEMENTATION NOTE:** Before implementing this phase, do in-game testing to verify what the `continents` density function actually returns in both Lithosphere and vanilla worlds. The research in `.claude/lithosphere/` and `.claude/minecraft/` suggests `continents` is the right function for both, but this needs empirical validation. Test at various locations: deep ocean, coastline, inland, mountains, etc.
-
 **Files:**
 - `src/main/java/org/sosly/rivertale/worldgen/river/DensityProvider.java` (interface)
 - `src/main/java/org/sosly/rivertale/worldgen/river/ContinentsDensityProvider.java` (implementation)
 
-**ContinentsDensityProvider:**
+**Empirical Testing Results (Vanilla Minecraft):**
 
-Both Lithosphere and vanilla expose a `continents` density function via `NoiseRouter.continents()`. This function determines how "continental" a location is—higher values are more inland, lower values are more oceanic. The same implementation should work for both:
+Testing was performed at various locations using `/rivertale c` to sample noise values:
+
+| Location | Terrain Height | Continents | Depth (y=63) | Erosion |
+|----------|---------------|------------|--------------|---------|
+| Deep Ocean | 63 | -0.661 | -0.466 | 0.060 |
+| Ocean | 63 | -0.302 | -0.153 | 0.060 |
+| Beach | 63 | -0.127 | -0.046 | 0.060 |
+| Plains | 93 | 0.246 | 0.159 | 0.060 |
+| Grove (mountain) | 201 | 0.213 | 0.913 | -0.687 |
+| Frozen Peaks | 255 | 0.306 | 1.288 | -0.687 |
+
+**Key findings:**
+
+1. **Continents does NOT vary with Y.** Values at y=63 and y=terrain_height are identical. This is essential for a 2D flow model.
+
+2. **Depth IS Y-dependent, but useful at y=63.** At terrain height, depth hovers near 0. At y=63, it correlates with terrain elevation (higher terrain = higher depth value).
+
+3. **Erosion doesn't correlate with distance from ocean.** It reflects terrain roughness: 0.060 for smooth areas, -0.687 for mountains.
+
+4. **The -0.13 ocean threshold is correct.** Beach lands at -0.127, right at the threshold.
+
+5. **Continents alone has insufficient local gradient.** Adjacent locations (mountain slope at height 159 vs valley at height 92) showed continents values of 0.283 vs 0.291—the valley was *higher*, which would cause water to flow uphill. The delta (0.008) is within our 0.01 epsilon.
+
+**Density Formula:**
+
+To ensure rivers follow terrain while draining toward ocean, combine continents with depth:
+
+```
+density = continents + (depth_at_y63 * DEPTH_WEIGHT)
+```
+
+Where `DEPTH_WEIGHT = 0.1` (configurable). This ensures:
+- Continents dominates for macro direction (toward ocean)
+- Depth breaks ties in favor of lower terrain (realistic flow)
+
+**ContinentsDensityProvider:**
 
 ```
 Constants:
     OCEAN_THRESHOLD = -0.13  // Below this is ocean
+    DEPTH_WEIGHT = 0.1       // How much terrain elevation influences flow
+    SAMPLE_Y = 63            // Fixed Y for consistent 2D sampling
 
 getDensity(worldX, worldZ):
-    return sampleContinents(worldX, worldZ)  // from NoiseRouter.continents()
+    continents = sampleContinents(worldX, SAMPLE_Y, worldZ)
+    depth = sampleDepth(worldX, SAMPLE_Y, worldZ)
+    return continents + (depth * DEPTH_WEIGHT)
 
 getAveragedDensity(worldX, worldZ, cellSize):
     sum = 0
@@ -372,22 +410,24 @@ getAveragedDensity(worldX, worldZ, cellSize):
     return sum / 49
 
 isOcean(density):
-    return density < OCEAN_THRESHOLD
+    // Use raw continents for ocean detection, not combined density
+    return sampleContinents(worldX, SAMPLE_Y, worldZ) < OCEAN_THRESHOLD
 ```
 
-**Why `continents`:**
+**Why this formula:**
 
-- Vanilla's `continents` is just shifted `minecraft:continentalness` noise
-- Lithosphere's `continents` is more complex but serves the same purpose
-- Both represent "how inland" a location is, which is exactly what we need for flow direction
-- Lithosphere's `depth` and `erosion` are NOT suitable—`depth` is Y-dependent and `erosion` is about roughness, not distance from ocean
+- **Continents** provides macro direction toward ocean
+- **Depth at y=63** provides terrain awareness without Y-dependency
+- **Small weight (0.1)** ensures continents dominates but depth prevents uphill flow
+- Example: Mountain (continents 0.283, depth 0.618) → combined 0.345; Valley (continents 0.291, depth 0.152) → combined 0.306. Water correctly flows from 0.345 to 0.306 (downhill).
 
-**Accessing the function:**
+**Accessing the functions:**
 
 ```
 RandomState randomState = level.getChunkSource().randomState()
 NoiseRouter router = randomState.router()
 DensityFunction continentsFunction = router.continents()
+DensityFunction depthFunction = router.depth()
 ```
 
 **Sample grid resolution:**
@@ -406,11 +446,12 @@ The non-integer step sizes are fine—we're sampling continuous density function
 Once the density provider is implemented, update `/rivertale cell` to display real density values instead of placeholder data. The command should now call `DensityProviderRegistry.getProvider(level)` and sample the cell's averaged density.
 
 **Validation:**
-1. Place player in world with Lithosphere
+1. Place player in world
 2. Run `/rivertale cell` at various locations
 3. Verify density value is reasonable (not NaN, within expected range)
 4. Verify ocean detection works near coastlines
 5. Verify inland locations have higher density than coastal locations
+6. Verify mountain locations have higher density than adjacent valleys
 
 ---
 
@@ -1022,6 +1063,7 @@ baseParticipationRate = 0.7        // range: 0.0 to 1.0
 participationDecay = 0.25          // range: 0.0 to 1.0
 densityEqualityThreshold = 0.01
 oceanThreshold = -0.13
+depthWeight = 0.1                  // how much terrain elevation influences flow direction
 upstreamDepthLimit = 3             // how many cells upstream to count for width
 ```
 

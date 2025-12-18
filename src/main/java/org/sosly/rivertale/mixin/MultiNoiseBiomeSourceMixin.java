@@ -31,7 +31,7 @@ public abstract class MultiNoiseBiomeSourceMixin {
     );
 
     @Unique
-    private static Climate.ParameterList<Holder<Biome>> rivertale$cachedFiltered = null;
+    private Climate.ParameterList<Holder<Biome>> rivertale$cachedFiltered = null;
 
     @Inject(method = "parameters", at = @At("RETURN"), cancellable = true)
     private void rivertale$filterParameterList(CallbackInfoReturnable<Climate.ParameterList<Holder<Biome>>> cir) {
@@ -39,9 +39,6 @@ public abstract class MultiNoiseBiomeSourceMixin {
             cir.setReturnValue(rivertale$cachedFiltered);
             return;
         }
-
-        RiverTale.LOGGER.info("RiverTale: Filtering river biomes from world generation...");
-        long start = System.currentTimeMillis();
 
         Climate.ParameterList<Holder<Biome>> original = cir.getReturnValue();
         rivertale$cachedFiltered = new Climate.ParameterList<>(
@@ -57,8 +54,5 @@ public abstract class MultiNoiseBiomeSourceMixin {
                 .collect(Collectors.toList())
         );
         cir.setReturnValue(rivertale$cachedFiltered);
-
-        long elapsed = System.currentTimeMillis() - start;
-        RiverTale.LOGGER.info("RiverTale: River biomes filtered in {}ms", elapsed);
     }
 }
