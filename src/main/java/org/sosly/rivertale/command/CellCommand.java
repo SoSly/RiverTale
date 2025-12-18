@@ -29,69 +29,66 @@ public class CellCommand {
 
                 ContinentsDensityProvider provider = new ContinentsDensityProvider(level);
 
-                for (int pass = 1; pass <= 2; pass++) {
-                    final int currentPass = pass;
-                    RiverCellKey key = RiverCellKey.fromBlockPos(pos.getX(), pos.getZ(), currentPass);
-                    RiverCell cell = RiverCellManager.createCell(key, provider, worldSeed);
+                RiverCellKey key = RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
+                RiverCell cell = RiverCellManager.createCell(key, provider, worldSeed);
 
-                    source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
-                    source.sendSuccess(() -> Component.literal(String.format("Pass %d - Cell (%d, %d):", currentPass, key.cellX(), key.cellZ()))
-                        .withStyle(ChatFormatting.YELLOW), false);
+                source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
+                source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d):", key.cellX(), key.cellZ()))
+                    .withStyle(ChatFormatting.YELLOW), false);
 
-                    if (!cell.isParticipating()) {
-                        source.sendSuccess(() -> Component.literal("  Participating: false")
-                            .withStyle(ChatFormatting.WHITE), false);
-                        continue;
-                    }
+                if (!cell.isParticipating()) {
+                    source.sendSuccess(() -> Component.literal("  Participating: false")
+                        .withStyle(ChatFormatting.WHITE), false);
+                    return 1;
+                }
 
-                    CellClassification classification = cell.getClassification();
+                CellClassification classification = cell.getClassification();
 
-                    if (classification == CellClassification.OCEAN || classification == CellClassification.COASTAL) {
-                        source.sendSuccess(() -> Component.literal(String.format("  Center: (%,d, %,d)", key.centerX(), key.centerZ()))
-                            .withStyle(ChatFormatting.WHITE), false);
-                        source.sendSuccess(() -> Component.literal(String.format("  Density: %.3f", cell.getDensity()))
-                            .withStyle(ChatFormatting.WHITE), false);
-                        source.sendSuccess(() -> Component.literal(String.format("  Classification: %s", classification))
-                            .withStyle(ChatFormatting.WHITE), false);
-
-                        int distance = RiverCellManager.getDistanceToOcean(cell, provider, worldSeed);
-                        source.sendSuccess(() -> Component.literal(String.format("  Distance to ocean: %d", distance))
-                            .withStyle(ChatFormatting.WHITE), false);
-                        continue;
-                    }
-
+                if (classification == CellClassification.OCEAN || classification == CellClassification.COASTAL) {
                     source.sendSuccess(() -> Component.literal(String.format("  Center: (%,d, %,d)", key.centerX(), key.centerZ()))
                         .withStyle(ChatFormatting.WHITE), false);
                     source.sendSuccess(() -> Component.literal(String.format("  Density: %.3f", cell.getDensity()))
                         .withStyle(ChatFormatting.WHITE), false);
                     source.sendSuccess(() -> Component.literal(String.format("  Classification: %s", classification))
                         .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal("  Participating: true")
-                        .withStyle(ChatFormatting.WHITE), false);
-
-                    FlowDirection primaryOutput = cell.getPrimaryOutput();
-                    source.sendSuccess(() -> Component.literal(String.format("  Output: %s", primaryOutput))
-                        .withStyle(ChatFormatting.WHITE), false);
-
-                    Set<FlowDirection> secondaryOutputs = cell.getSecondaryOutputs();
-                    if (!secondaryOutputs.isEmpty()) {
-                        String secondaryStr = secondaryOutputs.stream()
-                            .map(FlowDirection::toString)
-                            .sorted()
-                            .collect(Collectors.joining(", "));
-                        source.sendSuccess(() -> Component.literal(String.format("  Secondary outputs: %s", secondaryStr))
-                            .withStyle(ChatFormatting.WHITE), false);
-                    }
-
-                    if (classification == CellClassification.LAND) {
-                        source.sendSuccess(() -> Component.literal(String.format("  Basin: %s", cell.isBasin()))
-                            .withStyle(ChatFormatting.WHITE), false);
-                    }
 
                     int distance = RiverCellManager.getDistanceToOcean(cell, provider, worldSeed);
                     source.sendSuccess(() -> Component.literal(String.format("  Distance to ocean: %d", distance))
                         .withStyle(ChatFormatting.WHITE), false);
+                    return 1;
                 }
+
+                source.sendSuccess(() -> Component.literal(String.format("  Center: (%,d, %,d)", key.centerX(), key.centerZ()))
+                    .withStyle(ChatFormatting.WHITE), false);
+                source.sendSuccess(() -> Component.literal(String.format("  Density: %.3f", cell.getDensity()))
+                    .withStyle(ChatFormatting.WHITE), false);
+                source.sendSuccess(() -> Component.literal(String.format("  Classification: %s", classification))
+                    .withStyle(ChatFormatting.WHITE), false);
+                source.sendSuccess(() -> Component.literal("  Participating: true")
+                    .withStyle(ChatFormatting.WHITE), false);
+
+                FlowDirection primaryOutput = cell.getPrimaryOutput();
+                source.sendSuccess(() -> Component.literal(String.format("  Output: %s", primaryOutput))
+                    .withStyle(ChatFormatting.WHITE), false);
+
+                Set<FlowDirection> secondaryOutputs = cell.getSecondaryOutputs();
+                if (!secondaryOutputs.isEmpty()) {
+                    String secondaryStr = secondaryOutputs.stream()
+                        .map(FlowDirection::toString)
+                        .sorted()
+                        .collect(Collectors.joining(", "));
+                    source.sendSuccess(() -> Component.literal(String.format("  Secondary outputs: %s", secondaryStr))
+                        .withStyle(ChatFormatting.WHITE), false);
+                }
+
+                if (classification == CellClassification.LAND) {
+                    source.sendSuccess(() -> Component.literal(String.format("  Basin: %s", cell.isBasin()))
+                        .withStyle(ChatFormatting.WHITE), false);
+                }
+
+                int distance = RiverCellManager.getDistanceToOcean(cell, provider, worldSeed);
+                source.sendSuccess(() -> Component.literal(String.format("  Distance to ocean: %d", distance))
+                    .withStyle(ChatFormatting.WHITE), false);
 
                 return 1;
             });

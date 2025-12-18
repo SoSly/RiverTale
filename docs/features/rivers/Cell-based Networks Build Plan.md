@@ -14,25 +14,13 @@ These decisions were made during planning and supersede any conflicting details 
 
 | Decision | Value | Rationale |
 |----------|-------|-----------|
-| Base cell size | 4096 blocks | Coarse enough for major drainage patterns, low performance cost |
-| Subdivision factor | 7x | Odd number ensures edge centers land in a single subcell, not on a boundary |
-| Minimum cell size | 128 blocks | Prevents subdivision from creating cells too small for meaningful flow |
-| Number of passes | 2 | Main rivers + regional rivers. Simpler, faster generation |
+| Cell size | 256 blocks | Fine enough for detailed rivers, performance is not a concern (5-20ms even at 128 blocks) |
 | Density source | Abstracted | Design provider interface, implement Lithosphere adapter first |
 | Density formula | continents + (depth × 0.1) | Continents for ocean direction, depth for terrain-following |
 | Cache persistence | SavedData | Consistent with existing ContinentCacheSavedData pattern |
 | Debug visualization | Early | Add in Phase 2 for visual debugging throughout development |
 | Density equality threshold | 0.01 | Prevents floating-point noise from causing unexpected flow |
-| Base participation rate | 0.7 | Default 70% of cells participate, configurable |
-| Participation decay | 0.25x per pass | Pass 2 has ~52.5% participation for sparser tributaries |
-
-**Computed values:**
-
-- Pass 1: 4096 blocks, 70% participation (major rivers)
-- Pass 2: ~585 blocks (4096/7), 52.5% participation (regional tributaries)
-- Pass 3 would be ~84 blocks (below 128 minimum), so system stops at 2 passes
-
-Note: 4096/7 = 585.14 blocks per Pass 2 subcell. The non-integer size is acceptable—subcells are conceptual for flow decisions, not block placement boundaries. The carver interpolates smooth paths through subcell centers.
+| Participation rate | 0.7 | Default 70% of cells participate, configurable |
 
 ## Architecture Overview
 
@@ -47,7 +35,7 @@ Note: 4096/7 = 585.14 blocks per Pass 2 subcell. The non-integer size is accepta
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        RiverCell                                │
-│  - Coordinates (cellX, cellZ, pass)                             │
+│  - Coordinates (cellX, cellZ)                                   │
 │  - Cached density, participation, outputs, distance             │
 │  - Computes flow by comparing density to neighbors              │
 └─────────────────────────────────────────────────────────────────┘
@@ -57,7 +45,6 @@ Note: 4096/7 = 585.14 blocks per Pass 2 subcell. The non-integer size is accepta
 │                     RiverCellManager                            │
 │  - Owns the cell cache (per-level)                              │
 │  - Handles cell lookup and lazy computation                     │
-│  - Coordinates multi-pass hierarchy                             │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -69,52 +56,6 @@ Note: 4096/7 = 585.14 blocks per Pass 2 subcell. The non-integer size is accepta
 ```
 
 ## Implementation Phases
-
-### Phase 0: Validate Continentalness Assumption
-
-**Goal:** Verify that `NoiseRouter.continents()` provides a usable density signal before building the rest of the system.
-
-**Why this matters:**
-
-The entire cell-based network relies on one assumption: density decreases as you approach the ocean. We're using `continents` from `NoiseRouter` as our density source. If this assumption is wrong—if coastal mountains have high continentalness, or inland basins have low continentalness—rivers will flow the wrong direction.
-
-**Testing procedure:**
-
-1. Create a test world with Lithosphere
-2. Create a test world with vanilla Minecraft (no Lithosphere)
-3. In each world, teleport to various locations and record the `continents` value:
-   - Deep ocean (far from any land)
-   - Coastline (standing at water's edge)
-   - Inland plains (a few thousand blocks from coast)
-   - Inland mountains (high elevation, far from coast)
-   - Inland valleys (low elevation, far from coast)
-
-**Expected results:**
-
-| Location | Expected Continentalness |
-|----------|-------------------------|
-| Deep ocean | Below -0.13 (our ocean threshold) |
-| Coastline | Near -0.13 |
-| Inland plains | Positive, increasing with distance from coast |
-| Inland mountains | Positive (elevation shouldn't matter, only distance from coast) |
-| Inland valleys | Positive (elevation shouldn't matter, only distance from coast) |
-
-**Red flags:**
-
-- Coastal mountains with higher continentalness than inland plains → rivers would flow away from ocean
-- Inland valleys with lower continentalness than coastal areas → rivers would terminate inland incorrectly
-- Continentalness varying significantly with Y coordinate → 2D flow model breaks down
-
-**If testing fails:**
-
-If `continents` doesn't behave as expected, we need to either:
-1. Find a different density function that does represent "distance from ocean"
-2. Compute our own distance-from-ocean metric (more expensive, but guaranteed correct)
-3. Accept that rivers may sometimes flow "wrong" in edge cases
-
-**Validation:** Document findings. If continentalness works as expected, proceed to Phase 1. If not, revisit the density provider design before continuing.
-
----
 
 ### Phase 1: Data Structures
 
@@ -128,27 +69,21 @@ If `continents` doesn't behave as expected, we need to either:
 
 **RiverCellKey:**
 
-A record containing `cellX`, `cellZ`, and `pass`.
+A record containing `cellX` and `cellZ`.
 
 ```
-fromBlockPos(blockX, blockZ, pass):
-    cellSize = getCellSize(pass)
+CELL_SIZE = 256  // constant
+
+fromBlockPos(blockX, blockZ):
     return RiverCellKey(
-        floorDiv(blockX, cellSize),
-        floorDiv(blockZ, cellSize),
-        pass
+        floorDiv(blockX, CELL_SIZE),
+        floorDiv(blockZ, CELL_SIZE)
     )
 
-getCellSize(pass):
-    size = 4096
-    for i from 1 to pass-1:
-        size = size / 8
-    return max(size, 128)
-
-worldX = cellX * getCellSize(pass)
-worldZ = cellZ * getCellSize(pass)
-centerX = worldX + getCellSize(pass) / 2
-centerZ = worldZ + getCellSize(pass) / 2
+worldX = cellX * CELL_SIZE
+worldZ = cellZ * CELL_SIZE
+centerX = worldX + CELL_SIZE / 2
+centerZ = worldZ + CELL_SIZE / 2
 ```
 
 **FlowDirection:**
@@ -165,7 +100,7 @@ NONE:  dx=0, dz=0
 neighbor(from):
     if this == NONE:
         return null
-    return RiverCellKey(from.cellX + dx, from.cellZ + dz, from.pass)
+    return RiverCellKey(from.cellX + dx, from.cellZ + dz)
 ```
 
 **RiverCell:**
@@ -217,47 +152,38 @@ An interface with three methods:
 /rivertale cell
 ```
 
-Prints information about the cells at the player's current position, one per pass:
+Prints information about the cell at the player's current position:
 
 ```
-Pass 1 - Cell (3, -7):
-  Center: (14336, -26624)
+Cell (3, -7):
+  Center: (1792, -3328)
   Density: 0.342
   Classification: LAND
   Participating: true
   Output: SOUTH
   Inputs: NORTH, WEST
   Distance to ocean: 12
-
-Pass 2 - Cell (24, -56):
-  Center: (12544, -28416)
-  Density: 0.298
-  Classification: LAND
-  Participating: true
-  Output: EAST
-  Inputs: NORTH
-  Distance to ocean: 9
 ```
 
 If a cell is not participating, the output is simplified:
 
 ```
-Pass 2 - Cell (24, -56):
+Cell (24, -56):
   Participating: false
 ```
 
 Ocean, coastal, and basin cells show their status:
 
 ```
-Pass 1 - Cell (0, 12):
-  Center: (2048, 51200)
+Cell (0, 12):
+  Center: (256, 6400)
   Density: -0.21
   Classification: OCEAN
 ```
 
 ```
-Pass 1 - Cell (2, 8):
-  Center: (10240, 34816)
+Cell (2, 8):
+  Center: (1280, 4352)
   Density: 0.08
   Classification: COASTAL
   Participating: true
@@ -267,8 +193,8 @@ Pass 1 - Cell (2, 8):
 ```
 
 ```
-Pass 1 - Cell (5, 3):
-  Center: (22528, 14336)
+Cell (5, 3):
+  Center: (2816, 1792)
   Density: 0.67
   Classification: LAND
   Basin: true
@@ -334,7 +260,6 @@ Could not find a basin within 10000 blocks.
 **Implementation notes:**
 
 - Search outward from player position in a spiral or expanding grid
-- Check cells at each pass level
 - Stop at first match (or configurable: find N nearest)
 - Search radius should be configurable, default ~10000 blocks
 - For performance, can limit to cells already cached, or compute on-demand up to a limit
@@ -434,12 +359,7 @@ DensityFunction depthFunction = router.depth()
 
 All cells use a 7×7 subgrid (49 samples) regardless of cell size. This keeps the algorithm simple and ensures the same grid is available for both density averaging and path refinement.
 
-| Cell Size | Step |
-|-----------|------|
-| 4096 | ~585 blocks |
-| 512 | ~73 blocks |
-
-The non-integer step sizes are fine—we're sampling continuous density functions, not aligning to block boundaries.
+With 256-block cells, each subcell step is ~37 blocks. The non-integer step size is fine—we're sampling continuous density functions, not aligning to block boundaries.
 
 **Integration with Phase 2 command:**
 
@@ -513,7 +433,7 @@ When two neighbors have equal density (within EPSILON = 0.01):
 
 ```
 breakTie(cell, tied):
-    seed = cell.cellX * 31 + cell.cellZ * 17 + cell.pass * 7
+    seed = cell.cellX * 31 + cell.cellZ * 17
     rng = seededRandom(seed XOR worldSeed)
     return tied[rng.nextInt(tied.length)]
 ```
@@ -524,11 +444,9 @@ The tiebreaker is deterministic from coordinates and world seed.
 
 ```
 isParticipating(key):
-    baseRate = 0.7
-    decayPerPass = 0.25
-    rate = baseRate * (1 - decayPerPass)^(key.pass - 1)
+    rate = config.participationRate  // default 0.7
 
-    seed = key.cellX * 31 + key.cellZ * 17 + key.pass * 7
+    seed = key.cellX * 31 + key.cellZ * 17
     rng = seededRandom(seed XOR worldSeed)
     return rng.nextDouble() < rate
 ```
@@ -707,9 +625,9 @@ A cell's flow direction (e.g., "outputs EAST") tells you WHERE water exits, but 
 
 **Algorithm:**
 
-The refinement algorithm uses the same 7×7 subcell grid that Pass 2 will use for tributaries. Why 7×7? An odd subdivision guarantees a true center subcell on each edge—entry and exit points land in subcell 3 (indices 0-6), not on a boundary between cells.
+The refinement algorithm uses a 7×7 subcell grid. Why 7×7? An odd subdivision guarantees a true center subcell on each edge—entry and exit points land in subcell 3 (indices 0-6), not on a boundary between cells.
 
-For each participating Pass 1 cell with inputs and outputs:
+For each participating cell with inputs and outputs:
 
 1. Identify entry subcell(s) — which subcell(s) contain the input edge center(s)
 2. Identify exit subcell — which subcell contains the output edge center
@@ -847,93 +765,7 @@ Each participating cell now has:
 
 ---
 
-### Phase 9: Multi-Pass Hierarchy
-
-**Goal:** Implement Pass 2 tributaries that feed into the Pass 1 river network.
-
-**Files:**
-- Modify `RiverCellManager.java`
-- Modify `RiverCell.java`
-
-**Critical concept: Pass 2 does NOT subdivide or recalculate Pass 1 rivers.**
-
-Pass 1 establishes the main river network. The refinement step (Phase 8) determines where Pass 1 rivers actually go within each cell. Pass 2 adds tributaries—smaller streams that feed INTO those refined Pass 1 river paths. Pass 2 cells use density comparison independently; they don't inherit constraints from Pass 1 or affect Pass 1 in any way.
-
-Think of it as:
-- Pass 1 = highways
-- Pass 2 = side roads feeding into highways
-
-**Cells nest like matryoshka dolls:**
-
-Every block position exists inside exactly one cell per pass. With a subdivision factor of 7, each Pass 1 cell contains 49 Pass 2 cells (7×7). Standing anywhere in the world, `/rivertale cell` returns one cell per pass—and each smaller cell is entirely inside the larger one.
-
-```
-One Pass 1 cell contains 7×7 = 49 Pass 2 cells:
-
-     0   1   2   3   4   5   6
-   ┌───┬───┬───┬───┬───┬───┬───┐
- 0 │   │   │   │   │   │   │   │
-   ├───┼───┼───┼───┼───┼───┼───┤
- 1 │   │   │   │   │   │   │   │
-   ├───┼───┼───┼───┼───┼───┼───┤
- 2 │   │   │ X │   │   │   │   │  ← You are in Pass 2 cell (2,2)
-   ├───┼───┼───┼───┼───┼───┼───┤     within this Pass 1 cell
- 3 │   │   │   │   │   │   │   │  ← center row (edge centers here)
-   ├───┼───┼───┼───┼───┼───┼───┤
- 4 │   │   │   │   │   │   │   │
-   ├───┼───┼───┼───┼───┼───┼───┤
- 5 │   │   │   │   │   │   │   │
-   ├───┼───┼───┼───┼───┼───┼───┤
- 6 │   │   │   │   │   │   │   │
-   └───┴───┴───┴───┴───┴───┴───┘
-```
-
-**Pass 2 cells are bounded by their parent Pass 1 cell.**
-
-A Pass 2 cell only considers neighbors within the same Pass 1 cell. Tributaries cannot cross Pass 1 cell boundaries. This keeps the Pass 1 network authoritative—all water within a Pass 1 cell either drains to that cell's river or collects in a local pond.
-
-**Pass 2 flow calculation:**
-
-Pass 2 cells calculate flow by comparing density to participating neighbors within the same parent cell. The algorithm is similar to Pass 1, but neighbors outside the parent cell are excluded.
-
-```
-computePass2Flow(cell):
-    parentKey = getParentPass1Cell(cell.key)
-
-    // Only consider neighbors within the same Pass 1 cell
-    neighbors = getParticipatingNeighbors(cell)
-        .filter(n => getParentPass1Cell(n.key) == parentKey)
-
-    lowerNeighbors = neighbors where neighbor.density < cell.density - EPSILON
-
-    if lowerNeighbors is empty:
-        cell.isBasin = true  // Local pond within this Pass 1 cell
-        cell.primaryOutput = NONE
-        return
-
-    sorted = lowerNeighbors.sortBy(density)
-    cell.primaryOutput = directionTo(sorted[0])
-    cell.secondaryOutputs = sorted[1..].map(directionTo)
-```
-
-**How tributaries connect to the main river:**
-
-Pass 2 tributaries flow toward lower density until they either:
-1. Reach a subcell that contains the Pass 1 river path (merge point)
-2. Reach a local minimum within the parent cell (becoming a small pond)
-
-The Pass 1 river path (from Phase 8) runs through specific subcells. When a Pass 2 tributary's flow direction leads it into one of those subcells, it has reached the main river. The carving system places the visual merge at that point.
-
-**Validation:**
-1. Generate Pass 1 cells for an area
-2. Generate Pass 2 cells within a Pass 1 cell
-3. Verify Pass 2 cells flow toward lower density (not toward Pass 1 entry/exit)
-4. Verify Pass 2 cells that reach local minima become basins (ponds)
-5. Verify `/rivertale cell` shows both passes with independent flow directions
-
----
-
-### Phase 10: Upstream Accumulation
+### Phase 9: Upstream Accumulation
 
 **Goal:** Implement limited-depth upstream counting for width calculation.
 
@@ -992,7 +824,7 @@ Actual block widths are the feature generator's concern, not the cell system's.
 
 ---
 
-### Phase 11: Worldgen Integration
+### Phase 10: Worldgen Integration
 
 **Goal:** Trigger cell computation automatically during chunk generation.
 
@@ -1008,13 +840,11 @@ onChunkGenerate(chunk):
     chunkWorldX = chunk.getPos().getMinBlockX()
     chunkWorldZ = chunk.getPos().getMinBlockZ()
 
-    for each pass:
-        cellSize = getCellSize(pass)
-        cellX = floor(chunkWorldX / cellSize)
-        cellZ = floor(chunkWorldZ / cellSize)
+    cellX = floor(chunkWorldX / CELL_SIZE)
+    cellZ = floor(chunkWorldZ / CELL_SIZE)
 
-        // getCell triggers computation if not cached
-        cell = riverCellManager.getCell(new RiverCellKey(cellX, cellZ, pass))
+    // getCell triggers computation if not cached
+    cell = riverCellManager.getCell(new RiverCellKey(cellX, cellZ))
 ```
 
 **When to trigger:**
@@ -1045,7 +875,7 @@ This phase only ensures cell network data is computed and cached. A separate riv
 
 ---
 
-### Phase 12: Configuration
+### Phase 11: Configuration
 
 **Goal:** Expose tuning parameters for users.
 
@@ -1055,12 +885,8 @@ This phase only ensures cell network data is computed and cached. A separate riv
 **Configurable Values:**
 
 ```
-baseCellSize = 4096
-subdivisionFactor = 7              // odd number ensures edge centers land in single subcell
-minimumCellSize = 128
-maxPasses = 2
-baseParticipationRate = 0.7        // range: 0.0 to 1.0
-participationDecay = 0.25          // range: 0.0 to 1.0
+cellSize = 256                     // range: 128 to 4096
+participationRate = 0.7            // range: 0.0 to 1.0
 densityEqualityThreshold = 0.01
 oceanThreshold = -0.13
 depthWeight = 0.1                  // how much terrain elevation influences flow direction
@@ -1081,17 +907,16 @@ upstreamDepthLimit = 3             // how many cells upstream to count for width
 
 | After Phase | Testable Behavior |
 |-------------|-------------------|
-| 2 | `/rivertale cell` command exists, outputs placeholder data for all passes |
+| 2 | `/rivertale cell` command exists, outputs placeholder data |
 | 3 | `/rivertale locate` command exists with stub responses |
 | 4 | Density values appear correctly in cell info |
 | 5 | Output direction points toward lower density neighbor; locate commands work |
 | 6 | Distance to ocean increases inland |
 | 7 | Cells persist across save/load; no race conditions during parallel generation |
 | 8 | River paths determined within cells; paths connect input to output edges |
-| 9 | Pass 2 cells flow independently; tributaries bounded by parent cell |
-| 10 | Upstream count reflects feeder topology |
-| 11 | Cells computed automatically during chunk generation; `/rivertale cell` shows `[cached]` |
-| 12 | Config changes affect new worlds |
+| 9 | Upstream count reflects feeder topology |
+| 10 | Cells computed automatically during chunk generation; `/rivertale cell` shows `[cached]` |
+| 11 | Config changes affect new worlds |
 
 ---
 
@@ -1100,11 +925,11 @@ upstreamDepthLimit = 3             // how many cells upstream to count for width
 Once the cell-based network is complete, it provides the following data to downstream systems (river carving, decoration):
 
 **Per-Cell Data:**
-- `RiverCellKey` - coordinates and pass number
+- `RiverCellKey` - coordinates (cellX, cellZ)
 - `density` - averaged terrain density
 - `classification` - LAND, OCEAN, or COASTAL
 - `primaryOutput` - direction water exits (N/S/E/W or NONE)
-- `secondaryOutputs` - additional exit directions for tributaries
+- `secondaryOutputs` - additional exit directions for new river sources
 - `distanceToOcean` - cell count to nearest terminus (0 for OCEAN, COASTAL, and basins)
 - `upstreamCount` - feeders within limited depth
 - `isBasin` - true if this cell is a basin terminus (endorheic, no outlet)
@@ -1116,17 +941,195 @@ Rivers cross cell boundaries at edge centers only. World coordinates for edge ce
 
 ```
 getEdgeCenter(key, edge):
-    cellSize = getCellSize(key.pass)
     baseX = key.worldX
     baseZ = key.worldZ
 
-    NORTH: (baseX + cellSize/2, 0, baseZ)
-    SOUTH: (baseX + cellSize/2, 0, baseZ + cellSize)
-    EAST:  (baseX + cellSize, 0, baseZ + cellSize/2)
-    WEST:  (baseX, 0, baseZ + cellSize/2)
+    NORTH: (baseX + CELL_SIZE/2, 0, baseZ)
+    SOUTH: (baseX + CELL_SIZE/2, 0, baseZ + CELL_SIZE)
+    EAST:  (baseX + CELL_SIZE, 0, baseZ + CELL_SIZE/2)
+    WEST:  (baseX, 0, baseZ + CELL_SIZE/2)
     NONE:  null
 ```
 
 Adjacent cells always agree on connection points because edge centers are defined by world coordinates, not cell-relative positions.
 
+---
 
+## Phase 12 (Optional): Multi-Pass Extension
+
+This phase adds hierarchical river generation with multiple cell scales. It's not required for functional rivers but provides additional control over river hierarchy.
+
+**When to consider this extension:**
+
+- You want guaranteed major rivers at large scale with sparser tributaries at smaller scale
+- You want forced tributary bounding (tributaries must drain to their parent cell's river)
+- Single-pass rivers don't provide enough visual hierarchy
+
+**What this phase adds:**
+
+Multi-pass creates rivers at two (or more) scales:
+- Pass 1: Large cells (e.g., 4096 blocks) for major rivers
+- Pass 2: Smaller cells (e.g., ~585 blocks) for tributaries
+
+Pass 2 tributaries are bounded by their parent Pass 1 cell—they cannot cross Pass 1 boundaries. This ensures all water within a Pass 1 cell either drains to that cell's river or collects in a local pond.
+
+### Changes Required
+
+**RiverCellKey:**
+
+Add `pass` field to the record:
+
+```
+record RiverCellKey(int cellX, int cellZ, int pass)
+
+getCellSize(pass):
+    size = config.baseCellSize  // e.g., 4096
+    for i from 1 to pass-1:
+        size = size / config.subdivisionFactor  // e.g., 7
+    return max(size, config.minimumCellSize)  // e.g., 128
+
+fromBlockPos(blockX, blockZ, pass):
+    cellSize = getCellSize(pass)
+    return RiverCellKey(
+        floorDiv(blockX, cellSize),
+        floorDiv(blockZ, cellSize),
+        pass
+    )
+```
+
+**Participation Decay:**
+
+Higher passes have lower participation rates:
+
+```
+isParticipating(key):
+    baseRate = config.participationRate  // e.g., 0.7
+    decayPerPass = config.participationDecay  // e.g., 0.25
+    rate = baseRate * (1 - decayPerPass)^(key.pass - 1)
+
+    seed = key.cellX * 31 + key.cellZ * 17 + key.pass * 7
+    rng = seededRandom(seed XOR worldSeed)
+    return rng.nextDouble() < rate
+```
+
+Example with 0.7 base rate and 0.25 decay:
+- Pass 1: 70% participation
+- Pass 2: 52.5% participation
+- Pass 3: 39.4% participation
+
+**Pass 2 Flow Calculation:**
+
+Pass 2 cells only consider neighbors within the same Pass 1 cell:
+
+```
+computePass2Flow(cell):
+    parentKey = getParentPass1Cell(cell.key)
+
+    // Only consider neighbors within the same Pass 1 cell
+    neighbors = getParticipatingNeighbors(cell)
+        .filter(n => getParentPass1Cell(n.key) == parentKey)
+
+    lowerNeighbors = neighbors where neighbor.density < cell.density - EPSILON
+
+    if lowerNeighbors is empty:
+        cell.isBasin = true  // Local pond within this Pass 1 cell
+        cell.primaryOutput = NONE
+        return
+
+    sorted = lowerNeighbors.sortBy(density)
+    cell.primaryOutput = directionTo(sorted[0])
+    cell.secondaryOutputs = sorted[1..].map(directionTo)
+
+getParentPass1Cell(pass2Key):
+    pass1Size = getCellSize(1)
+    pass2Size = getCellSize(2)
+    worldX = pass2Key.cellX * pass2Size
+    worldZ = pass2Key.cellZ * pass2Size
+    return RiverCellKey(
+        floorDiv(worldX, pass1Size),
+        floorDiv(worldZ, pass1Size),
+        1
+    )
+```
+
+**Tributary Connection:**
+
+Pass 2 tributaries flow toward lower density until they either:
+1. Reach a subcell that contains the Pass 1 river path (merge point)
+2. Reach a local minimum within the parent cell (becoming a small pond)
+
+The Pass 1 river path (from Phase 8) runs through specific subcells. When a Pass 2 tributary's flow direction leads it into one of those subcells, it has reached the main river.
+
+**Debug Command Updates:**
+
+`/rivertale cell` shows both passes:
+
+```
+Pass 1 - Cell (3, -7):
+  Center: (14336, -26624)
+  Density: 0.342
+  Classification: LAND
+  Participating: true
+  Output: SOUTH
+  Inputs: NORTH, WEST
+  Distance to ocean: 12
+
+Pass 2 - Cell (24, -56):
+  Center: (12544, -28416)
+  Density: 0.298
+  Classification: LAND
+  Participating: true
+  Output: EAST
+  Inputs: NORTH
+  Distance to ocean: 9
+```
+
+**Worldgen Integration Updates:**
+
+Compute cells for all passes:
+
+```
+onChunkGenerate(chunk):
+    chunkWorldX = chunk.getPos().getMinBlockX()
+    chunkWorldZ = chunk.getPos().getMinBlockZ()
+
+    for pass from 1 to config.maxPasses:
+        cellSize = getCellSize(pass)
+        cellX = floor(chunkWorldX / cellSize)
+        cellZ = floor(chunkWorldZ / cellSize)
+
+        cell = riverCellManager.getCell(new RiverCellKey(cellX, cellZ, pass))
+```
+
+**Configuration Additions:**
+
+```
+baseCellSize = 4096
+subdivisionFactor = 7              // odd number ensures edge centers land in single subcell
+minimumCellSize = 128
+maxPasses = 2
+participationDecay = 0.25          // range: 0.0 to 1.0
+```
+
+### Validation
+
+1. Generate Pass 1 cells for an area
+2. Generate Pass 2 cells within a Pass 1 cell
+3. Verify Pass 2 cells flow toward lower density
+4. Verify Pass 2 cells respect parent cell boundaries (no flow crossing Pass 1 edges)
+5. Verify Pass 2 cells that reach local minima become basins (ponds)
+6. Verify `/rivertale cell` shows both passes with independent flow directions
+
+### Trade-offs
+
+**Advantages:**
+- Guaranteed major rivers at large scale
+- Sparser tributaries (via participation decay)
+- Forced tributary bounding ensures visual hierarchy
+
+**Disadvantages:**
+- More complex code
+- Artificial constraint (tributaries can't naturally drain to closer rivers)
+- Two passes to compute and cache per location
+
+The single-pass architecture handles most cases well. Multi-pass is worth adding if testing reveals that upstream accumulation alone doesn't provide sufficient width/visual hierarchy, or if you want explicit control over which rivers are "major" vs "minor."

@@ -27,7 +27,7 @@ public enum FlowDirection {
         if (this == NONE) {
             return null;
         }
-        return new RiverCellKey(from.cellX() + dx, from.cellZ() + dz, from.pass());
+        return new RiverCellKey(from.cellX() + dx, from.cellZ() + dz);
     }
 
     public static FlowDirection fromDelta(int dx, int dz) {

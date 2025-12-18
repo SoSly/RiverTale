@@ -16,8 +16,8 @@ public class RiverCellManager {
     private static final int MAX_RECURSION_DEPTH = 1000;
 
     public static RiverCell createCell(RiverCellKey key, ContinentsDensityProvider provider, long worldSeed) {
-        double[][] subcellDensities = provider.sampleSubcellDensities(key.worldX(), key.worldZ(), RiverCellKey.getCellSize(key.pass()));
-        double density = provider.getAveragedDensity(key.worldX(), key.worldZ(), RiverCellKey.getCellSize(key.pass()));
+        double[][] subcellDensities = provider.sampleSubcellDensities(key.worldX(), key.worldZ(), RiverCellKey.getCellSize());
+        double density = provider.getAveragedDensity(key.worldX(), key.worldZ(), RiverCellKey.getCellSize());
         CellClassification classification = classifyCell(key, provider);
         boolean participating = ParticipationCalculator.isParticipating(key, worldSeed);
 
@@ -31,7 +31,7 @@ public class RiverCellManager {
     }
 
     private static CellClassification classifyCell(RiverCellKey key, ContinentsDensityProvider provider) {
-        int cellSize = RiverCellKey.getCellSize(key.pass());
+        int cellSize = RiverCellKey.getCellSize();
         double step = cellSize / 7.0;
 
         boolean hasOcean = false;
@@ -130,7 +130,7 @@ public class RiverCellManager {
                 continue;
             }
 
-            double neighborDensity = provider.getAveragedDensity(neighborKey.worldX(), neighborKey.worldZ(), RiverCellKey.getCellSize(neighborKey.pass()));
+            double neighborDensity = provider.getAveragedDensity(neighborKey.worldX(), neighborKey.worldZ(), RiverCellKey.getCellSize());
             neighbors.add(new NeighborInfo(direction, neighborDensity));
         }
 
@@ -139,7 +139,7 @@ public class RiverCellManager {
 
     private static FlowDirection breakTie(RiverCell cell, List<FlowDirection> tied, long worldSeed) {
         RiverCellKey key = cell.getKey();
-        long seed = key.cellX() * 31L + key.cellZ() * 17L + key.pass() * 7L;
+        long seed = key.cellX() * 31L + key.cellZ() * 17L;
         Random rng = new Random(seed ^ worldSeed);
         return tied.get(rng.nextInt(tied.size()));
     }

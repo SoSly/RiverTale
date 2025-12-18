@@ -102,7 +102,6 @@ public class RiverCell {
 
         tag.putInt("cellX", key.cellX());
         tag.putInt("cellZ", key.cellZ());
-        tag.putInt("pass", key.pass());
 
         tag.putDouble("density", density);
 
@@ -144,8 +143,7 @@ public class RiverCell {
     public static RiverCell load(CompoundTag tag) {
         int cellX = tag.getInt("cellX");
         int cellZ = tag.getInt("cellZ");
-        int pass = tag.getInt("pass");
-        RiverCellKey key = new RiverCellKey(cellX, cellZ, pass);
+        RiverCellKey key = new RiverCellKey(cellX, cellZ);
 
         double density = tag.getDouble("density");
 

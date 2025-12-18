@@ -20,7 +20,6 @@ import org.sosly.rivertale.worldgen.river.RiverCellManager;
 public class LocateCommand {
 
     private static final int MAX_SEARCH_RADIUS = 10000;
-    private static final int SEARCH_PASS = 2;
 
     private enum FeatureType {
         BASIN,
@@ -66,7 +65,7 @@ public class LocateCommand {
 
         int playerX = pos.getX();
         int playerZ = pos.getZ();
-        int cellSize = RiverCellKey.getCellSize(SEARCH_PASS);
+        int cellSize = RiverCellKey.getCellSize();
         int playerCellX = Math.floorDiv(playerX, cellSize);
         int playerCellZ = Math.floorDiv(playerZ, cellSize);
 
@@ -119,7 +118,7 @@ public class LocateCommand {
 
         int playerX = pos.getX();
         int playerZ = pos.getZ();
-        int cellSize = RiverCellKey.getCellSize(SEARCH_PASS);
+        int cellSize = RiverCellKey.getCellSize();
         int playerCellX = Math.floorDiv(playerX, cellSize);
         int playerCellZ = Math.floorDiv(playerZ, cellSize);
 
@@ -163,7 +162,7 @@ public class LocateCommand {
     }
 
     private static BlockPos checkCell(int cellX, int cellZ, int cellSize, ContinentsDensityProvider provider, CellClassification target) {
-        RiverCellKey key = new RiverCellKey(cellX, cellZ, SEARCH_PASS);
+        RiverCellKey key = new RiverCellKey(cellX, cellZ);
         CellClassification classification = classify(key, cellSize, provider);
 
         if (classification == target) {
@@ -174,7 +173,7 @@ public class LocateCommand {
     }
 
     private static BlockPos checkFlowFeatureCell(int cellX, int cellZ, int cellSize, ContinentsDensityProvider provider, long worldSeed, FeatureType featureType) {
-        RiverCellKey key = new RiverCellKey(cellX, cellZ, SEARCH_PASS);
+        RiverCellKey key = new RiverCellKey(cellX, cellZ);
         RiverCell cell = RiverCellManager.createCell(key, provider, worldSeed);
 
         if (!cell.isParticipating()) {
