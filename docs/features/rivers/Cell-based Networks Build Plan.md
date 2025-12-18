@@ -1,6 +1,12 @@
+---
+level: 5
+parent: "[[Cell-based Networks Architecture]]"
+status: review
+---
+
 # Cell-based Network Implementation Plan
 
-This document outlines the build order for the cell-based networking system described in `Cell-based Networks.md`. The goal is to implement in testable increments, with debug visualization available early.
+This document outlines the build order for the cell-based networking system described in `Cell-based Networks Architecture.md`. The goal is to implement in testable increments, with debug visualization available early.
 
 ## Key Decisions
 

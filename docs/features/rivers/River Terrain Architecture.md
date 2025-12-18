@@ -1,3 +1,9 @@
+---
+level: 3
+parent: "[[Rivers Feature Concept]]"
+status: review
+---
+
 The Cell-based Network (CBN) determines WHERE rivers flow—which cells connect, flow direction, distance to ocean. The River Terrain System determines HOW rivers appear in the world—terrain modification that creates river valleys and channels before Minecraft applies surface decoration.
 
 ## Key Decisions
