@@ -35,6 +35,9 @@ public class RiverTaleCommand {
                     BlockPos pos = BlockPos.containing(source.getPosition());
 
                     int terrainHeight = level.getHeight(CarveConfig.TERRAIN_HEIGHTMAP, pos.getX(), pos.getZ());
+                    String biomeName = level.getBiome(pos).unwrapKey()
+                        .map(key -> key.location().toString())
+                        .orElse("unknown");
 
                     RandomState randomState = level.getChunkSource().randomState();
                     NoiseRouter router = randomState.router();
@@ -56,6 +59,8 @@ public class RiverTaleCommand {
                     source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
                     source.sendSuccess(() -> Component.literal(String.format("Noise at (%d, %d), terrain height %d:", pos.getX(), pos.getZ(), terrainHeight))
                         .withStyle(ChatFormatting.YELLOW), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Biome: %s", biomeName))
+                        .withStyle(ChatFormatting.WHITE), false);
                     source.sendSuccess(() -> Component.literal(String.format("  Continents: %.3f at y=63, %.3f at y=%d", continentsSea, continentsTerrain, terrainHeight))
                         .withStyle(ChatFormatting.WHITE), false);
                     source.sendSuccess(() -> Component.literal(String.format("  Depth: %.3f at y=63, %.3f at y=%d", depthSea, depthTerrain, terrainHeight))

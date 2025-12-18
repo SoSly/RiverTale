@@ -85,13 +85,26 @@ Multiple inflows each pathfind toward the exit. When paths intersect, they merge
 
 **Cell classification:**
 
-Cells are classified based on their subcell densities:
+Cells are classified based on their subcell densities. Two thresholds apply:
+- **Ocean threshold** (continents < -0.13) — saltwater ocean
+- **Lake threshold** (depth < 0) — terrain at or below sea level (y=63)
 
-- **Land** — all subcells above ocean threshold; normal flow rules apply
-- **Ocean** — all subcells below ocean threshold; cell is a terminus, no river passes through
-- **Coastal** — mixed subcells; cell participates in river network but is a terminus
+Classifications form two parallel hierarchies:
 
-Classification is determined during cell creation by checking the 7×7 subcell densities against the ocean threshold. No additional sampling required.
+| Classification | Condition | Behavior |
+|----------------|-----------|----------|
+| OCEAN | all subcells below ocean threshold | Terminus, no participation |
+| COASTAL | mixed ocean/land subcells | Terminus, participates (river mouth to ocean) |
+| LAKE | all subcells depth < 0 (not ocean) | Terminus, no participation |
+| LAKESHORE | mixed positive/negative depth subcells | Terminus, participates (river drains into lake) |
+| LAND | all subcells depth ≥ 0 and not ocean | Normal flow rules apply |
+
+Additionally, LAND cells can become **basins** if no participating neighbor has lower density. Basins are local minima where water pools, forming new lakes distinct from terrain-based LAKE cells.
+
+- **LAKE/LAKESHORE** = existing water bodies (terrain already below sea level)
+- **Basin** = potential water bodies (flow-based local minima where rivers collect)
+
+Classification is determined during cell creation by checking the 7×7 subcell densities against both thresholds. No additional sampling required.
 
 **Ocean termination:**
 

@@ -16,11 +16,12 @@ These decisions were made during planning and supersede any conflicting details 
 |----------|-------|-----------|
 | Cell size | 256 blocks | Fine enough for detailed rivers, performance is not a concern (5-20ms even at 128 blocks) |
 | Density source | Abstracted | Design provider interface, implement Lithosphere adapter first |
-| Density formula | continents + (depth × 0.1) | Continents for ocean direction, depth for terrain-following |
+| Density formula | continents + (depth × 1.0) | Continents for ocean direction, depth weighted 1.0 for aggressive terrain-following |
 | Cache persistence | SavedData | Consistent with existing ContinentCacheSavedData pattern |
 | Debug visualization | Early | Add in Phase 2 for visual debugging throughout development |
 | Density equality threshold | 0.01 | Prevents floating-point noise from causing unexpected flow |
 | Participation rate | 0.7 | Default 70% of cells participate, configurable |
+| Lake threshold | depth < 0 | Terrain at or below sea level (y=63) is lake; creates LAKE/LAKESHORE classifications |
 
 ## Architecture Overview
 
@@ -28,7 +29,7 @@ These decisions were made during planning and supersede any conflicting details 
 ┌─────────────────────────────────────────────────────────────────┐
 │                       DensityProvider                           │
 │  - Interface: getDensity(x, z) -> double                        │
-│  - ContinentsDensityProvider: continents + (depth * 0.1)        │
+│  - ContinentsDensityProvider: continents + (depth * 1.0)        │
 │    Works for both vanilla and Lithosphere                       │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -121,12 +122,22 @@ Plus getters and NBT serialization. The `subcellDensities` array is sampled once
 
 **CellClassification:**
 
-An enum with three values:
-- `LAND` — all subcells above ocean threshold; normal flow rules apply
-- `OCEAN` — all subcells below ocean threshold; cell is a terminus with no outputs
-- `COASTAL` — mixed subcells; cell participates but is a terminus (river ends at coastline)
+An enum with five values representing two parallel terminus hierarchies:
 
-Classification is determined during cell creation by checking each subcell density against the ocean threshold. If all are above: LAND. If all are below: OCEAN. If mixed: COASTAL.
+**Ocean terminuses (continents threshold):**
+- `OCEAN` — all subcells below ocean threshold (continents < -0.13); terminus with no outputs
+- `COASTAL` — mixed ocean/land subcells; participates but terminus (river ends at coastline)
+
+**Lake terminuses (depth threshold):**
+- `LAKE` — all subcells have depth < 0 (terrain at/below y=63), not ocean; terminus with no outputs
+- `LAKESHORE` — mixed positive/negative depth subcells; participates but terminus (river drains into lake)
+
+**Normal flow:**
+- `LAND` — all subcells have depth ≥ 0 and not ocean; normal flow rules apply
+
+Additionally, LAND cells can become **basins** if no participating neighbor has lower density. Basins are flow-based local minima where new lakes form, distinct from terrain-based LAKE cells.
+
+Classification is determined during cell creation by checking each subcell against both thresholds. Ocean threshold is checked first (takes precedence), then lake threshold.
 
 **DensityProvider:**
 
@@ -224,7 +235,9 @@ Cell (5, 3):
 |---------|-----------------|-------------|
 | `basin` | Phase 5 | Nearest cell that is a basin terminus |
 | `ocean` | Phase 5 | Nearest cell classified as OCEAN |
-| `coastal` | Phase 5 | Nearest cell classified as COASTAL (river mouth) |
+| `coastal` | Phase 5 | Nearest cell classified as COASTAL (river mouth to ocean) |
+| `lake` | Phase 5 | Nearest cell classified as LAKE (terrain-based freshwater) |
+| `lakeshore` | Phase 5 | Nearest cell classified as LAKESHORE (river drains into lake) |
 | `source` | Phase 5 | Nearest cell with no inputs (river source) |
 | `confluence` | Phase 5 | Nearest cell with multiple inputs |
 
@@ -280,14 +293,14 @@ Could not find a basin within 10000 blocks.
 
 Testing was performed at various locations using `/rivertale c` to sample noise values:
 
-| Location | Terrain Height | Continents | Depth (y=63) | Erosion |
-|----------|---------------|------------|--------------|---------|
-| Deep Ocean | 63 | -0.661 | -0.466 | 0.060 |
-| Ocean | 63 | -0.302 | -0.153 | 0.060 |
-| Beach | 63 | -0.127 | -0.046 | 0.060 |
-| Plains | 93 | 0.246 | 0.159 | 0.060 |
-| Grove (mountain) | 201 | 0.213 | 0.913 | -0.687 |
-| Frozen Peaks | 255 | 0.306 | 1.288 | -0.687 |
+| Location | Terrain Height | Continents | Depth (y=63) | our density |
+|----------|---------------|------------|--------------|-------------|
+| Deep Ocean | 63 | -0.661 | -0.466 | 0.060       |
+| Ocean | 63 | -0.302 | -0.153 | 0.060       |
+| Beach | 63 | -0.127 | -0.046 | 0.060       |
+| Plains | 93 | 0.246 | 0.159 | 0.060       |
+| Grove (mountain) | 201 | 0.213 | 0.913 | -0.687      |
+| Frozen Peaks | 255 | 0.306 | 1.288 | -0.687      |
 
 **Key findings:**
 
@@ -309,16 +322,17 @@ To ensure rivers follow terrain while draining toward ocean, combine continents 
 density = continents + (depth_at_y63 * DEPTH_WEIGHT)
 ```
 
-Where `DEPTH_WEIGHT = 0.1` (configurable). This ensures:
-- Continents dominates for macro direction (toward ocean)
-- Depth breaks ties in favor of lower terrain (realistic flow)
+Where `DEPTH_WEIGHT = 1.0` (configurable). This ensures:
+- Continents provides macro direction (toward ocean)
+- Depth aggressively follows terrain (rivers flow into valleys and lakes)
 
 **ContinentsDensityProvider:**
 
 ```
 Constants:
     OCEAN_THRESHOLD = -0.13  // Below this is ocean
-    DEPTH_WEIGHT = 0.1       // How much terrain elevation influences flow
+    LAKE_THRESHOLD = 0.0     // Depth below this is lake (terrain at/below y=63)
+    DEPTH_WEIGHT = 1.0       // How much terrain elevation influences flow
     SAMPLE_Y = 63            // Fixed Y for consistent 2D sampling
 
 getDensity(worldX, worldZ):
@@ -343,8 +357,8 @@ isOcean(density):
 
 - **Continents** provides macro direction toward ocean
 - **Depth at y=63** provides terrain awareness without Y-dependency
-- **Small weight (0.1)** ensures continents dominates but depth prevents uphill flow
-- Example: Mountain (continents 0.283, depth 0.618) → combined 0.345; Valley (continents 0.291, depth 0.152) → combined 0.306. Water correctly flows from 0.345 to 0.306 (downhill).
+- **Weight of 1.0** ensures rivers aggressively follow terrain, flowing into valleys and lakes
+- Example: Mountain (continents 0.320, depth 1.738) → combined 2.058; Lake area (continents 0.235, depth -0.070) → combined 0.165. Water correctly flows from high terrain to low terrain.
 
 **Accessing the functions:**
 
@@ -387,14 +401,15 @@ Once the density provider is implemented, update `/rivertale cell` to display re
 ```
 computeFlow(cell):
     // Classification was set during cell creation based on subcell densities
-    if cell.classification == OCEAN:
+    // All terminus types have no output
+    if cell.classification in [OCEAN, LAKE]:
         cell.primaryOutput = NONE
         return
 
-    if cell.classification == COASTAL:
-        // Coastal cells are terminuses—river ends at the coastline within this cell
+    if cell.classification in [COASTAL, LAKESHORE]:
+        // Coastal/lakeshore cells are terminuses—river ends within this cell
         cell.primaryOutput = NONE
-        // But they still receive inputs from higher-density land neighbors
+        // But they still receive inputs from higher-density neighbors
         return
 
     // LAND cells: normal flow rules
@@ -481,7 +496,7 @@ getDistanceToOcean(cell):
         return cell.distanceToOcean  // cached
 
     // All terminuses have distance 0
-    if cell.classification == OCEAN or cell.classification == COASTAL:
+    if cell.classification in [OCEAN, COASTAL, LAKE, LAKESHORE]:
         cell.distanceToOcean = 0
         return 0
 
@@ -877,7 +892,8 @@ cellSize = 256                     // range: 128 to 4096
 participationRate = 0.7            // range: 0.0 to 1.0
 densityEqualityThreshold = 0.01
 oceanThreshold = -0.13
-depthWeight = 0.1                  // how much terrain elevation influences flow direction
+lakeThreshold = 0.0                // depth below this is lake (terrain at/below y=63)
+depthWeight = 1.0                  // how much terrain elevation influences flow direction
 upstreamDepthLimit = 3             // how many cells upstream to count for width
 ```
 
@@ -915,13 +931,13 @@ Once the cell-based network is complete, it provides the following data to downs
 **Per-Cell Data:**
 - `RiverCellKey` - coordinates (cellX, cellZ)
 - `density` - averaged terrain density
-- `classification` - LAND, OCEAN, or COASTAL
+- `classification` - LAND, OCEAN, COASTAL, LAKE, or LAKESHORE
 - `primaryOutput` - direction water exits (N/S/E/W or NONE)
 - `secondaryOutputs` - additional exit directions for new river sources
-- `distanceToOcean` - cell count to nearest terminus (0 for OCEAN, COASTAL, and basins)
+- `distanceToOcean` - cell count to nearest terminus (0 for all terminus types and basins)
 - `upstreamCount` - feeders within limited depth
 - `isBasin` - true if this cell is a basin terminus (endorheic, no outlet)
-- `riverPath` - list of subcell coordinates the river passes through (for LAND and COASTAL cells)
+- `riverPath` - list of subcell coordinates the river passes through (for LAND, COASTAL, and LAKESHORE cells)
 
 **Edge Centers:**
 

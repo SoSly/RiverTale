@@ -8,7 +8,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 public class ContinentsDensityProvider implements DensityProvider {
 
     private static final double OCEAN_THRESHOLD = -0.13;
-    private static final double DEPTH_WEIGHT = 0.1;
+    private static final double DEPTH_WEIGHT = 1.0;
     private static final int SAMPLE_Y = 63;
     private static final int SUBCELL_SAMPLES = 7;
 
