@@ -8,6 +8,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 public class ContinentsDensityProvider implements DensityProvider {
 
     private static final double OCEAN_THRESHOLD = -0.13;
+    private static final double LAKE_THRESHOLD = 0.0;
     private static final double DEPTH_WEIGHT = 1.0;
     private static final int SAMPLE_Y = 63;
     private static final int SUBCELL_SAMPLES = 7;
@@ -74,5 +75,19 @@ public class ContinentsDensityProvider implements DensityProvider {
     @Override
     public boolean isOcean(int worldX, int worldZ) {
         return getContinents(worldX, worldZ) < OCEAN_THRESHOLD;
+    }
+
+    public double getDepth(int worldX, int worldZ) {
+        DensityFunction.SinglePointContext context =
+            new DensityFunction.SinglePointContext(worldX, SAMPLE_Y, worldZ);
+        return depthFunction.compute(context);
+    }
+
+    @Override
+    public boolean isLake(int worldX, int worldZ) {
+        if (isOcean(worldX, worldZ)) {
+            return false;
+        }
+        return getDepth(worldX, worldZ) < LAKE_THRESHOLD;
     }
 }

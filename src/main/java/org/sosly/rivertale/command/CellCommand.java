@@ -44,7 +44,10 @@ public class CellCommand {
 
                 CellClassification classification = cell.getClassification();
 
-                if (classification == CellClassification.OCEAN || classification == CellClassification.COASTAL) {
+                if (classification == CellClassification.OCEAN
+                        || classification == CellClassification.COASTAL
+                        || classification == CellClassification.LAKE
+                        || classification == CellClassification.LAKESHORE) {
                     source.sendSuccess(() -> Component.literal(String.format("  Center: (%,d, %,d)", key.centerX(), key.centerZ()))
                         .withStyle(ChatFormatting.WHITE), false);
                     source.sendSuccess(() -> Component.literal(String.format("  Density: %.3f", cell.getDensity()))

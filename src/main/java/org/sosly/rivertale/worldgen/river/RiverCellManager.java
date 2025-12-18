@@ -40,6 +40,7 @@ public class RiverCellManager {
         double step = cellSize / 7.0;
 
         boolean hasOcean = false;
+        boolean hasLake = false;
         boolean hasLand = false;
 
         for (int i = 0; i < 7; i++) {
@@ -49,30 +50,39 @@ public class RiverCellManager {
 
                 if (provider.isOcean(sampleX, sampleZ)) {
                     hasOcean = true;
+                } else if (provider.isLake(sampleX, sampleZ)) {
+                    hasLake = true;
                 } else {
                     hasLand = true;
-                }
-
-                if (hasOcean && hasLand) {
-                    return CellClassification.COASTAL;
                 }
             }
         }
 
+        if (hasOcean && (hasLand || hasLake)) {
+            return CellClassification.COASTAL;
+        }
         if (hasOcean) {
             return CellClassification.OCEAN;
+        }
+        if (hasLake && hasLand) {
+            return CellClassification.LAKESHORE;
+        }
+        if (hasLake) {
+            return CellClassification.LAKE;
         }
 
         return CellClassification.LAND;
     }
 
     private static void computeFlow(RiverCell cell, ContinentsDensityProvider provider, long worldSeed) {
-        if (cell.getClassification() == CellClassification.OCEAN) {
+        CellClassification classification = cell.getClassification();
+
+        if (classification == CellClassification.OCEAN || classification == CellClassification.LAKE) {
             cell.setPrimaryOutput(FlowDirection.NONE);
             return;
         }
 
-        if (cell.getClassification() == CellClassification.COASTAL) {
+        if (classification == CellClassification.COASTAL || classification == CellClassification.LAKESHORE) {
             cell.setPrimaryOutput(FlowDirection.NONE);
             return;
         }
@@ -159,7 +169,11 @@ public class RiverCellManager {
         }
 
         CellClassification classification = cell.getClassification();
-        if (classification == CellClassification.OCEAN || classification == CellClassification.COASTAL || cell.isBasin()) {
+        if (classification == CellClassification.OCEAN
+                || classification == CellClassification.COASTAL
+                || classification == CellClassification.LAKE
+                || classification == CellClassification.LAKESHORE
+                || cell.isBasin()) {
             cell.setDistanceToTerminus(0);
             return 0;
         }
