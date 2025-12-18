@@ -16,6 +16,7 @@ import org.sosly.rivertale.worldgen.river.FlowDirection;
 import org.sosly.rivertale.worldgen.river.RiverCell;
 import org.sosly.rivertale.worldgen.river.RiverCellKey;
 import org.sosly.rivertale.worldgen.river.RiverCellManager;
+import org.sosly.rivertale.worldgen.river.RiverCellSavedData;
 
 public class LocateCommand {
 
@@ -114,6 +115,7 @@ public class LocateCommand {
         BlockPos pos = BlockPos.containing(source.getPosition());
 
         ContinentsDensityProvider provider = new ContinentsDensityProvider(level);
+        RiverCellSavedData savedData = RiverCellSavedData.get(level);
         long worldSeed = level.getSeed();
 
         int playerX = pos.getX();
@@ -126,13 +128,13 @@ public class LocateCommand {
 
         for (int ring = 0; ring <= maxCells; ring++) {
             for (int dx = -ring; dx <= ring; dx++) {
-                BlockPos found = checkFlowFeatureCell(playerCellX + dx, playerCellZ - ring, cellSize, provider, worldSeed, featureType);
+                BlockPos found = checkFlowFeatureCell(playerCellX + dx, playerCellZ - ring, cellSize, provider, worldSeed, savedData, featureType);
                 if (found != null) {
                     sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
                     return 1;
                 }
                 if (ring > 0) {
-                    found = checkFlowFeatureCell(playerCellX + dx, playerCellZ + ring, cellSize, provider, worldSeed, featureType);
+                    found = checkFlowFeatureCell(playerCellX + dx, playerCellZ + ring, cellSize, provider, worldSeed, savedData, featureType);
                     if (found != null) {
                         sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
                         return 1;
@@ -141,12 +143,12 @@ public class LocateCommand {
             }
 
             for (int dz = -ring + 1; dz < ring; dz++) {
-                BlockPos found = checkFlowFeatureCell(playerCellX - ring, playerCellZ + dz, cellSize, provider, worldSeed, featureType);
+                BlockPos found = checkFlowFeatureCell(playerCellX - ring, playerCellZ + dz, cellSize, provider, worldSeed, savedData, featureType);
                 if (found != null) {
                     sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
                     return 1;
                 }
-                found = checkFlowFeatureCell(playerCellX + ring, playerCellZ + dz, cellSize, provider, worldSeed, featureType);
+                found = checkFlowFeatureCell(playerCellX + ring, playerCellZ + dz, cellSize, provider, worldSeed, savedData, featureType);
                 if (found != null) {
                     sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
                     return 1;
@@ -172,9 +174,9 @@ public class LocateCommand {
         return null;
     }
 
-    private static BlockPos checkFlowFeatureCell(int cellX, int cellZ, int cellSize, ContinentsDensityProvider provider, long worldSeed, FeatureType featureType) {
+    private static BlockPos checkFlowFeatureCell(int cellX, int cellZ, int cellSize, ContinentsDensityProvider provider, long worldSeed, RiverCellSavedData savedData, FeatureType featureType) {
         RiverCellKey key = new RiverCellKey(cellX, cellZ);
-        RiverCell cell = RiverCellManager.createCell(key, provider, worldSeed);
+        RiverCell cell = RiverCellManager.getOrCreate(key, provider, worldSeed, savedData);
 
         if (!cell.isParticipating()) {
             return null;
@@ -186,8 +188,8 @@ public class LocateCommand {
 
         boolean matches = switch (featureType) {
             case BASIN -> cell.isBasin();
-            case SOURCE -> countInputs(cell, provider, worldSeed) == 0;
-            case CONFLUENCE -> countInputs(cell, provider, worldSeed) >= 2;
+            case SOURCE -> countInputs(cell, provider, worldSeed, savedData) == 0;
+            case CONFLUENCE -> countInputs(cell, provider, worldSeed, savedData) >= 2;
         };
 
         if (matches) {
@@ -197,14 +199,14 @@ public class LocateCommand {
         return null;
     }
 
-    private static int countInputs(RiverCell cell, ContinentsDensityProvider provider, long worldSeed) {
+    private static int countInputs(RiverCell cell, ContinentsDensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
         int inputs = 0;
         RiverCellKey key = cell.getKey();
         FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
 
         for (FlowDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(key);
-            RiverCell neighbor = RiverCellManager.createCell(neighborKey, provider, worldSeed);
+            RiverCell neighbor = RiverCellManager.getOrCreate(neighborKey, provider, worldSeed, savedData);
 
             if (!neighbor.isParticipating()) {
                 continue;

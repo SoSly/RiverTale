@@ -13,6 +13,7 @@ import org.sosly.rivertale.worldgen.river.FlowDirection;
 import org.sosly.rivertale.worldgen.river.RiverCell;
 import org.sosly.rivertale.worldgen.river.RiverCellKey;
 import org.sosly.rivertale.worldgen.river.RiverCellManager;
+import org.sosly.rivertale.worldgen.river.RiverCellSavedData;
 
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -28,9 +29,10 @@ public class CellCommand {
                 long worldSeed = level.getSeed();
 
                 ContinentsDensityProvider provider = new ContinentsDensityProvider(level);
+                RiverCellSavedData savedData = RiverCellSavedData.get(level);
 
                 RiverCellKey key = RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
-                RiverCell cell = RiverCellManager.createCell(key, provider, worldSeed);
+                RiverCell cell = RiverCellManager.getOrCreate(key, provider, worldSeed, savedData);
 
                 source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
                 source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d):", key.cellX(), key.cellZ()))
@@ -55,7 +57,7 @@ public class CellCommand {
                     source.sendSuccess(() -> Component.literal(String.format("  Classification: %s", classification))
                         .withStyle(ChatFormatting.WHITE), false);
 
-                    int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed);
+                    int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed, savedData);
                     source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                         .withStyle(ChatFormatting.WHITE), false);
                     return 1;
@@ -89,7 +91,7 @@ public class CellCommand {
                         .withStyle(ChatFormatting.WHITE), false);
                 }
 
-                int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed);
+                int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed, savedData);
                 source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                     .withStyle(ChatFormatting.WHITE), false);
 

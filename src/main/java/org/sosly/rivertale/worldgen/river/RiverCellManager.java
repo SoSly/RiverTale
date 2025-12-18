@@ -15,7 +15,7 @@ public class RiverCellManager {
     private static final double DENSITY_EPSILON = 0.01;
     private static final int MAX_RECURSION_DEPTH = 1000;
 
-    public static RiverCell createCell(RiverCellKey key, ContinentsDensityProvider provider, long worldSeed) {
+    static RiverCell createCell(RiverCellKey key, ContinentsDensityProvider provider, long worldSeed) {
         long startTime = System.nanoTime();
 
         double[][] subcellDensities = provider.sampleSubcellDensities(key.worldX(), key.worldZ(), RiverCellKey.getCellSize());
@@ -159,11 +159,15 @@ public class RiverCellManager {
         return tied.get(rng.nextInt(tied.size()));
     }
 
-    public static int getDistanceToTerminus(RiverCell cell, ContinentsDensityProvider provider, long worldSeed) {
-        return getDistanceToTerminusRecursive(cell, provider, worldSeed, 0);
+    public static RiverCell getOrCreate(RiverCellKey key, ContinentsDensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
+        return savedData.getOrCompute(key, k -> createCell(k, provider, worldSeed));
     }
 
-    private static int getDistanceToTerminusRecursive(RiverCell cell, ContinentsDensityProvider provider, long worldSeed, int depth) {
+    public static int getDistanceToTerminus(RiverCell cell, ContinentsDensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
+        return getDistanceToTerminusRecursive(cell, provider, worldSeed, savedData, 0);
+    }
+
+    private static int getDistanceToTerminusRecursive(RiverCell cell, ContinentsDensityProvider provider, long worldSeed, RiverCellSavedData savedData, int depth) {
         if (cell.getDistanceToTerminus() >= 0) {
             return cell.getDistanceToTerminus();
         }
@@ -190,9 +194,9 @@ public class RiverCellManager {
 
         FlowDirection primaryOutput = cell.getPrimaryOutput();
         RiverCellKey downstreamKey = primaryOutput.neighbor(cell.getKey());
-        RiverCell downstreamCell = createCell(downstreamKey, provider, worldSeed);
+        RiverCell downstreamCell = savedData.getOrCompute(downstreamKey, k -> createCell(k, provider, worldSeed));
 
-        int downstreamDistance = getDistanceToTerminusRecursive(downstreamCell, provider, worldSeed, depth + 1);
+        int downstreamDistance = getDistanceToTerminusRecursive(downstreamCell, provider, worldSeed, savedData, depth + 1);
         int distance = 1 + downstreamDistance;
 
         cell.setDistanceToTerminus(distance);
