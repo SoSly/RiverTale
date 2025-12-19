@@ -35,10 +35,12 @@ public class CellCommand {
                 RiverCellSavedData savedData = RiverCellSavedData.get(level);
 
                 RiverCellKey key = RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
+                boolean wasCached = savedData.getIfPresent(key) != null;
                 RiverCell cell = RiverCellManager.getOrCreate(key, provider, worldSeed, savedData);
 
+                String cacheStatus = wasCached ? "[cached]" : "[computed]";
                 source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
-                source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d):", key.cellX(), key.cellZ()))
+                source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d): %s", key.cellX(), key.cellZ(), cacheStatus))
                     .withStyle(ChatFormatting.YELLOW), false);
 
                 if (!cell.isParticipating()) {
