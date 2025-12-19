@@ -1,7 +1,7 @@
 ---
 level: 5
 parent: "[[Cell-based Networks Architecture]]"
-status: review
+status: implemented
 ---
 
 # Cell-based Network Implementation Plan

@@ -85,18 +85,21 @@ Rivers are not uniform channels. A river's appearance varies along its length: s
 
 Each subcell along a river path selects a **feature** that determines how terrain is modified in that subcell. Features are registered handlers that know how to carve their specific river element. The selection process uses subcell conditions and seeded noise to pick deterministically from eligible features.
 
-### Feature Types
+### Feature Categories
 
-Features are categorized by where in the river they can appear. A feature declares its type, and the selection process only considers features matching the subcell's position:
+Features are categorized by their role in the river system. Each category has a basic feature that handles the common case, with optional variants for special conditions.
 
-| Type | Location | Conditions |
-|------|----------|------------|
-| **Source** | First subcell of a new river | No inlets—either a true headwater (cell with no inputs) or a secondary output (new river from a drainage divide) |
-| **Mouth** | Last subcell before terminus | Subcell borders ocean or drains into an endorheic basin |
-| **Confluence** | Merging point | Subcell has 2+ inlets from upstream |
-| **Midstream** | Everything else | Standard river segments between source and mouth |
+| Category | Level | Location | Conditions | Basic Feature |
+|----------|-------|----------|------------|---------------|
+| **SOURCE** | Subcell | First subcell of a new river | No inlets—either a true headwater (cell with no inputs) or a secondary output (new river from a drainage divide) | Stream |
+| **PATH** | Subcell | Along the river | Standard river segments between source and terminus | River |
+| **CONFLUENCE** | Subcell | Merging point | Subcell has 2+ inlets from upstream | Junction |
+| **TERMINUS** | Subcell | Last subcell before ending | Subcell borders ocean, lake, or basin | Mouth |
+| **BASIN** | Cell | Basin terminus cells | Flow-based local minimum where rivers collect | Endorheic |
 
-A subcell has exactly one type. The type determines which features are eligible for selection.
+A subcell along a river path has exactly one category (SOURCE, PATH, CONFLUENCE, or TERMINUS). The category determines which features are eligible for selection.
+
+BASIN operates at cell level rather than subcell level. Basin size scales with cell size—large cells produce moderately-sized pools, small cells may fill entirely. When a river terminates at a basin, the entry subcell receives a TERMINUS feature and the cell receives a BASIN feature. The terminus flows into the basin.
 
 ### Feature Selection
 
@@ -115,8 +118,8 @@ Every feature receives the same context and fulfills the same contract:
 
 **Input (what features receive):**
 - Subcell world bounds (block coordinates)
-- Entry points (where water flows in—zero for sources, one for midstream, two+ for confluence)
-- Exit point (where water flows out—none for mouths terminating at ocean/basin)
+- Entry points (where water flows in—zero for SOURCE, one for PATH, two+ for CONFLUENCE)
+- Exit point (where water flows out—none for TERMINUS features ending at ocean/basin)
 - Target elevation at entry and exit
 - River width at this subcell
 - Biome context
@@ -131,17 +134,23 @@ Features may read terrain outside their bounds for context (e.g., checking surro
 
 ### Required Features
 
-Two features must exist for the system to function:
+These features must exist for the system to function:
 
-**Default River** — The standard midstream channel. Handles the vast majority of subcells. Carves a rounded channel, builds embankments where needed, produces smooth meandering paths.
+**PATH: River** — The standard channel. Handles the vast majority of subcells. Carves a rounded channel, builds embankments where needed, produces smooth meandering paths.
 
-**Confluence** — Handles subcells where multiple rivers meet. Must merge inlet paths into a single outlet path, typically widening the channel to accommodate combined flow.
+**CONFLUENCE: Junction** — Handles subcells where multiple rivers meet. Must merge inlet paths into a single outlet path, typically widening the channel to accommodate combined flow.
 
-Without these, rivers cannot be generated. All other features are optional extensions.
+**SOURCE: Stream** — Handles the first subcell of a river. Creates the origin point where water begins.
 
-## Default River Feature
+**TERMINUS: Mouth** — Handles the last subcell before a river ends. Manages the transition from river to ocean, lake, or basin.
 
-The Default River feature handles standard midstream subcells. It implements the baseline terrain modification that all rivers share.
+**BASIN: Endorheic** — Handles cells that are basin terminuses. Creates a pool of standing water where rivers collect at flow minima.
+
+Without these basic features, rivers cannot be generated. All other features are optional variants that provide visual variety.
+
+## PATH: River Feature
+
+The River feature handles standard PATH subcells. It implements the baseline terrain modification that all rivers share.
 
 ### Channel Carving
 
@@ -172,9 +181,9 @@ Meandering magnitude scales with river width. Wide rivers curve dramatically. Na
 
 Terrain modification removes any block in its path—stone, dirt, existing features. Rivers claim their space unconditionally. This prevents rivers from being blocked by terrain that happened to generate in their path.
 
-## Confluence Feature
+## CONFLUENCE: Junction Feature
 
-The Confluence feature handles subcells where two or more rivers merge. It solves the geometric problem of routing multiple entry points to a single exit.
+The Junction feature handles CONFLUENCE subcells where two or more rivers merge. It solves the geometric problem of routing multiple entry points to a single exit.
 
 ### Merge Point Calculation
 
@@ -200,7 +209,7 @@ For each inlet:
 
 1. Route a path from inlet entry point to the merge point
 2. Carve a channel appropriate to that inlet's width
-3. Apply the same valley/embankment logic as Default River
+3. Apply the same valley/embankment logic as the River feature
 
 All inlet paths terminate at the merge point. From there, a single channel continues to the exit.
 
@@ -234,6 +243,45 @@ This creates a natural "pooling" effect where rivers meet before narrowing back 
 All inlets must arrive at the same elevation—the confluence's target elevation. Both Pass 1 and Pass 2 rivers share elevation context (Pass 2 inherits baseline from parent Pass 1 cell), so steep drops from pass differences alone shouldn't occur.
 
 For steep elevation differences between inlets from other factors (unusual terrain, basin edges), the higher inlet's final subcells use gradual descent to reach the confluence elevation. Future waterfall features will replace this with vertical drops where appropriate.
+
+## BASIN: Endorheic Feature
+
+The Endorheic feature handles cells that are basin terminuses—flow-based local minima where rivers collect. Unlike the subcell-level features above, BASIN operates at cell level.
+
+### When Basins Form
+
+A cell becomes a basin when it has no participating neighbor with lower density and is not ocean. Water flows in but has nowhere to flow out. The cell is a local minimum in the drainage network.
+
+### Basin Termination
+
+When a river reaches a basin cell:
+
+1. The entry subcell receives a TERMINUS feature (Mouth)
+2. The cell receives a BASIN feature (Endorheic)
+3. The terminus flows into the basin pool
+
+Unlike coastal or lakeshore termination, the river does not pathfind toward existing water. The entry point IS the terminus—there's no pre-existing water to find.
+
+### Pool Creation
+
+The Endorheic feature creates a pool of standing water at the basin. Pool characteristics:
+
+- **Location**: Centered on or near the river entry point
+- **Size**: Scales with cell size. Large cells (4096 blocks) produce moderately-sized pools. Small cells (256 blocks) may fill the entire cell.
+- **Depth**: Shallow relative to river channels. Basins are collection points, not deep lakes.
+- **Shape**: Organic, following terrain contours where possible
+
+### Terrain Modification
+
+Basin terrain modification differs from river terrain modification:
+
+- **Carving**: The pool area is carved to a consistent depth below the water surface
+- **No embankments**: Basins form at local minima, so surrounding terrain is already higher
+- **Shoreline**: The pool edge follows natural terrain contours rather than a fixed geometric shape
+
+### Multiple Inlets
+
+A basin may receive rivers from multiple directions. Each inlet gets its own TERMINUS feature at its entry subcell. All inlets feed the same pool—the BASIN feature handles the unified body of water.
 
 ## River Elevation
 
@@ -388,7 +436,7 @@ Terrain modification uses cached CBN data and seeded noise for feature selection
 
 - Provides feature-based architecture for river terrain modification
 - Selects features per subcell based on type and conditions
-- Implements Default River and Confluence features
+- Implements River and Junction features
 - Modifies terrain to create river channels and valleys
 - Builds embankments where terrain is too low
 - Updates heightmaps so surface rules work correctly
@@ -408,15 +456,19 @@ Terrain modification uses cached CBN data and seeded noise for feature selection
 
 These features are not required for initial implementation. They register into the feature-based architecture when implemented.
 
-| Feature | Type | Selection Criteria |
-|---------|------|-------------------|
-| Spring | Source | Default source in temperate biomes |
-| Glacial Melt | Source | Source in cold/mountain biomes |
-| Source Lake | Source | Rare; small pond at river origin |
-| Rapids | Midstream | Moderate elevation drop (6-10 blocks per subcell) |
-| Waterfall | Midstream | Steep elevation drop (10+ blocks per subcell) |
-| Midstream Lake | Midstream | Rare; minimal elevation drop, wide valley |
-| Confluence Lake | Confluence | Rare; weighted higher with 3+ inlets |
-| Estuary | Mouth | Coastal mouth in flat terrain |
-| Delta | Mouth | Coastal mouth with sediment deposits |
-| Bay | Mouth | Coastal mouth in hilly terrain |
+| Feature | Category | Selection Criteria |
+|---------|----------|-------------------|
+| Spring | SOURCE | Default source in temperate biomes |
+| Glacial Melt | SOURCE | Source in cold/mountain biomes |
+| Source Pool | SOURCE | Rare; small pond at river origin |
+| Rapids | PATH | Moderate elevation drop (6-10 blocks per subcell) |
+| Waterfall | PATH | Steep elevation drop (10+ blocks per subcell) |
+| Gorge | PATH | Deep narrow channel through rock |
+| Cave | PATH | River flowing through underground cavern |
+| Confluence Pool | CONFLUENCE | Rare; weighted higher with 3+ inlets |
+| Cascade | CONFLUENCE | One inlet drops from elevation into main river |
+| Estuary | TERMINUS | Coastal terminus in flat terrain |
+| Delta | TERMINUS | Coastal terminus with sediment deposits |
+| Bay | TERMINUS | Coastal terminus in hilly terrain |
+| Lake | BASIN | Larger body with defined shoreline |
+| Wetland | BASIN | Shallow marshy area at flow minimum |
