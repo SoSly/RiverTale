@@ -26,9 +26,15 @@ import java.util.Map;
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class RiverPathRenderer {
 
-    private static final int CELL_SIZE = RiverCellKey.getCellSize();
-    private static final double SUBCELL_STEP = CELL_SIZE / 7.0;
     private static final double SEA_LEVEL = 63.0;
+
+    private static int getCellSize() {
+        return RiverCellKey.getCellSize();
+    }
+
+    private static double getSubcellStep() {
+        return getCellSize() / 7.0;
+    }
 
     private static final float[] COLOR_SOURCE = {0.0f, 0.5f, 1.0f, 0.8f};
     private static final float[] COLOR_TERMINUS = {1.0f, 0.2f, 0.2f, 0.8f};
@@ -69,8 +75,8 @@ public class RiverPathRenderer {
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
         for (CellData cell : ClientCellCache.getCells()) {
-            int cellWorldX = cell.cellX * CELL_SIZE;
-            int cellWorldZ = cell.cellZ * CELL_SIZE;
+            int cellWorldX = cell.cellX * getCellSize();
+            int cellWorldZ = cell.cellZ * getCellSize();
 
             for (List<int[]> path : cell.riverPaths.values()) {
                 if (path.isEmpty()) {
@@ -84,8 +90,8 @@ public class RiverPathRenderer {
                     if (neighbor != null) {
                         Vec3 thisPos = subcellToWorld(startPoint, cellWorldX, cellWorldZ);
                         int[] neighborPoint = getOppositeEdgePoint(startPoint, startEdge);
-                        int neighborWorldX = neighbor.cellX * CELL_SIZE;
-                        int neighborWorldZ = neighbor.cellZ * CELL_SIZE;
+                        int neighborWorldX = neighbor.cellX * getCellSize();
+                        int neighborWorldZ = neighbor.cellZ * getCellSize();
                         Vec3 neighborPos = subcellToWorld(neighborPoint, neighborWorldX, neighborWorldZ);
                         drawLine(poseStack, bufferBuilder, thisPos, neighborPos, camPos, COLOR_BOUNDARY);
                     }
@@ -98,8 +104,8 @@ public class RiverPathRenderer {
                     if (neighbor != null) {
                         Vec3 thisPos = subcellToWorld(endPoint, cellWorldX, cellWorldZ);
                         int[] neighborPoint = getOppositeEdgePoint(endPoint, endEdge);
-                        int neighborWorldX = neighbor.cellX * CELL_SIZE;
-                        int neighborWorldZ = neighbor.cellZ * CELL_SIZE;
+                        int neighborWorldX = neighbor.cellX * getCellSize();
+                        int neighborWorldZ = neighbor.cellZ * getCellSize();
                         Vec3 neighborPos = subcellToWorld(neighborPoint, neighborWorldX, neighborWorldZ);
                         drawLine(poseStack, bufferBuilder, thisPos, neighborPos, camPos, COLOR_BOUNDARY);
                     }
@@ -148,8 +154,8 @@ public class RiverPathRenderer {
     }
 
     private static void renderCell(CellData cell, PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
-        int cellWorldX = cell.cellX * CELL_SIZE;
-        int cellWorldZ = cell.cellZ * CELL_SIZE;
+        int cellWorldX = cell.cellX * getCellSize();
+        int cellWorldZ = cell.cellZ * getCellSize();
 
         java.util.Set<String> confluencePoints = findConfluencePoints(cell);
 
@@ -294,8 +300,8 @@ public class RiverPathRenderer {
         int row = subcell[0];
         int col = subcell[1];
 
-        double worldX = cellWorldX + (col * SUBCELL_STEP) + (SUBCELL_STEP / 2);
-        double worldZ = cellWorldZ + (row * SUBCELL_STEP) + (SUBCELL_STEP / 2);
+        double worldX = cellWorldX + (col * getSubcellStep()) + (getSubcellStep() / 2);
+        double worldZ = cellWorldZ + (row * getSubcellStep()) + (getSubcellStep() / 2);
 
         return new Vec3(worldX, SEA_LEVEL, worldZ);
     }

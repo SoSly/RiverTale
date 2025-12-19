@@ -42,8 +42,7 @@ public class RiverPathRefiner {
             List<int[]> primaryPath = null;
             Set<String> allPathCells = new HashSet<>();
 
-            // TODO: Replace cardinal priority with upstream density ordering when available
-            List<FlowDirection> sortedInputs = sortByCardinalPriority(inputs);
+            List<FlowDirection> sortedInputs = sortByUpstreamCount(inputs, cell, provider, worldSeed, savedData);
 
             for (FlowDirection input : sortedInputs) {
                 int[] entry = getSubcellAtEdge(input);
@@ -110,8 +109,7 @@ public class RiverPathRefiner {
                 int[] exit = getSubcellAtEdge(primaryOutput);
                 double[][] weightedCosts = applyExitWeighting(cell.getSubcellDensities(), exit);
 
-                // TODO: Replace cardinal priority with upstream density ordering when available
-                List<FlowDirection> sortedInputs = sortByCardinalPriority(inputs);
+                List<FlowDirection> sortedInputs = sortByUpstreamCount(inputs, cell, provider, worldSeed, savedData);
 
                 for (FlowDirection input : sortedInputs) {
                     int[] entry = getSubcellAtEdge(input);
@@ -139,8 +137,7 @@ public class RiverPathRefiner {
                 Set<String> allPathCells = new HashSet<>();
                 int[] center = new int[]{CENTER_SUBCELL, CENTER_SUBCELL};
 
-                // TODO: Replace cardinal priority with upstream density ordering when available
-                List<FlowDirection> sortedInputs = sortByCardinalPriority(inputs);
+                List<FlowDirection> sortedInputs = sortByUpstreamCount(inputs, cell, provider, worldSeed, savedData);
 
                 for (FlowDirection input : sortedInputs) {
                     int[] entry = getSubcellAtEdge(input);
@@ -476,19 +473,19 @@ public class RiverPathRefiner {
         return FlowDirection.NONE;
     }
 
-    private static List<FlowDirection> sortByCardinalPriority(Set<FlowDirection> inputs) {
+    private static List<FlowDirection> sortByUpstreamCount(Set<FlowDirection> inputs, RiverCell cell,
+                                                            DensityProvider provider, long worldSeed,
+                                                            RiverCellSavedData savedData) {
         List<FlowDirection> sorted = new ArrayList<>(inputs);
-        Map<FlowDirection, Integer> priority = Map.of(
-            FlowDirection.SOUTH, 0,
-            FlowDirection.EAST, 1,
-            FlowDirection.WEST, 2,
-            FlowDirection.NORTH, 3
-        );
-        sorted.sort((a, b) -> {
-            int pa = priority.getOrDefault(a, 99);
-            int pb = priority.getOrDefault(b, 99);
-            return Integer.compare(pa, pb);
-        });
+        Map<FlowDirection, Integer> upstreamCounts = new HashMap<>();
+
+        for (FlowDirection input : inputs) {
+            RiverCellKey neighborKey = input.neighbor(cell.getKey());
+            int count = RiverCellManager.getUpstreamCount(neighborKey, provider, worldSeed, savedData);
+            upstreamCounts.put(input, count);
+        }
+
+        sorted.sort((a, b) -> Integer.compare(upstreamCounts.get(b), upstreamCounts.get(a)));
         return sorted;
     }
 
