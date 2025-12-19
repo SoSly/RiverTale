@@ -38,4 +38,14 @@ public enum FlowDirection {
         }
         return NONE;
     }
+
+    public FlowDirection opposite() {
+        return switch (this) {
+            case NORTH -> SOUTH;
+            case SOUTH -> NORTH;
+            case EAST -> WEST;
+            case WEST -> EAST;
+            case NONE -> NONE;
+        };
+    }
 }

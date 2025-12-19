@@ -4,7 +4,7 @@ import java.util.Random;
 
 public class ParticipationCalculator {
 
-    private static final double PARTICIPATION_RATE = 0.7;
+    private static final double PARTICIPATION_RATE = 0.6;
 
     public static boolean isParticipating(RiverCellKey key, long worldSeed) {
         long seed = key.cellX() * 31L + key.cellZ() * 17L;

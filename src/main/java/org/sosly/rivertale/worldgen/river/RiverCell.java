@@ -5,8 +5,10 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class RiverCell {
@@ -21,7 +23,7 @@ public class RiverCell {
     private Set<FlowDirection> secondaryOutputs;
     private int distanceToTerminus;
     private boolean isBasin;
-    private List<int[]> riverPath;
+    private Map<FlowDirection, List<int[]>> riverPaths;
 
     public RiverCell(RiverCellKey key, double density, double[][] subcellDensities,
                      CellClassification classification, boolean participating) {
@@ -34,7 +36,7 @@ public class RiverCell {
         this.secondaryOutputs = new HashSet<>();
         this.distanceToTerminus = -1;
         this.isBasin = false;
-        this.riverPath = null;
+        this.riverPaths = new HashMap<>();
     }
 
     public RiverCellKey getKey() {
@@ -89,12 +91,12 @@ public class RiverCell {
         this.isBasin = basin;
     }
 
-    public List<int[]> getRiverPath() {
-        return riverPath;
+    public Map<FlowDirection, List<int[]>> getRiverPaths() {
+        return riverPaths;
     }
 
-    public void setRiverPath(List<int[]> riverPath) {
-        this.riverPath = riverPath;
+    public void setRiverPaths(Map<FlowDirection, List<int[]>> riverPaths) {
+        this.riverPaths = riverPaths;
     }
 
     public CompoundTag save() {
@@ -128,13 +130,22 @@ public class RiverCell {
         tag.putInt("distanceToTerminus", distanceToTerminus);
         tag.putBoolean("isBasin", isBasin);
 
-        if (riverPath != null) {
-            int[] flatPath = new int[riverPath.size() * 2];
-            for (int i = 0; i < riverPath.size(); i++) {
-                flatPath[i * 2] = riverPath.get(i)[0];
-                flatPath[i * 2 + 1] = riverPath.get(i)[1];
+        if (!riverPaths.isEmpty()) {
+            ListTag pathsListTag = new ListTag();
+            for (Map.Entry<FlowDirection, List<int[]>> entry : riverPaths.entrySet()) {
+                CompoundTag pathEntryTag = new CompoundTag();
+                pathEntryTag.putString("direction", entry.getKey().name());
+
+                List<int[]> path = entry.getValue();
+                int[] flatPath = new int[path.size() * 2];
+                for (int i = 0; i < path.size(); i++) {
+                    flatPath[i * 2] = path.get(i)[0];
+                    flatPath[i * 2 + 1] = path.get(i)[1];
+                }
+                pathEntryTag.putIntArray("path", flatPath);
+                pathsListTag.add(pathEntryTag);
             }
-            tag.putIntArray("riverPath", flatPath);
+            tag.put("riverPaths", pathsListTag);
         }
 
         return tag;
@@ -174,13 +185,21 @@ public class RiverCell {
         cell.setDistanceToTerminus(tag.getInt("distanceToTerminus"));
         cell.setBasin(tag.getBoolean("isBasin"));
 
-        if (tag.contains("riverPath")) {
-            int[] flatPath = tag.getIntArray("riverPath");
-            List<int[]> riverPath = new ArrayList<>();
-            for (int i = 0; i < flatPath.length; i += 2) {
-                riverPath.add(new int[]{flatPath[i], flatPath[i + 1]});
+        if (tag.contains("riverPaths")) {
+            Map<FlowDirection, List<int[]>> riverPaths = new HashMap<>();
+            ListTag pathsListTag = tag.getList("riverPaths", Tag.TAG_COMPOUND);
+            for (int i = 0; i < pathsListTag.size(); i++) {
+                CompoundTag pathEntryTag = pathsListTag.getCompound(i);
+                FlowDirection direction = FlowDirection.valueOf(pathEntryTag.getString("direction"));
+
+                int[] flatPath = pathEntryTag.getIntArray("path");
+                List<int[]> path = new ArrayList<>();
+                for (int j = 0; j < flatPath.length; j += 2) {
+                    path.add(new int[]{flatPath[j], flatPath[j + 1]});
+                }
+                riverPaths.put(direction, path);
             }
-            cell.setRiverPath(riverPath);
+            cell.setRiverPaths(riverPaths);
         }
 
         return cell;

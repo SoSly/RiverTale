@@ -15,6 +15,8 @@ import org.sosly.rivertale.worldgen.river.RiverCellKey;
 import org.sosly.rivertale.worldgen.river.RiverCellManager;
 import org.sosly.rivertale.worldgen.river.RiverCellSavedData;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -22,6 +24,7 @@ public class CellCommand {
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         return Commands.literal("cell")
+            .then(VisualizeCommand.register())
             .executes(context -> {
                 CommandSourceStack source = context.getSource();
                 ServerLevel level = source.getLevel();
@@ -46,10 +49,12 @@ public class CellCommand {
 
                 CellClassification classification = cell.getClassification();
 
-                if (classification == CellClassification.OCEAN
+                boolean isTerminus = classification == CellClassification.OCEAN
                         || classification == CellClassification.COASTAL
                         || classification == CellClassification.LAKE
-                        || classification == CellClassification.LAKESHORE) {
+                        || classification == CellClassification.LAKESHORE;
+
+                if (isTerminus) {
                     source.sendSuccess(() -> Component.literal(String.format("  Center: (%,d, %,d)", key.centerX(), key.centerZ()))
                         .withStyle(ChatFormatting.WHITE), false);
                     source.sendSuccess(() -> Component.literal(String.format("  Density: %.3f", cell.getDensity()))
@@ -60,6 +65,20 @@ public class CellCommand {
                     int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed, savedData);
                     source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                         .withStyle(ChatFormatting.WHITE), false);
+
+                    RiverCellManager.ensurePaths(cell, provider, worldSeed, savedData);
+                    Map<FlowDirection, List<int[]>> terminusPaths = cell.getRiverPaths();
+                    if (!terminusPaths.isEmpty()) {
+                        for (Map.Entry<FlowDirection, List<int[]>> entry : terminusPaths.entrySet()) {
+                            FlowDirection inputDirection = entry.getKey();
+                            List<int[]> path = entry.getValue();
+                            String pathStr = path.stream()
+                                .map(coords -> String.format("(%d,%d)", coords[0], coords[1]))
+                                .collect(Collectors.joining(" -> "));
+                            source.sendSuccess(() -> Component.literal(String.format("  Path from %s: %s", inputDirection, pathStr))
+                                .withStyle(ChatFormatting.WHITE), false);
+                        }
+                    }
                     return 1;
                 }
 
@@ -95,7 +114,45 @@ public class CellCommand {
                 source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                     .withStyle(ChatFormatting.WHITE), false);
 
+                RiverCellManager.ensurePaths(cell, provider, worldSeed, savedData);
+                Map<FlowDirection, List<int[]>> paths = cell.getRiverPaths();
+                if (!paths.isEmpty()) {
+                    for (Map.Entry<FlowDirection, List<int[]>> entry : paths.entrySet()) {
+                        FlowDirection inputDirection = entry.getKey();
+                        List<int[]> path = entry.getValue();
+                        String pathStr = path.stream()
+                            .map(coords -> String.format("(%d,%d)", coords[0], coords[1]))
+                            .collect(Collectors.joining(" -> "));
+                        String label = formatPathLabel(inputDirection, primaryOutput, cell);
+                        source.sendSuccess(() -> Component.literal(String.format("  %s: %s", label, pathStr))
+                            .withStyle(ChatFormatting.WHITE), false);
+                    }
+                }
+
                 return 1;
             });
+    }
+
+    private static String formatPathLabel(FlowDirection key, FlowDirection primaryOutput, RiverCell cell) {
+        if (key == primaryOutput && !isEdgeDirection(key, cell)) {
+            return String.format("Source to %s", primaryOutput);
+        }
+
+        if (cell.getSecondaryOutputs().contains(key)) {
+            return String.format("Secondary source to %s", key);
+        }
+
+        return String.format("Path from %s to %s", key, primaryOutput);
+    }
+
+    private static boolean isEdgeDirection(FlowDirection key, RiverCell cell) {
+        List<int[]> path = cell.getRiverPaths().get(key);
+        if (path == null || path.isEmpty()) {
+            return false;
+        }
+        int[] start = path.get(0);
+        int row = start[0];
+        int col = start[1];
+        return row == 0 || row == 6 || col == 0 || col == 6;
     }
 }

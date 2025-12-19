@@ -7,6 +7,7 @@ import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
+import org.sosly.rivertale.network.RiverTaleNetwork;
 
 @Mod(RiverTale.MOD_ID)
 public class RiverTale {
@@ -25,6 +26,7 @@ public class RiverTale {
     private void setup(final FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             LOGGER.info("RiverTale common setup");
+            RiverTaleNetwork.register();
         });
     }
 

@@ -51,6 +51,10 @@ public class RiverCellSavedData extends SavedData {
         });
     }
 
+    public RiverCell getIfPresent(RiverCellKey key) {
+        return cells.get(key);
+    }
+
     @Override
     public CompoundTag save(CompoundTag tag) {
         CompoundTag cellsTag = new CompoundTag();
