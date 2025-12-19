@@ -4,12 +4,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
+import org.sosly.rivertale.config.RiverConfig;
 
 public class ContinentsDensityProvider implements DensityProvider {
 
-    private static final double OCEAN_THRESHOLD = -0.13;
-    private static final double LAKE_THRESHOLD = 0.0;
-    private static final double DEPTH_WEIGHT = 1.0;
     private static final int SAMPLE_Y = 63;
     private static final int SUBCELL_SAMPLES = 7;
 
@@ -29,7 +27,7 @@ public class ContinentsDensityProvider implements DensityProvider {
             new DensityFunction.SinglePointContext(worldX, SAMPLE_Y, worldZ);
         double continents = continentsFunction.compute(context);
         double depth = depthFunction.compute(context);
-        return continents + (depth * DEPTH_WEIGHT);
+        return continents + (depth * RiverConfig.DEPTH_WEIGHT.get());
     }
 
     @Override
@@ -74,7 +72,7 @@ public class ContinentsDensityProvider implements DensityProvider {
 
     @Override
     public boolean isOcean(int worldX, int worldZ) {
-        return getContinents(worldX, worldZ) < OCEAN_THRESHOLD;
+        return getContinents(worldX, worldZ) < RiverConfig.OCEAN_THRESHOLD.get();
     }
 
     public double getDepth(int worldX, int worldZ) {
@@ -88,6 +86,6 @@ public class ContinentsDensityProvider implements DensityProvider {
         if (isOcean(worldX, worldZ)) {
             return false;
         }
-        return getDepth(worldX, worldZ) < LAKE_THRESHOLD;
+        return getDepth(worldX, worldZ) < RiverConfig.LAKE_THRESHOLD.get();
     }
 }

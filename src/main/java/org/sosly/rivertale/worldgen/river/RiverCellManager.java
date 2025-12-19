@@ -2,6 +2,7 @@ package org.sosly.rivertale.worldgen.river;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sosly.rivertale.config.RiverConfig;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -12,9 +13,7 @@ import java.util.Set;
 public class RiverCellManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RiverCellManager.class);
-    private static final double DENSITY_EPSILON = 0.01;
     private static final int MAX_RECURSION_DEPTH = 1000;
-    private static final int UPSTREAM_DEPTH_LIMIT = 3;
 
     static RiverCell createCell(RiverCellKey key, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
         long startTime = System.nanoTime();
@@ -95,7 +94,7 @@ public class RiverCellManager {
             cell.getKey().cellX(), cell.getKey().cellZ(), cell.getDensity(), neighbors.size());
         for (NeighborInfo neighbor : neighbors) {
             LOGGER.info("  {} neighbor density={}", neighbor.direction, neighbor.density);
-            if (neighbor.density < cell.getDensity() - DENSITY_EPSILON) {
+            if (neighbor.density < cell.getDensity() - RiverConfig.DENSITY_EQUALITY_THRESHOLD.get()) {
                 lowerNeighbors.add(neighbor);
             }
         }
@@ -114,7 +113,7 @@ public class RiverCellManager {
         List<FlowDirection> otherLowerDirections = new ArrayList<>();
 
         for (NeighborInfo neighbor : lowerNeighbors) {
-            if (Math.abs(neighbor.density - lowestDensity) < DENSITY_EPSILON) {
+            if (Math.abs(neighbor.density - lowestDensity) < RiverConfig.DENSITY_EQUALITY_THRESHOLD.get()) {
                 lowestDirections.add(neighbor.direction);
             } else {
                 otherLowerDirections.add(neighbor.direction);
@@ -236,7 +235,7 @@ public class RiverCellManager {
     }
 
     private static int countUpstream(RiverCellKey key, int depth, Set<RiverCellKey> visited, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
-        if (depth > UPSTREAM_DEPTH_LIMIT) {
+        if (depth > RiverConfig.UPSTREAM_DEPTH_LIMIT.get()) {
             return 0;
         }
         if (visited.contains(key)) {

@@ -7,7 +7,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
-import org.sosly.rivertale.RiverTale;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -31,10 +30,11 @@ public abstract class MultiNoiseBiomeSourceMixin {
     );
 
     @Unique
-    private Climate.ParameterList<Holder<Biome>> rivertale$cachedFiltered = null;
+    private Climate.ParameterList<Holder<Biome>> rivertale$cachedFiltered = null; // CHECKSTYLE:OFF MemberName
 
     @Inject(method = "parameters", at = @At("RETURN"), cancellable = true)
-    private void rivertale$filterParameterList(CallbackInfoReturnable<Climate.ParameterList<Holder<Biome>>> cir) {
+    private void rivertale$filterParameterList( // CHECKSTYLE:OFF MethodName
+            CallbackInfoReturnable<Climate.ParameterList<Holder<Biome>>> cir) {
         if (rivertale$cachedFiltered != null) {
             cir.setReturnValue(rivertale$cachedFiltered);
             return;

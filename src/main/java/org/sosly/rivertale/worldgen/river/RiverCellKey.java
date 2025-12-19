@@ -1,8 +1,8 @@
 package org.sosly.rivertale.worldgen.river;
 
-public record RiverCellKey(int cellX, int cellZ) {
+import org.sosly.rivertale.config.RiverConfig;
 
-    private static final int CELL_SIZE = 256;
+public record RiverCellKey(int cellX, int cellZ) {
 
     public static RiverCellKey fromBlockPos(int blockX, int blockZ) {
         int cellSize = getCellSize();
@@ -12,7 +12,7 @@ public record RiverCellKey(int cellX, int cellZ) {
     }
 
     public static int getCellSize() {
-        return CELL_SIZE;
+        return RiverConfig.CELL_SIZE.get();
     }
 
     public int worldX() {
