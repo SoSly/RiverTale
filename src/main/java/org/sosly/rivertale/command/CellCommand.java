@@ -66,6 +66,12 @@ public class CellCommand {
                     source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                         .withStyle(ChatFormatting.WHITE), false);
 
+                    if (classification == CellClassification.COASTAL || classification == CellClassification.LAKESHORE) {
+                        int upstreamCount = RiverCellManager.getUpstreamCount(key, provider, worldSeed, savedData);
+                        source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
+                            .withStyle(ChatFormatting.WHITE), false);
+                    }
+
                     RiverCellManager.ensurePaths(cell, provider, worldSeed, savedData);
                     Map<FlowDirection, List<int[]>> terminusPaths = cell.getRiverPaths();
                     if (!terminusPaths.isEmpty()) {
@@ -113,6 +119,12 @@ public class CellCommand {
                 int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed, savedData);
                 source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                     .withStyle(ChatFormatting.WHITE), false);
+
+                if (classification == CellClassification.LAND) {
+                    int upstreamCount = RiverCellManager.getUpstreamCount(key, provider, worldSeed, savedData);
+                    source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
+                        .withStyle(ChatFormatting.WHITE), false);
+                }
 
                 RiverCellManager.ensurePaths(cell, provider, worldSeed, savedData);
                 Map<FlowDirection, List<int[]>> paths = cell.getRiverPaths();

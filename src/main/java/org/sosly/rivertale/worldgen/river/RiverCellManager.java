@@ -14,6 +14,7 @@ public class RiverCellManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(RiverCellManager.class);
     private static final double DENSITY_EPSILON = 0.01;
     private static final int MAX_RECURSION_DEPTH = 1000;
+    private static final int UPSTREAM_DEPTH_LIMIT = 3;
 
     static RiverCell createCell(RiverCellKey key, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
         long startTime = System.nanoTime();
@@ -227,6 +228,45 @@ public class RiverCellManager {
 
         cell.setDistanceToTerminus(distance);
         return distance;
+    }
+
+    public static int getUpstreamCount(RiverCellKey key, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
+        Set<RiverCellKey> visited = new HashSet<>();
+        return countUpstream(key, 0, visited, provider, worldSeed, savedData);
+    }
+
+    private static int countUpstream(RiverCellKey key, int depth, Set<RiverCellKey> visited, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
+        if (depth > UPSTREAM_DEPTH_LIMIT) {
+            return 0;
+        }
+        if (visited.contains(key)) {
+            return 0;
+        }
+        visited.add(key);
+
+        int count = 0;
+        FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
+
+        for (FlowDirection dir : cardinals) {
+            RiverCellKey neighborKey = dir.neighbor(key);
+            RiverCell neighbor = getOrCreate(neighborKey, provider, worldSeed, savedData);
+
+            if (!neighbor.isParticipating()) {
+                continue;
+            }
+
+            FlowDirection neighborOutput = neighbor.getPrimaryOutput();
+            if (neighborOutput == null || neighborOutput == FlowDirection.NONE) {
+                continue;
+            }
+
+            RiverCellKey outputTarget = neighborOutput.neighbor(neighborKey);
+            if (outputTarget != null && outputTarget.equals(key)) {
+                count += 1 + countUpstream(neighborKey, depth + 1, visited, provider, worldSeed, savedData);
+            }
+        }
+
+        return count;
     }
 
     private record NeighborInfo(FlowDirection direction, double density) {}
