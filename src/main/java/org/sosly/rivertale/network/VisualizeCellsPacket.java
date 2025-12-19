@@ -4,7 +4,6 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
-import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.client.ClientCellCache;
 import org.sosly.rivertale.worldgen.river.CellClassification;
 import org.sosly.rivertale.worldgen.river.FlowDirection;
@@ -89,7 +88,6 @@ public class VisualizeCellsPacket {
     }
 
     private void handleClient() {
-        RiverTale.LOGGER.info("Received VisualizeCellsPacket: enabled={}, cells={}", enabled, cells.size());
         ClientCellCache.setEnabled(enabled);
         if (enabled) {
             ClientCellCache.updateCells(cells);

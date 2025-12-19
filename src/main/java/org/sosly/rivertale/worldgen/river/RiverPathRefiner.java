@@ -1,8 +1,5 @@
 package org.sosly.rivertale.worldgen.river;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -12,7 +9,6 @@ import java.util.Set;
 
 public class RiverPathRefiner {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(RiverPathRefiner.class);
     private static final double EXIT_WEIGHT_FACTOR = 0.25;
     private static final double TERMINUS_WEIGHT_FACTOR = 0.5;
     private static final int SUBCELL_SIZE = 7;
@@ -35,8 +31,6 @@ public class RiverPathRefiner {
 
         if (classification == CellClassification.COASTAL || classification == CellClassification.LAKESHORE) {
             int[] biasTarget = findWaterSubcell(cell.getKey(), provider);
-            LOGGER.info("Cell ({}, {}) classification={} water subcell at [{}, {}]",
-                cell.getKey().cellX(), cell.getKey().cellZ(), classification, biasTarget[0], biasTarget[1]);
             double[][] weightedCosts = applyExitWeighting(cell.getSubcellDensities(), biasTarget, TERMINUS_WEIGHT_FACTOR);
 
             List<int[]> primaryPath = null;
@@ -180,32 +174,23 @@ public class RiverPathRefiner {
         Set<FlowDirection> inputs = new HashSet<>();
         FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
 
-        LOGGER.info("detectInputs for cell ({}, {})", cell.getKey().cellX(), cell.getKey().cellZ());
-
         for (FlowDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(cell.getKey());
             RiverCell neighbor = savedData.getIfPresent(neighborKey);
 
             if (neighbor == null) {
-                LOGGER.info("  {} neighbor ({}, {}) is NULL", direction, neighborKey.cellX(), neighborKey.cellZ());
                 continue;
             }
 
             FlowDirection outputTowardUs = direction.opposite();
-            LOGGER.info("  {} neighbor ({}, {}): primaryOutput={}, secondaries={}, outputTowardUs={}",
-                direction, neighborKey.cellX(), neighborKey.cellZ(),
-                neighbor.getPrimaryOutput(), neighbor.getSecondaryOutputs(), outputTowardUs);
 
             if (neighbor.getPrimaryOutput() == outputTowardUs) {
-                LOGGER.info("    -> Adding {} as input (primary match)", direction);
                 inputs.add(direction);
             } else if (neighbor.getSecondaryOutputs().contains(outputTowardUs)) {
-                LOGGER.info("    -> Adding {} as input (secondary match)", direction);
                 inputs.add(direction);
             }
         }
 
-        LOGGER.info("  Final inputs: {}", inputs);
         return inputs;
     }
 
@@ -443,12 +428,10 @@ public class RiverPathRefiner {
             RiverCell neighbor = savedData.getIfPresent(neighborKey);
 
             if (neighbor == null) {
-                LOGGER.info("  findTerminusDirection: {} neighbor is null", direction);
                 continue;
             }
 
             CellClassification neighborClass = neighbor.getClassification();
-            LOGGER.info("  findTerminusDirection: {} neighbor classification={}", direction, neighborClass);
 
             if (neighborClass == CellClassification.OCEAN || neighborClass == CellClassification.LAKE) {
                 return direction;
@@ -465,7 +448,6 @@ public class RiverPathRefiner {
 
             CellClassification neighborClass = neighbor.getClassification();
             if (neighborClass == CellClassification.COASTAL || neighborClass == CellClassification.LAKESHORE) {
-                LOGGER.info("  findTerminusDirection: falling back to shore neighbor {}", direction);
                 return direction;
             }
         }

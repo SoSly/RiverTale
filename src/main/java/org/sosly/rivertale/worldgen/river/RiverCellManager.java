@@ -90,15 +90,11 @@ public class RiverCellManager {
         List<NeighborInfo> neighbors = getParticipatingNeighbors(cell.getKey(), provider, worldSeed);
         List<NeighborInfo> lowerNeighbors = new ArrayList<>();
 
-        LOGGER.info("computeFlow({}, {}): density={}, neighbors={}",
-            cell.getKey().cellX(), cell.getKey().cellZ(), cell.getDensity(), neighbors.size());
         for (NeighborInfo neighbor : neighbors) {
-            LOGGER.info("  {} neighbor density={}", neighbor.direction, neighbor.density);
             if (neighbor.density < cell.getDensity() - RiverConfig.DENSITY_EQUALITY_THRESHOLD.get()) {
                 lowerNeighbors.add(neighbor);
             }
         }
-        LOGGER.info("  lowerNeighbors count={}", lowerNeighbors.size());
 
         if (lowerNeighbors.isEmpty()) {
             cell.setBasin(true);
@@ -169,20 +165,13 @@ public class RiverCellManager {
 
     public static void ensurePaths(RiverCell cell, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
         if (!cell.getRiverPaths().isEmpty()) {
-            LOGGER.info("ensurePaths({}, {}): returning early, paths already exist: {}",
-                cell.getKey().cellX(), cell.getKey().cellZ(), cell.getRiverPaths().keySet());
             return;
         }
-
-        LOGGER.info("ensurePaths({}, {}): computing fresh paths", cell.getKey().cellX(), cell.getKey().cellZ());
 
         FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
         for (FlowDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(cell.getKey());
-            RiverCell neighbor = getOrCreate(neighborKey, provider, worldSeed, savedData);
-            LOGGER.info("  Created/got {} neighbor ({}, {}): output={}, secondaries={}",
-                direction, neighborKey.cellX(), neighborKey.cellZ(),
-                neighbor.getPrimaryOutput(), neighbor.getSecondaryOutputs());
+            getOrCreate(neighborKey, provider, worldSeed, savedData);
         }
 
         RiverPathRefiner.refineRiverPath(cell, provider, savedData, worldSeed);
