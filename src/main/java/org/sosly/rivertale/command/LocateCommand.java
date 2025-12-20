@@ -10,13 +10,13 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.worldgen.river.CellClassification;
 import org.sosly.rivertale.worldgen.river.ContinentsDensityProvider;
 import org.sosly.rivertale.worldgen.river.FlowDirection;
 import org.sosly.rivertale.worldgen.river.RiverCell;
 import org.sosly.rivertale.worldgen.river.RiverCellKey;
 import org.sosly.rivertale.worldgen.river.RiverCellManager;
-import org.sosly.rivertale.worldgen.river.RiverCellSavedData;
 
 public class LocateCommand {
 
@@ -62,7 +62,8 @@ public class LocateCommand {
         ServerLevel level = source.getLevel();
         BlockPos pos = BlockPos.containing(source.getPosition());
 
-        ContinentsDensityProvider provider = new ContinentsDensityProvider(level);
+        RandomState randomState = level.getChunkSource().randomState();
+        ContinentsDensityProvider provider = new ContinentsDensityProvider(randomState);
 
         int playerX = pos.getX();
         int playerZ = pos.getZ();
@@ -114,9 +115,8 @@ public class LocateCommand {
         ServerLevel level = source.getLevel();
         BlockPos pos = BlockPos.containing(source.getPosition());
 
-        ContinentsDensityProvider provider = new ContinentsDensityProvider(level);
-        RiverCellSavedData savedData = RiverCellSavedData.get(level);
-        long worldSeed = level.getSeed();
+        RandomState randomState = level.getChunkSource().randomState();
+        ContinentsDensityProvider provider = new ContinentsDensityProvider(randomState);
 
         int playerX = pos.getX();
         int playerZ = pos.getZ();
@@ -128,13 +128,13 @@ public class LocateCommand {
 
         for (int ring = 0; ring <= maxCells; ring++) {
             for (int dx = -ring; dx <= ring; dx++) {
-                BlockPos found = checkFlowFeatureCell(playerCellX + dx, playerCellZ - ring, cellSize, provider, worldSeed, savedData, featureType);
+                BlockPos found = checkFlowFeatureCell(playerCellX + dx, playerCellZ - ring, cellSize, provider, randomState, featureType);
                 if (found != null) {
                     sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
                     return 1;
                 }
                 if (ring > 0) {
-                    found = checkFlowFeatureCell(playerCellX + dx, playerCellZ + ring, cellSize, provider, worldSeed, savedData, featureType);
+                    found = checkFlowFeatureCell(playerCellX + dx, playerCellZ + ring, cellSize, provider, randomState, featureType);
                     if (found != null) {
                         sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
                         return 1;
@@ -143,12 +143,12 @@ public class LocateCommand {
             }
 
             for (int dz = -ring + 1; dz < ring; dz++) {
-                BlockPos found = checkFlowFeatureCell(playerCellX - ring, playerCellZ + dz, cellSize, provider, worldSeed, savedData, featureType);
+                BlockPos found = checkFlowFeatureCell(playerCellX - ring, playerCellZ + dz, cellSize, provider, randomState, featureType);
                 if (found != null) {
                     sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
                     return 1;
                 }
-                found = checkFlowFeatureCell(playerCellX + ring, playerCellZ + dz, cellSize, provider, worldSeed, savedData, featureType);
+                found = checkFlowFeatureCell(playerCellX + ring, playerCellZ + dz, cellSize, provider, randomState, featureType);
                 if (found != null) {
                     sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
                     return 1;
@@ -174,9 +174,9 @@ public class LocateCommand {
         return null;
     }
 
-    private static BlockPos checkFlowFeatureCell(int cellX, int cellZ, int cellSize, ContinentsDensityProvider provider, long worldSeed, RiverCellSavedData savedData, FeatureType featureType) {
+    private static BlockPos checkFlowFeatureCell(int cellX, int cellZ, int cellSize, ContinentsDensityProvider provider, RandomState randomState, FeatureType featureType) {
         RiverCellKey key = new RiverCellKey(cellX, cellZ);
-        RiverCell cell = RiverCellManager.getOrCreate(key, provider, worldSeed, savedData);
+        RiverCell cell = RiverCellManager.getOrCreate(key, provider, randomState);
 
         if (!cell.isParticipating()) {
             return null;
@@ -188,8 +188,8 @@ public class LocateCommand {
 
         boolean matches = switch (featureType) {
             case BASIN -> cell.isBasin();
-            case SOURCE -> countInputs(cell, provider, worldSeed, savedData) == 0;
-            case CONFLUENCE -> countInputs(cell, provider, worldSeed, savedData) >= 2;
+            case SOURCE -> countInputs(cell, provider, randomState) == 0;
+            case CONFLUENCE -> countInputs(cell, provider, randomState) >= 2;
         };
 
         if (matches) {
@@ -199,14 +199,14 @@ public class LocateCommand {
         return null;
     }
 
-    private static int countInputs(RiverCell cell, ContinentsDensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
+    private static int countInputs(RiverCell cell, ContinentsDensityProvider provider, RandomState randomState) {
         int inputs = 0;
         RiverCellKey key = cell.getKey();
         FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
 
         for (FlowDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(key);
-            RiverCell neighbor = RiverCellManager.getOrCreate(neighborKey, provider, worldSeed, savedData);
+            RiverCell neighbor = RiverCellManager.getOrCreate(neighborKey, provider, randomState);
 
             if (!neighbor.isParticipating()) {
                 continue;

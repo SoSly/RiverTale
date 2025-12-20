@@ -2,9 +2,11 @@ package org.sosly.rivertale.event;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.command.VisualizeCommand;
+import org.sosly.rivertale.worldgen.river.RiverCellCache;
 import org.sosly.rivertale.worldgen.river.RiverCellKey;
 
 import java.util.HashMap;
@@ -50,5 +52,12 @@ public class VisualizeSyncHandler {
                 VisualizeCommand.sendCellDataToPlayer(player);
             }
         }
+    }
+
+    @SubscribeEvent
+    public static void onServerStopping(ServerStoppingEvent event) {
+        LAST_KNOWN_CELL.clear();
+        VisualizeCommand.clearEnabledPlayers();
+        RiverCellCache.clear();
     }
 }

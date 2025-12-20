@@ -1,5 +1,9 @@
 package org.sosly.rivertale.worldgen.river;
 
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.levelgen.PositionalRandomFactory;
+import net.minecraft.world.level.levelgen.RandomState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sosly.rivertale.config.RiverConfig;
@@ -7,7 +11,6 @@ import org.sosly.rivertale.config.RiverConfig;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 
 public class RiverCellManager {
@@ -15,18 +18,18 @@ public class RiverCellManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(RiverCellManager.class);
     private static final int MAX_RECURSION_DEPTH = 1000;
 
-    static RiverCell createCell(RiverCellKey key, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
+    static RiverCell createCell(RiverCellKey key, DensityProvider provider, RandomState randomState) {
         long startTime = System.nanoTime();
 
         double[][] subcellDensities = provider.sampleSubcellDensities(key.worldX(), key.worldZ(), RiverCellKey.getCellSize());
         double density = provider.getAveragedDensity(key.worldX(), key.worldZ(), RiverCellKey.getCellSize());
         CellClassification classification = classifyCell(key, provider);
-        boolean participating = ParticipationCalculator.isParticipating(key, worldSeed);
+        boolean participating = ParticipationCalculator.isParticipating(key, randomState);
 
         RiverCell cell = new RiverCell(key, density, subcellDensities, classification, participating);
 
         if (participating && classification == CellClassification.LAND) {
-            computeFlow(cell, provider, worldSeed);
+            computeFlow(cell, provider, randomState);
         }
 
         long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
@@ -74,7 +77,7 @@ public class RiverCellManager {
         return CellClassification.LAND;
     }
 
-    private static void computeFlow(RiverCell cell, DensityProvider provider, long worldSeed) {
+    private static void computeFlow(RiverCell cell, DensityProvider provider, RandomState randomState) {
         CellClassification classification = cell.getClassification();
 
         if (classification == CellClassification.OCEAN || classification == CellClassification.LAKE) {
@@ -87,7 +90,7 @@ public class RiverCellManager {
             return;
         }
 
-        List<NeighborInfo> neighbors = getParticipatingNeighbors(cell.getKey(), provider, worldSeed);
+        List<NeighborInfo> neighbors = getParticipatingNeighbors(cell.getKey(), provider, randomState);
         List<NeighborInfo> lowerNeighbors = new ArrayList<>();
 
         for (NeighborInfo neighbor : neighbors) {
@@ -120,7 +123,7 @@ public class RiverCellManager {
         if (lowestDirections.size() == 1) {
             primary = lowestDirections.get(0);
         } else {
-            primary = breakTie(cell, lowestDirections, worldSeed);
+            primary = breakTie(cell, lowestDirections, randomState);
         }
 
         cell.setPrimaryOutput(primary);
@@ -134,14 +137,14 @@ public class RiverCellManager {
         cell.setSecondaryOutputs(secondaries);
     }
 
-    private static List<NeighborInfo> getParticipatingNeighbors(RiverCellKey key, DensityProvider provider, long worldSeed) {
+    private static List<NeighborInfo> getParticipatingNeighbors(RiverCellKey key, DensityProvider provider, RandomState randomState) {
         List<NeighborInfo> neighbors = new ArrayList<>();
         FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
 
         for (FlowDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(key);
 
-            if (!ParticipationCalculator.isParticipating(neighborKey, worldSeed)) {
+            if (!ParticipationCalculator.isParticipating(neighborKey, randomState)) {
                 continue;
             }
 
@@ -152,18 +155,19 @@ public class RiverCellManager {
         return neighbors;
     }
 
-    private static FlowDirection breakTie(RiverCell cell, List<FlowDirection> tied, long worldSeed) {
+    private static FlowDirection breakTie(RiverCell cell, List<FlowDirection> tied, RandomState randomState) {
         RiverCellKey key = cell.getKey();
-        long seed = key.cellX() * 31L + key.cellZ() * 17L;
-        Random rng = new Random(seed ^ worldSeed);
+        PositionalRandomFactory factory = randomState.getOrCreateRandomFactory(
+            new ResourceLocation("rivertale", "tiebreaker"));
+        RandomSource rng = factory.at(key.cellX(), 0, key.cellZ());
         return tied.get(rng.nextInt(tied.size()));
     }
 
-    public static RiverCell getOrCreate(RiverCellKey key, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
-        return savedData.getOrCompute(key, k -> createCell(k, provider, worldSeed, savedData));
+    public static RiverCell getOrCreate(RiverCellKey key, DensityProvider provider, RandomState randomState) {
+        return RiverCellCache.getOrCompute(key, k -> createCell(k, provider, randomState));
     }
 
-    public static void ensurePaths(RiverCell cell, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
+    public static void ensurePaths(RiverCell cell, DensityProvider provider, RandomState randomState) {
         if (!cell.getRiverPaths().isEmpty()) {
             return;
         }
@@ -171,18 +175,17 @@ public class RiverCellManager {
         FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
         for (FlowDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(cell.getKey());
-            getOrCreate(neighborKey, provider, worldSeed, savedData);
+            getOrCreate(neighborKey, provider, randomState);
         }
 
-        RiverPathRefiner.refineRiverPath(cell, provider, savedData, worldSeed);
-        savedData.setDirty();
+        RiverPathRefiner.refineRiverPath(cell, provider, randomState);
     }
 
-    public static int getDistanceToTerminus(RiverCell cell, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
-        return getDistanceToTerminusRecursive(cell, provider, worldSeed, savedData, 0);
+    public static int getDistanceToTerminus(RiverCell cell, DensityProvider provider, RandomState randomState) {
+        return getDistanceToTerminusRecursive(cell, provider, randomState, 0);
     }
 
-    private static int getDistanceToTerminusRecursive(RiverCell cell, DensityProvider provider, long worldSeed, RiverCellSavedData savedData, int depth) {
+    private static int getDistanceToTerminusRecursive(RiverCell cell, DensityProvider provider, RandomState randomState, int depth) {
         if (cell.getDistanceToTerminus() >= 0) {
             return cell.getDistanceToTerminus();
         }
@@ -209,21 +212,21 @@ public class RiverCellManager {
 
         FlowDirection primaryOutput = cell.getPrimaryOutput();
         RiverCellKey downstreamKey = primaryOutput.neighbor(cell.getKey());
-        RiverCell downstreamCell = savedData.getOrCompute(downstreamKey, k -> createCell(k, provider, worldSeed, savedData));
+        RiverCell downstreamCell = RiverCellCache.getOrCompute(downstreamKey, k -> createCell(k, provider, randomState));
 
-        int downstreamDistance = getDistanceToTerminusRecursive(downstreamCell, provider, worldSeed, savedData, depth + 1);
+        int downstreamDistance = getDistanceToTerminusRecursive(downstreamCell, provider, randomState, depth + 1);
         int distance = 1 + downstreamDistance;
 
         cell.setDistanceToTerminus(distance);
         return distance;
     }
 
-    public static int getUpstreamCount(RiverCellKey key, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
+    public static int getUpstreamCount(RiverCellKey key, DensityProvider provider, RandomState randomState) {
         Set<RiverCellKey> visited = new HashSet<>();
-        return countUpstream(key, 0, visited, provider, worldSeed, savedData);
+        return countUpstream(key, 0, visited, provider, randomState);
     }
 
-    private static int countUpstream(RiverCellKey key, int depth, Set<RiverCellKey> visited, DensityProvider provider, long worldSeed, RiverCellSavedData savedData) {
+    private static int countUpstream(RiverCellKey key, int depth, Set<RiverCellKey> visited, DensityProvider provider, RandomState randomState) {
         if (depth > RiverConfig.UPSTREAM_DEPTH_LIMIT.get()) {
             return 0;
         }
@@ -237,7 +240,7 @@ public class RiverCellManager {
 
         for (FlowDirection dir : cardinals) {
             RiverCellKey neighborKey = dir.neighbor(key);
-            RiverCell neighbor = getOrCreate(neighborKey, provider, worldSeed, savedData);
+            RiverCell neighbor = getOrCreate(neighborKey, provider, randomState);
 
             if (!neighbor.isParticipating()) {
                 continue;
@@ -250,7 +253,7 @@ public class RiverCellManager {
 
             RiverCellKey outputTarget = neighborOutput.neighbor(neighborKey);
             if (outputTarget != null && outputTarget.equals(key)) {
-                count += 1 + countUpstream(neighborKey, depth + 1, visited, provider, worldSeed, savedData);
+                count += 1 + countUpstream(neighborKey, depth + 1, visited, provider, randomState);
             }
         }
 

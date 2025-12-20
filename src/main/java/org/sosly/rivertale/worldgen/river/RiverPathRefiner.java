@@ -1,5 +1,7 @@
 package org.sosly.rivertale.worldgen.river;
 
+import net.minecraft.world.level.levelgen.RandomState;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,8 +16,7 @@ public class RiverPathRefiner {
     private static final int SUBCELL_SIZE = 7;
     private static final int CENTER_SUBCELL = 3;
 
-    public static void refineRiverPath(RiverCell cell, DensityProvider provider,
-                                       RiverCellSavedData savedData, long worldSeed) {
+    public static void refineRiverPath(RiverCell cell, DensityProvider provider, RandomState randomState) {
         CellClassification classification = cell.getClassification();
 
         if (classification == CellClassification.OCEAN || classification == CellClassification.LAKE) {
@@ -27,7 +28,7 @@ public class RiverPathRefiner {
         }
 
         Map<FlowDirection, List<int[]>> paths = new HashMap<>();
-        Set<FlowDirection> inputs = detectInputs(cell, savedData);
+        Set<FlowDirection> inputs = detectInputs(cell);
 
         if (classification == CellClassification.COASTAL || classification == CellClassification.LAKESHORE) {
             int[] biasTarget = findWaterSubcell(cell.getKey(), provider);
@@ -36,7 +37,7 @@ public class RiverPathRefiner {
             List<int[]> primaryPath = null;
             Set<String> allPathCells = new HashSet<>();
 
-            List<FlowDirection> sortedInputs = sortByUpstreamCount(inputs, cell, provider, worldSeed, savedData);
+            List<FlowDirection> sortedInputs = sortByUpstreamCount(inputs, cell, provider, randomState);
 
             for (FlowDirection input : sortedInputs) {
                 int[] entry = getSubcellAtEdge(input);
@@ -103,7 +104,7 @@ public class RiverPathRefiner {
                 int[] exit = getSubcellAtEdge(primaryOutput);
                 double[][] weightedCosts = applyExitWeighting(cell.getSubcellDensities(), exit);
 
-                List<FlowDirection> sortedInputs = sortByUpstreamCount(inputs, cell, provider, worldSeed, savedData);
+                List<FlowDirection> sortedInputs = sortByUpstreamCount(inputs, cell, provider, randomState);
 
                 for (FlowDirection input : sortedInputs) {
                     int[] entry = getSubcellAtEdge(input);
@@ -131,7 +132,7 @@ public class RiverPathRefiner {
                 Set<String> allPathCells = new HashSet<>();
                 int[] center = new int[]{CENTER_SUBCELL, CENTER_SUBCELL};
 
-                List<FlowDirection> sortedInputs = sortByUpstreamCount(inputs, cell, provider, worldSeed, savedData);
+                List<FlowDirection> sortedInputs = sortByUpstreamCount(inputs, cell, provider, randomState);
 
                 for (FlowDirection input : sortedInputs) {
                     int[] entry = getSubcellAtEdge(input);
@@ -170,13 +171,13 @@ public class RiverPathRefiner {
         }
     }
 
-    private static Set<FlowDirection> detectInputs(RiverCell cell, RiverCellSavedData savedData) {
+    private static Set<FlowDirection> detectInputs(RiverCell cell) {
         Set<FlowDirection> inputs = new HashSet<>();
         FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
 
         for (FlowDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(cell.getKey());
-            RiverCell neighbor = savedData.getIfPresent(neighborKey);
+            RiverCell neighbor = RiverCellCache.getIfPresent(neighborKey);
 
             if (neighbor == null) {
                 continue;
@@ -420,12 +421,12 @@ public class RiverPathRefiner {
         return new int[]{CENTER_SUBCELL, CENTER_SUBCELL};
     }
 
-    private static FlowDirection findTerminusDirection(RiverCell cell, RiverCellSavedData savedData) {
+    private static FlowDirection findTerminusDirection(RiverCell cell) {
         FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
 
         for (FlowDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(cell.getKey());
-            RiverCell neighbor = savedData.getIfPresent(neighborKey);
+            RiverCell neighbor = RiverCellCache.getIfPresent(neighborKey);
 
             if (neighbor == null) {
                 continue;
@@ -440,7 +441,7 @@ public class RiverPathRefiner {
 
         for (FlowDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(cell.getKey());
-            RiverCell neighbor = savedData.getIfPresent(neighborKey);
+            RiverCell neighbor = RiverCellCache.getIfPresent(neighborKey);
 
             if (neighbor == null) {
                 continue;
@@ -456,14 +457,13 @@ public class RiverPathRefiner {
     }
 
     private static List<FlowDirection> sortByUpstreamCount(Set<FlowDirection> inputs, RiverCell cell,
-                                                            DensityProvider provider, long worldSeed,
-                                                            RiverCellSavedData savedData) {
+                                                            DensityProvider provider, RandomState randomState) {
         List<FlowDirection> sorted = new ArrayList<>(inputs);
         Map<FlowDirection, Integer> upstreamCounts = new HashMap<>();
 
         for (FlowDirection input : inputs) {
             RiverCellKey neighborKey = input.neighbor(cell.getKey());
-            int count = RiverCellManager.getUpstreamCount(neighborKey, provider, worldSeed, savedData);
+            int count = RiverCellManager.getUpstreamCount(neighborKey, provider, randomState);
             upstreamCounts.put(input, count);
         }
 

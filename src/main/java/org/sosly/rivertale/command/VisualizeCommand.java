@@ -8,13 +8,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.network.RiverTaleNetwork;
 import org.sosly.rivertale.network.VisualizeCellsPacket;
 import org.sosly.rivertale.worldgen.river.ContinentsDensityProvider;
 import org.sosly.rivertale.worldgen.river.RiverCell;
 import org.sosly.rivertale.worldgen.river.RiverCellKey;
 import org.sosly.rivertale.worldgen.river.RiverCellManager;
-import org.sosly.rivertale.worldgen.river.RiverCellSavedData;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -62,10 +62,9 @@ public class VisualizeCommand {
     public static void sendCellDataToPlayer(ServerPlayer player) {
         ServerLevel level = player.serverLevel();
         BlockPos pos = player.blockPosition();
-        long worldSeed = level.getSeed();
+        RandomState randomState = level.getChunkSource().randomState();
 
-        RiverCellSavedData savedData = RiverCellSavedData.get(level);
-        ContinentsDensityProvider provider = new ContinentsDensityProvider(level);
+        ContinentsDensityProvider provider = new ContinentsDensityProvider(randomState);
 
         RiverCellKey playerCell = RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
         List<VisualizeCellsPacket.CellData> cellDataList = new ArrayList<>();
@@ -73,8 +72,8 @@ public class VisualizeCommand {
         for (int dx = -CELL_RADIUS; dx <= CELL_RADIUS; dx++) {
             for (int dz = -CELL_RADIUS; dz <= CELL_RADIUS; dz++) {
                 RiverCellKey key = new RiverCellKey(playerCell.cellX() + dx, playerCell.cellZ() + dz);
-                RiverCell cell = RiverCellManager.getOrCreate(key, provider, worldSeed, savedData);
-                RiverCellManager.ensurePaths(cell, provider, worldSeed, savedData);
+                RiverCell cell = RiverCellManager.getOrCreate(key, provider, randomState);
+                RiverCellManager.ensurePaths(cell, provider, randomState);
 
                 if (!cell.getRiverPaths().isEmpty()) {
                     cellDataList.add(new VisualizeCellsPacket.CellData(
@@ -94,5 +93,9 @@ public class VisualizeCommand {
     public static RiverCellKey getPlayerCell(ServerPlayer player) {
         BlockPos pos = player.blockPosition();
         return RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
+    }
+
+    public static void clearEnabledPlayers() {
+        ENABLED_PLAYERS.clear();
     }
 }

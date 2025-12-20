@@ -41,6 +41,7 @@ public class RiverPathRenderer {
     private static final float[] COLOR_BOUNDARY = {0.7f, 0.3f, 0.9f, 0.8f};
     private static final float[] COLOR_CONFLUENCE = {0.2f, 0.9f, 0.3f, 0.8f};
     private static final float[] COLOR_LINE = {0.3f, 0.7f, 1.0f, 0.6f};
+    private static final float[] COLOR_BORDER = {1.0f, 1.0f, 1.0f, 0.5f};
 
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
@@ -62,7 +63,40 @@ public class RiverPathRenderer {
             renderCell(cell, poseStack, camPos, bufferBuilder);
         }
 
+        renderCellBorders(poseStack, camPos, bufferBuilder);
         renderCrossBoundaryConnections(poseStack, camPos, bufferBuilder);
+    }
+
+    private static void renderCellBorders(PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableDepthTest();
+        RenderSystem.lineWidth(1.0f);
+
+        bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
+
+        for (CellData cell : ClientCellCache.getCells()) {
+            int cellSize = getCellSize();
+            double minX = cell.cellX * cellSize;
+            double maxX = minX + cellSize;
+            double minZ = cell.cellZ * cellSize;
+            double maxZ = minZ + cellSize;
+
+            Vec3 nw = new Vec3(minX, SEA_LEVEL, minZ);
+            Vec3 ne = new Vec3(maxX, SEA_LEVEL, minZ);
+            Vec3 sw = new Vec3(minX, SEA_LEVEL, maxZ);
+            Vec3 se = new Vec3(maxX, SEA_LEVEL, maxZ);
+
+            drawLine(poseStack, bufferBuilder, nw, ne, camPos, COLOR_BORDER);
+            drawLine(poseStack, bufferBuilder, ne, se, camPos, COLOR_BORDER);
+            drawLine(poseStack, bufferBuilder, se, sw, camPos, COLOR_BORDER);
+            drawLine(poseStack, bufferBuilder, sw, nw, camPos, COLOR_BORDER);
+        }
+
+        Tesselator.getInstance().end();
+        RenderSystem.enableDepthTest();
+        RenderSystem.disableBlend();
     }
 
     private static void renderCrossBoundaryConnections(PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {

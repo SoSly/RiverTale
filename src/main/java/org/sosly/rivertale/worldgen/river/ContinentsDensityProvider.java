@@ -1,6 +1,5 @@
 package org.sosly.rivertale.worldgen.river;
 
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -14,8 +13,7 @@ public class ContinentsDensityProvider implements DensityProvider {
     private final DensityFunction continentsFunction;
     private final DensityFunction depthFunction;
 
-    public ContinentsDensityProvider(ServerLevel level) {
-        RandomState randomState = level.getChunkSource().randomState();
+    public ContinentsDensityProvider(RandomState randomState) {
         NoiseRouter router = randomState.router();
         this.continentsFunction = router.continents();
         this.depthFunction = router.depth();

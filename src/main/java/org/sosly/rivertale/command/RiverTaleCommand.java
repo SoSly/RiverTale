@@ -75,6 +75,7 @@ public class RiverTaleCommand {
             )
             .then(CellCommand.register())
             .then(LocateCommand.register())
+            .then(VisualizeCommand.register())
             .then(Commands.literal("poc")
                 .then(Commands.literal("carve")
                     .then(Commands.argument("entryX", IntegerArgumentType.integer())

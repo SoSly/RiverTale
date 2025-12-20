@@ -24,7 +24,7 @@ public class RiverConfig {
 
         PARTICIPATION_RATE = builder
             .comment("Probability that a land cell will participate in river generation (0.0 to 1.0).")
-            .defineInRange("participationRate", 0.6, 0.0, 1.0);
+            .defineInRange("participationRate", 0.7, 0.0, 1.0);
 
         DENSITY_EQUALITY_THRESHOLD = builder
             .comment("Maximum density difference for two cells to be considered equal when determining flow direction.")

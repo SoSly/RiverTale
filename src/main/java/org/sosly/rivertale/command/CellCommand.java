@@ -7,13 +7,14 @@ import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.worldgen.river.CellClassification;
 import org.sosly.rivertale.worldgen.river.ContinentsDensityProvider;
 import org.sosly.rivertale.worldgen.river.FlowDirection;
 import org.sosly.rivertale.worldgen.river.RiverCell;
+import org.sosly.rivertale.worldgen.river.RiverCellCache;
 import org.sosly.rivertale.worldgen.river.RiverCellKey;
 import org.sosly.rivertale.worldgen.river.RiverCellManager;
-import org.sosly.rivertale.worldgen.river.RiverCellSavedData;
 
 import java.util.List;
 import java.util.Map;
@@ -24,19 +25,17 @@ public class CellCommand {
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         return Commands.literal("cell")
-            .then(VisualizeCommand.register())
             .executes(context -> {
                 CommandSourceStack source = context.getSource();
                 ServerLevel level = source.getLevel();
                 BlockPos pos = BlockPos.containing(source.getPosition());
-                long worldSeed = level.getSeed();
+                RandomState randomState = level.getChunkSource().randomState();
 
-                ContinentsDensityProvider provider = new ContinentsDensityProvider(level);
-                RiverCellSavedData savedData = RiverCellSavedData.get(level);
+                ContinentsDensityProvider provider = new ContinentsDensityProvider(randomState);
 
                 RiverCellKey key = RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
-                boolean wasCached = savedData.getIfPresent(key) != null;
-                RiverCell cell = RiverCellManager.getOrCreate(key, provider, worldSeed, savedData);
+                boolean wasCached = RiverCellCache.getIfPresent(key) != null;
+                RiverCell cell = RiverCellManager.getOrCreate(key, provider, randomState);
 
                 String cacheStatus = wasCached ? "[cached]" : "[computed]";
                 source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
@@ -64,17 +63,17 @@ public class CellCommand {
                     source.sendSuccess(() -> Component.literal(String.format("  Classification: %s", classification))
                         .withStyle(ChatFormatting.WHITE), false);
 
-                    int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed, savedData);
+                    int distance = RiverCellManager.getDistanceToTerminus(cell, provider, randomState);
                     source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                         .withStyle(ChatFormatting.WHITE), false);
 
                     if (classification == CellClassification.COASTAL || classification == CellClassification.LAKESHORE) {
-                        int upstreamCount = RiverCellManager.getUpstreamCount(key, provider, worldSeed, savedData);
+                        int upstreamCount = RiverCellManager.getUpstreamCount(key, provider, randomState);
                         source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
                             .withStyle(ChatFormatting.WHITE), false);
                     }
 
-                    RiverCellManager.ensurePaths(cell, provider, worldSeed, savedData);
+                    RiverCellManager.ensurePaths(cell, provider, randomState);
                     Map<FlowDirection, List<int[]>> terminusPaths = cell.getRiverPaths();
                     if (!terminusPaths.isEmpty()) {
                         for (Map.Entry<FlowDirection, List<int[]>> entry : terminusPaths.entrySet()) {
@@ -118,17 +117,17 @@ public class CellCommand {
                         .withStyle(ChatFormatting.WHITE), false);
                 }
 
-                int distance = RiverCellManager.getDistanceToTerminus(cell, provider, worldSeed, savedData);
+                int distance = RiverCellManager.getDistanceToTerminus(cell, provider, randomState);
                 source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                     .withStyle(ChatFormatting.WHITE), false);
 
                 if (classification == CellClassification.LAND) {
-                    int upstreamCount = RiverCellManager.getUpstreamCount(key, provider, worldSeed, savedData);
+                    int upstreamCount = RiverCellManager.getUpstreamCount(key, provider, randomState);
                     source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
                         .withStyle(ChatFormatting.WHITE), false);
                 }
 
-                RiverCellManager.ensurePaths(cell, provider, worldSeed, savedData);
+                RiverCellManager.ensurePaths(cell, provider, randomState);
                 Map<FlowDirection, List<int[]>> paths = cell.getRiverPaths();
                 if (!paths.isEmpty()) {
                     for (Map.Entry<FlowDirection, List<int[]>> entry : paths.entrySet()) {
