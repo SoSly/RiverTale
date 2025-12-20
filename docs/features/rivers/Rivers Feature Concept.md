@@ -152,7 +152,7 @@ Two players with the same seed must see identical rivers. This rules out any app
 
 ### Solution Direction
 
-The planned approach divides the world into large cells. Each cell determines its flow direction, upstream accumulation, and elevation by comparing its seed-derived density value to its neighbors. This makes all properties computable without requiring neighboring chunks to exist first.
+The planned approach divides the world into large regions. Each region determines its flow direction, upstream accumulation, and elevation by comparing its seed-derived density value to its neighbors. This makes all properties computable without requiring neighboring chunks to exist first.
 
 A separate technical document specifies the cell-based flow algorithm in detail.
 

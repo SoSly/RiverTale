@@ -4,21 +4,21 @@ parent: "[[Rivers Feature Concept]]"
 status: review
 ---
 
-The Cell-based Network (CBN) determines WHERE rivers flow—which cells connect, flow direction, distance to ocean. The River Terrain System determines HOW rivers appear in the world—terrain modification that creates river valleys and channels before Minecraft applies surface decoration.
+The Cell-based Network (CBN) determines WHERE rivers flow—which regions connect, flow direction, distance to ocean. The River Terrain System determines HOW rivers appear in the world—terrain modification that creates river valleys and channels before Minecraft applies surface decoration.
 
 ## Key Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | River-authoritative terrain | Rivers dictate elevation; terrain is carved or filled to match | Guarantees rivers descend toward ocean regardless of local terrain noise. Alternative (terrain-authoritative) would cause rivers to pool or reverse in valleys. |
-| Feature-based architecture | Subcells select features by type; features handle terrain modification | Extensible—new features (waterfalls, rapids) register without changing core logic. Alternative (monolithic carver) would require extensive conditionals. |
+| Feature-based architecture | Cells select features by type; features handle terrain modification | Extensible—new features (waterfalls, rapids) register without changing core logic. Alternative (monolithic carver) would require extensive conditionals. |
 | Inject at buildSurface HEAD | Mixin runs before vanilla surface rules | Surface rules automatically apply biome materials (grass, sand) to our modifications. Alternative injection points would require manual surface handling. |
 | Stone for embankments | Fill with `defaultBlock` (stone) | Surface rules only decorate stone. Using dirt or other blocks would leave embankments visually distinct from natural terrain. |
 | Deterministic feature selection | Seeded noise picks features from eligible set | Same world seed = identical rivers. No exploration-order artifacts. |
 
 ## The Core Problem
 
-Minecraft's terrain doesn't know about rivers. Density functions shape continents, mountains, and valleys based on noise—but rivers need to follow drainage networks that span thousands of blocks. A river 50 cells from the ocean needs to be higher than one 10 cells away, regardless of what the terrain happens to be doing.
+Minecraft's terrain doesn't know about rivers. Density functions shape continents, mountains, and valleys based on noise—but rivers need to follow drainage networks that span thousands of blocks. A river 50 regions from the ocean needs to be higher than one 10 regions away, regardless of what the terrain happens to be doing.
 
 This creates conflicts. A mountain range might sit between a river's source and the ocean. A depression might exist where the river needs to maintain elevation. The terrain and the river network disagree about what should exist at a given location.
 
@@ -44,7 +44,7 @@ These parameters control terrain modification behavior. They affect newly genera
 
 | Parameter | Default | Range | Effect |
 |-----------|---------|-------|--------|
-| `elevationPerCell` | 4 | 1-10 | Blocks of elevation rise per cell inland from ocean |
+| `elevationPerRegion` | 4 | 1-10 | Blocks of elevation rise per region inland from ocean |
 | `minChannelDepth` | 3 | 1-5 | Minimum blocks carved below water surface |
 | `maxChannelDepth` | 8 | 5-20 | Maximum blocks carved below water surface |
 | `minWidth` | 2 | 2-5 | Narrowest possible river (source streams) |
@@ -55,19 +55,19 @@ These parameters control terrain modification behavior. They affect newly genera
 
 Channel depth scales with river width: wider rivers carve deeper channels within the min/max range.
 
-## Cell Data Consumption
+## Region Data Consumption
 
-This system consumes cell data from the Cell-based Network. See `Cell-based Networks.md` "What cells provide" (lines 356-372) for the complete interface.
+This system consumes region data from the Cell-based Network. See `Cell-based Networks.md` "What regions provide" for the complete interface.
 
 **Fields we use:**
 
 | Field | Type | How We Use It |
 |-------|------|---------------|
-| `riverPath` | List of subcell coordinates | Determines which subcells contain river segments and in what order |
-| `distanceToTerminus` | int | Calculates target elevation: `sea_level + (distance × elevationPerCell)` |
-| `classification` | enum (LAND/OCEAN/COASTAL) | COASTAL cells terminate rivers at the coastline subcell, not an edge |
+| `riverPath` | List of cell coordinates | Determines which cells contain river segments and in what order |
+| `distanceToTerminus` | int | Calculates target elevation: `sea_level + (distance × elevationPerRegion)` |
+| `classification` | enum (LAND/OCEAN/COASTAL) | COASTAL regions terminate rivers at the coastline cell, not an edge |
 | `primaryOutput` | FlowDirection | Determines exit edge for path interpolation |
-| `isBasin` | boolean | Basin cells are terminuses—rivers end in a pool, not at ocean |
+| `isBasin` | boolean | Basin regions are terminuses—rivers end in a pool, not at ocean |
 
 **Fields we don't directly use:**
 
@@ -77,80 +77,117 @@ This system consumes cell data from the Cell-based Network. See `Cell-based Netw
 
 **Cache availability:**
 
-Cell data is computed and cached during chunk generation before our mixin runs. If a cell isn't cached (shouldn't happen in normal flow), the query triggers computation. This adds latency to the first chunk touching that cell but doesn't break correctness.
+Region data is computed and cached during chunk generation before our mixin runs. If a region isn't cached (shouldn't happen in normal flow), the query triggers computation. This adds latency to the first chunk touching that region but doesn't break correctness.
 
 ## Feature-Based Architecture
 
 Rivers are not uniform channels. A river's appearance varies along its length: springs bubble up at sources, channels widen at confluences, waterfalls plunge down cliffs, deltas spread at ocean mouths. The terrain system handles this variation through a **feature-based architecture**.
 
-Each subcell along a river path selects a **feature** that determines how terrain is modified in that subcell. Features are registered handlers that know how to carve their specific river element. The selection process uses subcell conditions and seeded noise to pick deterministically from eligible features.
+Features operate at two scales:
+- **Cell Features** determine terrain modification at specific points along the river path
+- **Region Features** classify what kind of area a region represents in the drainage network
 
-### Feature Categories
+Each cell along a river path selects a **cell feature** that determines how terrain is modified in that cell. Features are registered handlers that know how to carve their specific river element. The selection process uses cell conditions and seeded noise to pick deterministically from eligible features.
 
-Features are categorized by their role in the river system. Each category has a basic feature that handles the common case, with optional variants for special conditions.
+Each region also has a **region feature** that classifies its role in the broader network. Region features don't necessarily modify terrain—some are purely classification.
 
-| Category | Level | Location | Conditions | Basic Feature |
-|----------|-------|----------|------------|---------------|
-| **SOURCE** | Subcell | First subcell of a new river | No inlets—either a true headwater (cell with no inputs) or a secondary output (new river from a drainage divide) | Stream |
-| **PATH** | Subcell | Along the river | Standard river segments between source and terminus | River |
-| **CONFLUENCE** | Subcell | Merging point | Subcell has 2+ inlets from upstream | Junction |
-| **TERMINUS** | Subcell | Last subcell before ending | Subcell borders ocean, lake, or basin | Mouth |
-| **BASIN** | Cell | Basin terminus cells | Flow-based local minimum where rivers collect | Endorheic |
+### Cell Feature Types
 
-A subcell along a river path has exactly one category (SOURCE, PATH, CONFLUENCE, or TERMINUS). The category determines which features are eligible for selection.
+Cell features are categorized by their role along the river path. Each type has a default feature that handles the common case, with optional variants for special conditions.
 
-BASIN operates at cell level rather than subcell level. Basin size scales with cell size—large cells produce moderately-sized pools, small cells may fill entirely. When a river terminates at a basin, the entry subcell receives a TERMINUS feature and the cell receives a BASIN feature. The terminus flows into the basin.
+| Type | Location | Conditions | Features (* = default) |
+|------|----------|------------|------------------------|
+| **SOURCE** | First cell of a new river | No inlets—either a true headwater or a secondary output from a drainage divide | seep*, snowmelt, spring, basin outflow, resurgence |
+| **COURSE** | Along the river | Standard river segments between source and terminus | run*, waterfall, rapids, plunge pool |
+| **JUNCTION** | Merging point | Cell has 2+ inlets from upstream | confluence*, bifurcation, braid |
+| **TERMINUS** | Last cell before ending | Cell borders ocean, lake, or basin | mouth*, estuary, delta, wetland, sink |
+
+A cell along a river path has exactly one type (SOURCE, COURSE, JUNCTION, or TERMINUS). The type determines which features are eligible for selection.
+
+### Region Feature Types
+
+Region features classify what kind of area the region represents. Some have terrain modification behavior; others are purely classification.
+
+| Type | Description | Features (* = default) |
+|------|-------------|------------------------|
+| **BASIN** | Flow-based local minimum where rivers collect | endorheic*, oxbow lake, kettle lake, glacial lake, tarn, sinkhole |
+| **DIVIDE** | Flow originates here (local maximum in drainage network) | headwaters*, crater lake |
+| **FLUVIAL** | River passes through, no special characteristics | river* |
+| **SHORE** | Adjacent to Minecraft's water bodies | none*, outlet |
+| **BARREN** | No visible water system | none* |
+| **BODY** | Minecraft placed water here (ocean or lake) | none* |
+
+Every region has exactly one region type. Region types with "none*" as default have no terrain modification behavior—they're classification only.
+
+### Relationship Between Scales
+
+Cell features and region features work together:
+
+- A **FLUVIAL** region with a `river` feature contains cells with SOURCE, COURSE, JUNCTION, or TERMINUS features along the river path
+- A **BASIN** region with an `endorheic` feature has the entry cell receiving a TERMINUS feature; the basin pool is the region feature's responsibility
+- A **SHORE** region with an `outlet` feature has the river's final TERMINUS cell where the river meets Minecraft's water
+- A **DIVIDE** region with a `headwaters` feature has SOURCE cells where rivers begin
+
+The cell-level features describe what the river is doing at a specific point. The region-level features describe what kind of place this is in the broader network.
 
 ### Feature Selection
 
-For each subcell in a river path:
+For each cell in a river path:
 
 1. **Determine type** — Check inlet count, terminus status, and source status
 2. **Get eligible features** — Filter registered features by type
 3. **Evaluate conditions** — Each feature declares conditions that affect its weight (elevation drop, biome, width, etc.)
 4. **Select feature** — Use seeded noise to pick from eligible features based on weights
 
-The selection is deterministic: same world seed, same subcell, same feature. Noise coordinates derive from subcell world position.
+The selection is deterministic: same world seed, same cell, same feature. Noise coordinates derive from cell world position.
 
 ### Feature Interface
 
-Every feature receives the same context and fulfills the same contract:
+Every cell feature receives the same context and fulfills the same contract:
 
 **Input (what features receive):**
-- Subcell world bounds (block coordinates)
-- Entry points (where water flows in—zero for SOURCE, one for PATH, two+ for CONFLUENCE)
+- Cell world bounds (block coordinates)
+- Entry points (where water flows in—zero for SOURCE, one for COURSE, two+ for JUNCTION)
 - Exit point (where water flows out—none for TERMINUS features ending at ocean/basin)
 - Target elevation at entry and exit
-- River width at this subcell
+- River width at this cell
 - Biome context
 - Noise sampler for deterministic randomization
 
 **Output (what features must do):**
-- Modify terrain within subcell bounds (carve, build embankments)
+- Modify terrain within cell bounds (carve, build embankments)
 - Define the water surface area and elevation for later water placement
-- Report the actual exit point(s) for downstream subcells to connect
+- Report the actual exit point(s) for downstream cells to connect
 
-Features may read terrain outside their bounds for context (e.g., checking surrounding elevation) but should only modify terrain within their subcell.
+Features may read terrain outside their bounds for context (e.g., checking surrounding elevation) but should only modify terrain within their cell.
 
 ### Required Features
 
 These features must exist for the system to function:
 
-**PATH: River** — The standard channel. Handles the vast majority of subcells. Carves a rounded channel, builds embankments where needed, produces smooth meandering paths.
+**Cell Features:**
 
-**CONFLUENCE: Junction** — Handles subcells where multiple rivers meet. Must merge inlet paths into a single outlet path, typically widening the channel to accommodate combined flow.
+**COURSE: run** — The standard channel. Handles the vast majority of cells. Carves a rounded channel, builds embankments where needed, produces smooth meandering paths.
 
-**SOURCE: Stream** — Handles the first subcell of a river. Creates the origin point where water begins.
+**JUNCTION: confluence** — Handles cells where multiple rivers meet. Must merge inlet paths into a single outlet path, typically widening the channel to accommodate combined flow.
 
-**TERMINUS: Mouth** — Handles the last subcell before a river ends. Manages the transition from river to ocean, lake, or basin.
+**SOURCE: seep** — Handles the first cell of a river. Creates the origin point where water begins.
 
-**BASIN: Endorheic** — Handles cells that are basin terminuses. Creates a pool of standing water where rivers collect at flow minima.
+**TERMINUS: mouth** — Handles the last cell before a river ends. Manages the transition from river to ocean, lake, or basin.
+
+**Region Features:**
+
+**BASIN: endorheic** — Handles regions that are basin terminuses. Creates a pool of standing water where rivers collect at flow minima.
+
+**DIVIDE: headwaters** — Handles regions where rivers originate. Marks the top of the drainage network.
+
+**FLUVIAL: river** — Handles regions where a river passes through. No special terrain behavior beyond the cell features.
 
 Without these basic features, rivers cannot be generated. All other features are optional variants that provide visual variety.
 
-## PATH: River Feature
+## COURSE: Run Feature
 
-The River feature handles standard PATH subcells. It implements the baseline terrain modification that all rivers share.
+The run feature handles standard COURSE cells. It implements the baseline terrain modification that all rivers share.
 
 ### Channel Carving
 
@@ -173,7 +210,7 @@ Embankments use gradual slopes (30-50 blocks wide) to look like natural terrain 
 
 ### Path Interpolation
 
-The path between subcell entry and exit uses smooth curve interpolation to avoid angular river segments. A noise-based offset displaces the path laterally, creating natural S-curves without changing overall flow direction.
+The path between cell entry and exit uses smooth curve interpolation to avoid angular river segments. A noise-based offset displaces the path laterally, creating natural S-curves without changing overall flow direction.
 
 Meandering magnitude scales with river width. Wide rivers curve dramatically. Narrow streams wind tightly.
 
@@ -181,9 +218,9 @@ Meandering magnitude scales with river width. Wide rivers curve dramatically. Na
 
 Terrain modification removes any block in its path—stone, dirt, existing features. Rivers claim their space unconditionally. This prevents rivers from being blocked by terrain that happened to generate in their path.
 
-## CONFLUENCE: Junction Feature
+## JUNCTION: Confluence Feature
 
-The Junction feature handles CONFLUENCE subcells where two or more rivers merge. It solves the geometric problem of routing multiple entry points to a single exit.
+The confluence feature handles JUNCTION cells where two or more rivers merge. It solves the geometric problem of routing multiple entry points to a single exit.
 
 ### Merge Point Calculation
 
@@ -216,7 +253,7 @@ All inlet paths terminate at the merge point. From there, a single channel conti
 | Inlet Count | Merge Behavior |
 |-------------|----------------|
 | 2 inlets | Standard Y-junction |
-| 3 inlets | Three paths converging to central point |
+| 3+ inlets | Multiple paths converging to central point |
 
 ### Width Handling
 
@@ -230,7 +267,7 @@ The widest incoming river dominates. The bonus (typically 10-20% of the second-w
 
 ### Channel Shape
 
-The confluence carves a wider area than standard segments to accommodate the merging flows:
+The confluence carves a wider area than standard cells to accommodate the merging flows:
 
 ```
 confluence_area = circle(merge_point, radius = post_merge_width × 1.5)
@@ -240,34 +277,34 @@ This creates a natural "pooling" effect where rivers meet before narrowing back 
 
 ### Elevation at Confluence
 
-All inlets must arrive at the same elevation—the confluence's target elevation. Both Pass 1 and Pass 2 rivers share elevation context (Pass 2 inherits baseline from parent Pass 1 cell), so steep drops from pass differences alone shouldn't occur.
+All inlets must arrive at the same elevation—the confluence's target elevation. All rivers within a region share elevation context from the region's distance-to-ocean, so steep drops shouldn't occur from network position alone.
 
-For steep elevation differences between inlets from other factors (unusual terrain, basin edges), the higher inlet's final subcells use gradual descent to reach the confluence elevation. Future waterfall features will replace this with vertical drops where appropriate.
+For steep elevation differences between inlets from other factors (unusual terrain, basin edges), the higher inlet's final cells use gradual descent to reach the confluence elevation. Future waterfall features will replace this with vertical drops where appropriate.
 
 ## BASIN: Endorheic Feature
 
-The Endorheic feature handles cells that are basin terminuses—flow-based local minima where rivers collect. Unlike the subcell-level features above, BASIN operates at cell level.
+The endorheic feature handles regions that are basin terminuses—flow-based local minima where rivers collect. This is a region feature, operating at region scale rather than cell scale.
 
 ### When Basins Form
 
-A cell becomes a basin when it has no participating neighbor with lower density and is not ocean. Water flows in but has nowhere to flow out. The cell is a local minimum in the drainage network.
+A region becomes a basin when it has no participating neighbor with lower density and is not ocean. Water flows in but has nowhere to flow out. The region is a local minimum in the drainage network.
 
 ### Basin Termination
 
-When a river reaches a basin cell:
+When a river reaches a basin region:
 
-1. The entry subcell receives a TERMINUS feature (Mouth)
-2. The cell receives a BASIN feature (Endorheic)
+1. The entry cell receives a TERMINUS feature (mouth)
+2. The region receives a BASIN feature (endorheic)
 3. The terminus flows into the basin pool
 
 Unlike coastal or lakeshore termination, the river does not pathfind toward existing water. The entry point IS the terminus—there's no pre-existing water to find.
 
 ### Pool Creation
 
-The Endorheic feature creates a pool of standing water at the basin. Pool characteristics:
+The endorheic feature creates a pool of standing water at the basin. Pool characteristics:
 
 - **Location**: Centered on or near the river entry point
-- **Size**: Scales with cell size. Large cells (4096 blocks) produce moderately-sized pools. Small cells (256 blocks) may fill the entire cell.
+- **Size**: Scales with region size. Large regions (4096 blocks) produce moderately-sized pools. Small regions (256 blocks) may fill the entire region.
 - **Depth**: Shallow relative to river channels. Basins are collection points, not deep lakes.
 - **Shape**: Organic, following terrain contours where possible
 
@@ -281,7 +318,7 @@ Basin terrain modification differs from river terrain modification:
 
 ### Multiple Inlets
 
-A basin may receive rivers from multiple directions. Each inlet gets its own TERMINUS feature at its entry subcell. All inlets feed the same pool—the BASIN feature handles the unified body of water.
+A basin may receive rivers from multiple directions. Each inlet gets its own TERMINUS feature at its entry cell. All inlets feed the same pool—the BASIN feature handles the unified body of water.
 
 ## River Elevation
 
@@ -292,23 +329,23 @@ Rivers need consistent elevation to convey flow direction. A player should look 
 Each river segment calculates its target elevation from CBN data:
 
 ```
-river_elevation = sea_level + (distance_to_ocean × elevation_per_cell)
+river_elevation = sea_level + (distance_to_ocean × elevation_per_region)
 ```
 
 Where:
 - `sea_level` is Minecraft's water level (Y=63)
-- `distance_to_ocean` comes from CBN's cached cell data
-- `elevation_per_cell` is configurable (typically 3-5 blocks)
+- `distance_to_ocean` comes from CBN's cached region data
+- `elevation_per_region` is configurable (typically 3-5 blocks)
 
-A river 20 cells from the ocean targets Y = 63 + (20 × 4) = 143. One 5 cells away targets Y = 83. Network position determines elevation, not local terrain.
+A river 20 regions from the ocean targets Y = 63 + (20 × 4) = 143. One 5 regions away targets Y = 83. Network position determines elevation, not local terrain.
 
 ### Elevation Continuity
 
-Within a cell, elevation interpolates smoothly between entry and exit. A cell receiving water from 20 cells inland and passing it toward 19 cells inland has a gentle drop across its length. This creates the visual "downhill toward ocean" that makes rivers readable.
+Within a region, elevation interpolates smoothly between entry and exit. A region receiving water from 20 regions inland and passing it toward 19 regions inland has a gentle drop across its length. This creates the visual "downhill toward ocean" that makes rivers readable.
 
 ### Elevation Drop and Feature Selection
 
-The elevation difference between subcell entry and exit influences feature selection. Steep drops weight toward Rapids or Waterfall features. Minimal drops weight toward Lake features. This connects terrain to river character without hard-coding specific behaviors.
+The elevation difference between cell entry and exit influences feature selection. Steep drops weight toward rapids or waterfall features. Minimal drops weight toward pool features. This connects terrain to river character without hard-coding specific behaviors.
 
 ## River Width
 
@@ -369,29 +406,29 @@ The river area receives the `minecraft:river` biome. This enables river-specific
 
 The overlay applies to water and immediate banks, not the entire valley.
 
-## Pass Integration
+## River Hierarchy
 
-Pass 1 and Pass 2 rivers use the same terrain system with different parameters.
+Rivers exist at two scales within each region:
 
-**Pass 1 (Major Rivers):**
-- Larger cells (~4096 blocks)
-- Wider base width
-- Deeper channels
+**Main Rivers:**
+- Follow the region's primary flow path (entry to exit)
+- Wider channels
+- Deeper carving
 - More prominent valleys
 
-**Pass 2 (Tributaries):**
-- Smaller cells (~585 blocks)
-- Narrower base width
-- Shallower channels
+**Tributaries:**
+- Flow within cells toward the main river
+- Narrower channels
+- Shallower carving
 - Gentler banks
 
-When tributaries meet main rivers, they merge naturally. The Confluence feature handles the junction, and paths connect at shared points.
+When tributaries meet main rivers, they merge naturally. The confluence feature handles the junction, and paths connect at shared points.
 
 ## Boundary Constraints
 
-Rivers connect at cell boundaries via fixed edge centers. Entry and exit points are computed from world coordinates, not from either cell's internal state. Adjacent cells always agree on connection points.
+Rivers connect at region boundaries via fixed edge centers. Entry and exit points are computed from world coordinates, not from either region's internal state. Adjacent regions always agree on connection points.
 
-Subcells at cell edges must ensure their paths connect precisely to the edge center points defined by CBN.
+Cells at region edges must ensure their paths connect precisely to the edge center points defined by CBN.
 
 ## Chunk Independence
 
@@ -406,11 +443,11 @@ There is no inter-chunk communication during terrain modification. Determinism g
 
 ## Performance Characteristics
 
-**Most chunks have no rivers.** With reasonable cell sizes and participation rates, roughly 2% of chunks contain river segments. The other 98% check CBN data, find no river, and skip terrain modification entirely.
+**Most chunks have no rivers.** With reasonable region sizes and participation rates, roughly 2% of chunks contain river segments. The other 98% check CBN data, find no river, and skip terrain modification entirely.
 
 **River chunks do moderate work.** A river crossing a chunk might modify 500-3000 blocks depending on width and embankment needs. This is small compared to vanilla terrain generation's per-chunk work.
 
-**CBN queries are cached.** Cell data computes once and caches permanently. Queries during chunk generation are instant lookups.
+**CBN queries are cached.** Region data computes once and caches permanently. Queries during chunk generation are instant lookups.
 
 **Heightmap recalculation is bounded.** Recalculating heightmaps scans columns top-to-bottom—limited by chunk size (256 columns), not river complexity.
 
@@ -434,21 +471,23 @@ Terrain modification uses cached CBN data and seeded noise for feature selection
 
 ### What This System Does
 
-- Provides feature-based architecture for river terrain modification
-- Selects features per subcell based on type and conditions
-- Implements River and Junction features
+- Provides feature-based architecture for river terrain modification at both cell and region scales
+- Selects cell features based on type and conditions
+- Assigns region features based on network position
+- Implements run and confluence cell features
+- Implements endorheic region feature
 - Modifies terrain to create river channels and valleys
 - Builds embankments where terrain is too low
 - Updates heightmaps so surface rules work correctly
-- Handles both Pass 1 and Pass 2 rivers
+- Handles both main rivers and tributaries
 - Provides channel shapes for later water placement
 
 ### What This System Does NOT Do
 
-- Generate CBN connectivity data (cell network's job)
+- Generate CBN connectivity data (region network's job)
 - Place water blocks (feature generation's job)
 - Apply surface materials (surface rules do this automatically)
-- Implement advanced features like Rapids, Waterfalls, or Lakes (future registrations)
+- Implement advanced features like rapids, waterfalls, or lakes (future registrations)
 
 ---
 
@@ -456,19 +495,32 @@ Terrain modification uses cached CBN data and seeded noise for feature selection
 
 These features are not required for initial implementation. They register into the feature-based architecture when implemented.
 
-| Feature | Category | Selection Criteria |
-|---------|----------|-------------------|
-| Spring | SOURCE | Default source in temperate biomes |
-| Glacial Melt | SOURCE | Source in cold/mountain biomes |
-| Source Pool | SOURCE | Rare; small pond at river origin |
-| Rapids | PATH | Moderate elevation drop (6-10 blocks per subcell) |
-| Waterfall | PATH | Steep elevation drop (10+ blocks per subcell) |
-| Gorge | PATH | Deep narrow channel through rock |
-| Cave | PATH | River flowing through underground cavern |
-| Confluence Pool | CONFLUENCE | Rare; weighted higher with 3+ inlets |
-| Cascade | CONFLUENCE | One inlet drops from elevation into main river |
-| Estuary | TERMINUS | Coastal terminus in flat terrain |
-| Delta | TERMINUS | Coastal terminus with sediment deposits |
-| Bay | TERMINUS | Coastal terminus in hilly terrain |
-| Lake | BASIN | Larger body with defined shoreline |
-| Wetland | BASIN | Shallow marshy area at flow minimum |
+**Cell Features:**
+
+| Feature | Type | Selection Criteria |
+|---------|------|-------------------|
+| spring | SOURCE | Default source in temperate biomes |
+| snowmelt | SOURCE | Source in cold/mountain biomes |
+| basin outflow | SOURCE | River emerging from a basin region |
+| resurgence | SOURCE | River emerging from underground |
+| waterfall | COURSE | Steep elevation drop (10+ blocks per cell) |
+| rapids | COURSE | Moderate elevation drop (6-10 blocks per cell) |
+| plunge pool | COURSE | Pool at base of waterfall |
+| bifurcation | JUNCTION | River splits into multiple channels |
+| braid | JUNCTION | Complex multi-channel junction |
+| estuary | TERMINUS | Coastal terminus in flat terrain |
+| delta | TERMINUS | Coastal terminus with sediment deposits |
+| wetland | TERMINUS | Marshy transition to standing water |
+| sink | TERMINUS | River disappearing underground |
+
+**Region Features:**
+
+| Feature | Type | Selection Criteria |
+|---------|------|-------------------|
+| oxbow lake | BASIN | Curved remnant of former river channel |
+| kettle lake | BASIN | Depression from glacial ice block |
+| glacial lake | BASIN | Large basin from glacial activity |
+| tarn | BASIN | Small mountain lake in cirque |
+| sinkhole | BASIN | Basin draining underground |
+| crater lake | DIVIDE | Lake in volcanic caldera at drainage divide |
+| outlet | SHORE | River entering Minecraft's water body |
