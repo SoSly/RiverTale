@@ -23,10 +23,10 @@ public class RiverTaleNetwork {
 
         channel.registerMessage(
             packetId++,
-            VisualizeCellsPacket.class,
-            VisualizeCellsPacket::encode,
-            VisualizeCellsPacket::decode,
-            VisualizeCellsPacket::handle
+            VisualizeD8Packet.class,
+            VisualizeD8Packet::encode,
+            VisualizeD8Packet::decode,
+            VisualizeD8Packet::handle
         );
     }
 

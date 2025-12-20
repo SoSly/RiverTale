@@ -9,8 +9,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.worldgen.river.CellClassification;
-import org.sosly.rivertale.worldgen.river.ContinentsDensityProvider;
-import org.sosly.rivertale.worldgen.river.FlowDirection;
+import org.sosly.rivertale.worldgen.river.CellDensityProvider;
+import org.sosly.rivertale.worldgen.river.PathDirection;
 import org.sosly.rivertale.worldgen.river.RiverCell;
 import org.sosly.rivertale.worldgen.river.RiverCellCache;
 import org.sosly.rivertale.worldgen.river.RiverCellKey;
@@ -31,7 +31,7 @@ public class CellCommand {
                 BlockPos pos = BlockPos.containing(source.getPosition());
                 RandomState randomState = level.getChunkSource().randomState();
 
-                ContinentsDensityProvider provider = new ContinentsDensityProvider(randomState);
+                CellDensityProvider provider = new CellDensityProvider(randomState);
 
                 RiverCellKey key = RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
                 boolean wasCached = RiverCellCache.getIfPresent(key) != null;
@@ -74,10 +74,10 @@ public class CellCommand {
                     }
 
                     RiverCellManager.ensurePaths(cell, provider, randomState);
-                    Map<FlowDirection, List<int[]>> terminusPaths = cell.getRiverPaths();
+                    Map<PathDirection, List<int[]>> terminusPaths = cell.getRiverPaths();
                     if (!terminusPaths.isEmpty()) {
-                        for (Map.Entry<FlowDirection, List<int[]>> entry : terminusPaths.entrySet()) {
-                            FlowDirection inputDirection = entry.getKey();
+                        for (Map.Entry<PathDirection, List<int[]>> entry : terminusPaths.entrySet()) {
+                            PathDirection inputDirection = entry.getKey();
                             List<int[]> path = entry.getValue();
                             String pathStr = path.stream()
                                 .map(coords -> String.format("(%d,%d)", coords[0], coords[1]))
@@ -98,14 +98,14 @@ public class CellCommand {
                 source.sendSuccess(() -> Component.literal("  Participating: true")
                     .withStyle(ChatFormatting.WHITE), false);
 
-                FlowDirection primaryOutput = cell.getPrimaryOutput();
+                PathDirection primaryOutput = cell.getPrimaryOutput();
                 source.sendSuccess(() -> Component.literal(String.format("  Output: %s", primaryOutput))
                     .withStyle(ChatFormatting.WHITE), false);
 
-                Set<FlowDirection> secondaryOutputs = cell.getSecondaryOutputs();
+                Set<PathDirection> secondaryOutputs = cell.getSecondaryOutputs();
                 if (!secondaryOutputs.isEmpty()) {
                     String secondaryStr = secondaryOutputs.stream()
-                        .map(FlowDirection::toString)
+                        .map(PathDirection::toString)
                         .sorted()
                         .collect(Collectors.joining(", "));
                     source.sendSuccess(() -> Component.literal(String.format("  Secondary outputs: %s", secondaryStr))
@@ -128,10 +128,10 @@ public class CellCommand {
                 }
 
                 RiverCellManager.ensurePaths(cell, provider, randomState);
-                Map<FlowDirection, List<int[]>> paths = cell.getRiverPaths();
+                Map<PathDirection, List<int[]>> paths = cell.getRiverPaths();
                 if (!paths.isEmpty()) {
-                    for (Map.Entry<FlowDirection, List<int[]>> entry : paths.entrySet()) {
-                        FlowDirection inputDirection = entry.getKey();
+                    for (Map.Entry<PathDirection, List<int[]>> entry : paths.entrySet()) {
+                        PathDirection inputDirection = entry.getKey();
                         List<int[]> path = entry.getValue();
                         String pathStr = path.stream()
                             .map(coords -> String.format("(%d,%d)", coords[0], coords[1]))
@@ -146,7 +146,7 @@ public class CellCommand {
             });
     }
 
-    private static String formatPathLabel(FlowDirection key, FlowDirection primaryOutput, RiverCell cell) {
+    private static String formatPathLabel(PathDirection key, PathDirection primaryOutput, RiverCell cell) {
         if (key == primaryOutput && !isEdgeDirection(key, cell)) {
             return String.format("Source to %s", primaryOutput);
         }
@@ -158,7 +158,7 @@ public class CellCommand {
         return String.format("Path from %s to %s", key, primaryOutput);
     }
 
-    private static boolean isEdgeDirection(FlowDirection key, RiverCell cell) {
+    private static boolean isEdgeDirection(PathDirection key, RiverCell cell) {
         List<int[]> path = cell.getRiverPaths().get(key);
         if (path == null || path.isEmpty()) {
             return false;
@@ -166,6 +166,6 @@ public class CellCommand {
         int[] start = path.get(0);
         int row = start[0];
         int col = start[1];
-        return row == 0 || row == 6 || col == 0 || col == 6;
+        return row == 0 || row == 7 || col == 0 || col == 7;
     }
 }

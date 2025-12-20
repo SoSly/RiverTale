@@ -1,17 +1,13 @@
 package org.sosly.rivertale.worldgen.river;
 
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.levelgen.PositionalRandomFactory;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sosly.rivertale.config.RiverConfig;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 public class RiverCellManager {
 
@@ -40,14 +36,14 @@ public class RiverCellManager {
 
     private static CellClassification classifyCell(RiverCellKey key, DensityProvider provider) {
         int cellSize = RiverCellKey.getCellSize();
-        double step = cellSize / 7.0;
+        double step = cellSize / 8.0;
 
         boolean hasOcean = false;
         boolean hasLake = false;
         boolean hasLand = false;
 
-        for (int i = 0; i < 7; i++) {
-            for (int j = 0; j < 7; j++) {
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
                 int sampleX = key.worldX() + (int) (i * step);
                 int sampleZ = key.worldZ() + (int) (j * step);
 
@@ -81,86 +77,58 @@ public class RiverCellManager {
         CellClassification classification = cell.getClassification();
 
         if (classification == CellClassification.OCEAN || classification == CellClassification.LAKE) {
-            cell.setPrimaryOutput(FlowDirection.NONE);
+            cell.setPrimaryOutput(PathDirection.NONE);
             return;
         }
 
         if (classification == CellClassification.COASTAL || classification == CellClassification.LAKESHORE) {
-            cell.setPrimaryOutput(FlowDirection.NONE);
+            cell.setPrimaryOutput(PathDirection.NONE);
             return;
         }
 
-        List<NeighborInfo> neighbors = getParticipatingNeighbors(cell.getKey(), provider, randomState);
-        List<NeighborInfo> lowerNeighbors = new ArrayList<>();
+        RiverCellKey key = cell.getKey();
+        CellDensityProvider cdp = (CellDensityProvider) provider;
 
-        for (NeighborInfo neighbor : neighbors) {
-            if (neighbor.density < cell.getDensity() - RiverConfig.DENSITY_EQUALITY_THRESHOLD.get()) {
-                lowerNeighbors.add(neighbor);
-            }
+        BiFunction<Integer, Integer, Double> densitySampler = cdp::getDensity;
+        BiFunction<Integer, Integer, Double> continentsSampler = cdp::getContinents;
+        BiFunction<Integer, Integer, Double> depthSampler = cdp::getDepth;
+
+        double oceanThreshold = RiverConfig.OCEAN_THRESHOLD.get();
+        double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
+
+        FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(key, densitySampler);
+
+        FlowDirection[][][] neighborFlowDirections = new FlowDirection[4][][];
+        CellClassification[] neighborClassifications = new CellClassification[4];
+        PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
+
+        for (int i = 0; i < 4; i++) {
+            RiverCellKey neighborKey = cardinals[i].neighbor(key);
+            neighborFlowDirections[i] = D8FlowCalculator.computeFlowDirections(neighborKey, densitySampler);
+            neighborClassifications[i] = D8FlowCalculator.classifyCell(
+                neighborKey, continentsSampler, depthSampler, oceanThreshold, lakeThreshold);
         }
 
-        if (lowerNeighbors.isEmpty()) {
-            cell.setBasin(true);
-            cell.setPrimaryOutput(FlowDirection.NONE);
-            return;
-        }
+        D8FlowResult result = D8PathRefiner.refine(
+            key, flowDirections, classification,
+            neighborFlowDirections, neighborClassifications,
+            densitySampler, continentsSampler, depthSampler,
+            oceanThreshold, lakeThreshold);
 
-        lowerNeighbors.sort((a, b) -> Double.compare(a.density, b.density));
+        cell.setPrimaryOutput(result.primaryOutputDirection());
+        cell.setBasin(result.isBasin());
 
-        double lowestDensity = lowerNeighbors.get(0).density;
-        List<FlowDirection> lowestDirections = new ArrayList<>();
-        List<FlowDirection> otherLowerDirections = new ArrayList<>();
-
-        for (NeighborInfo neighbor : lowerNeighbors) {
-            if (Math.abs(neighbor.density - lowestDensity) < RiverConfig.DENSITY_EQUALITY_THRESHOLD.get()) {
-                lowestDirections.add(neighbor.direction);
-            } else {
-                otherLowerDirections.add(neighbor.direction);
-            }
-        }
-
-        FlowDirection primary;
-        if (lowestDirections.size() == 1) {
-            primary = lowestDirections.get(0);
-        } else {
-            primary = breakTie(cell, lowestDirections, randomState);
-        }
-
-        cell.setPrimaryOutput(primary);
-
-        Set<FlowDirection> secondaries = new HashSet<>(otherLowerDirections);
-        for (FlowDirection direction : lowestDirections) {
-            if (direction != primary) {
-                secondaries.add(direction);
+        Set<PathDirection> secondaries = new HashSet<>();
+        EdgeCrossing[] crossings = result.crossings();
+        for (int i = 0; i < 4; i++) {
+            if (crossings[i] != null && crossings[i].direction() == EdgeCrossing.Direction.OUT) {
+                PathDirection dir = cardinals[i];
+                if (dir != result.primaryOutputDirection()) {
+                    secondaries.add(dir);
+                }
             }
         }
         cell.setSecondaryOutputs(secondaries);
-    }
-
-    private static List<NeighborInfo> getParticipatingNeighbors(RiverCellKey key, DensityProvider provider, RandomState randomState) {
-        List<NeighborInfo> neighbors = new ArrayList<>();
-        FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
-
-        for (FlowDirection direction : cardinals) {
-            RiverCellKey neighborKey = direction.neighbor(key);
-
-            if (!ParticipationCalculator.isParticipating(neighborKey, randomState)) {
-                continue;
-            }
-
-            double neighborDensity = provider.getAveragedDensity(neighborKey.worldX(), neighborKey.worldZ(), RiverCellKey.getCellSize());
-            neighbors.add(new NeighborInfo(direction, neighborDensity));
-        }
-
-        return neighbors;
-    }
-
-    private static FlowDirection breakTie(RiverCell cell, List<FlowDirection> tied, RandomState randomState) {
-        RiverCellKey key = cell.getKey();
-        PositionalRandomFactory factory = randomState.getOrCreateRandomFactory(
-            new ResourceLocation("rivertale", "tiebreaker"));
-        RandomSource rng = factory.at(key.cellX(), 0, key.cellZ());
-        return tied.get(rng.nextInt(tied.size()));
     }
 
     public static RiverCell getOrCreate(RiverCellKey key, DensityProvider provider, RandomState randomState) {
@@ -172,13 +140,48 @@ public class RiverCellManager {
             return;
         }
 
-        FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
-        for (FlowDirection direction : cardinals) {
-            RiverCellKey neighborKey = direction.neighbor(cell.getKey());
-            getOrCreate(neighborKey, provider, randomState);
+        RiverCellKey key = cell.getKey();
+        CellDensityProvider cdp = (CellDensityProvider) provider;
+
+        BiFunction<Integer, Integer, Double> densitySampler = cdp::getDensity;
+        BiFunction<Integer, Integer, Double> continentsSampler = cdp::getContinents;
+        BiFunction<Integer, Integer, Double> depthSampler = cdp::getDepth;
+
+        double oceanThreshold = RiverConfig.OCEAN_THRESHOLD.get();
+        double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
+
+        FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(key, densitySampler);
+        CellClassification classification = cell.getClassification();
+
+        FlowDirection[][][] neighborFlowDirections = new FlowDirection[4][][];
+        CellClassification[] neighborClassifications = ensureNeighborsLoaded(key, provider, randomState);
+        PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
+
+        for (int i = 0; i < 4; i++) {
+            RiverCellKey neighborKey = cardinals[i].neighbor(key);
+            neighborFlowDirections[i] = D8FlowCalculator.computeFlowDirections(neighborKey, densitySampler);
         }
 
-        RiverPathRefiner.refineRiverPath(cell, provider, randomState);
+        D8FlowResult result = D8PathRefiner.refine(
+            key, flowDirections, classification,
+            neighborFlowDirections, neighborClassifications,
+            densitySampler, continentsSampler, depthSampler,
+            oceanThreshold, lakeThreshold);
+
+        cell.setRiverPaths(result.riverPaths());
+    }
+
+    public static CellClassification[] ensureNeighborsLoaded(RiverCellKey key, DensityProvider provider, RandomState randomState) {
+        CellClassification[] neighborClassifications = new CellClassification[4];
+        PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
+
+        for (int i = 0; i < cardinals.length; i++) {
+            RiverCellKey neighborKey = cardinals[i].neighbor(key);
+            RiverCell neighbor = getOrCreate(neighborKey, provider, randomState);
+            neighborClassifications[i] = neighbor.getClassification();
+        }
+
+        return neighborClassifications;
     }
 
     public static int getDistanceToTerminus(RiverCell cell, DensityProvider provider, RandomState randomState) {
@@ -205,12 +208,12 @@ public class RiverCellManager {
             return depth;
         }
 
-        if (!cell.isParticipating() || cell.getPrimaryOutput() == FlowDirection.NONE) {
+        if (!cell.isParticipating() || cell.getPrimaryOutput() == PathDirection.NONE) {
             cell.setDistanceToTerminus(0);
             return 0;
         }
 
-        FlowDirection primaryOutput = cell.getPrimaryOutput();
+        PathDirection primaryOutput = cell.getPrimaryOutput();
         RiverCellKey downstreamKey = primaryOutput.neighbor(cell.getKey());
         RiverCell downstreamCell = RiverCellCache.getOrCompute(downstreamKey, k -> createCell(k, provider, randomState));
 
@@ -236,9 +239,9 @@ public class RiverCellManager {
         visited.add(key);
 
         int count = 0;
-        FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
+        PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
 
-        for (FlowDirection dir : cardinals) {
+        for (PathDirection dir : cardinals) {
             RiverCellKey neighborKey = dir.neighbor(key);
             RiverCell neighbor = getOrCreate(neighborKey, provider, randomState);
 
@@ -246,8 +249,8 @@ public class RiverCellManager {
                 continue;
             }
 
-            FlowDirection neighborOutput = neighbor.getPrimaryOutput();
-            if (neighborOutput == null || neighborOutput == FlowDirection.NONE) {
+            PathDirection neighborOutput = neighbor.getPrimaryOutput();
+            if (neighborOutput == null || neighborOutput == PathDirection.NONE) {
                 continue;
             }
 
@@ -259,6 +262,4 @@ public class RiverCellManager {
 
         return count;
     }
-
-    private record NeighborInfo(FlowDirection direction, double density) {}
 }

@@ -12,8 +12,8 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.worldgen.river.CellClassification;
-import org.sosly.rivertale.worldgen.river.ContinentsDensityProvider;
-import org.sosly.rivertale.worldgen.river.FlowDirection;
+import org.sosly.rivertale.worldgen.river.CellDensityProvider;
+import org.sosly.rivertale.worldgen.river.PathDirection;
 import org.sosly.rivertale.worldgen.river.RiverCell;
 import org.sosly.rivertale.worldgen.river.RiverCellKey;
 import org.sosly.rivertale.worldgen.river.RiverCellManager;
@@ -63,7 +63,7 @@ public class LocateCommand {
         BlockPos pos = BlockPos.containing(source.getPosition());
 
         RandomState randomState = level.getChunkSource().randomState();
-        ContinentsDensityProvider provider = new ContinentsDensityProvider(randomState);
+        CellDensityProvider provider = new CellDensityProvider(randomState);
 
         int playerX = pos.getX();
         int playerZ = pos.getZ();
@@ -116,7 +116,7 @@ public class LocateCommand {
         BlockPos pos = BlockPos.containing(source.getPosition());
 
         RandomState randomState = level.getChunkSource().randomState();
-        ContinentsDensityProvider provider = new ContinentsDensityProvider(randomState);
+        CellDensityProvider provider = new CellDensityProvider(randomState);
 
         int playerX = pos.getX();
         int playerZ = pos.getZ();
@@ -163,7 +163,7 @@ public class LocateCommand {
         return 0;
     }
 
-    private static BlockPos checkCell(int cellX, int cellZ, int cellSize, ContinentsDensityProvider provider, CellClassification target) {
+    private static BlockPos checkCell(int cellX, int cellZ, int cellSize, CellDensityProvider provider, CellClassification target) {
         RiverCellKey key = new RiverCellKey(cellX, cellZ);
         CellClassification classification = classify(key, cellSize, provider);
 
@@ -174,7 +174,7 @@ public class LocateCommand {
         return null;
     }
 
-    private static BlockPos checkFlowFeatureCell(int cellX, int cellZ, int cellSize, ContinentsDensityProvider provider, RandomState randomState, FeatureType featureType) {
+    private static BlockPos checkFlowFeatureCell(int cellX, int cellZ, int cellSize, CellDensityProvider provider, RandomState randomState, FeatureType featureType) {
         RiverCellKey key = new RiverCellKey(cellX, cellZ);
         RiverCell cell = RiverCellManager.getOrCreate(key, provider, randomState);
 
@@ -199,12 +199,12 @@ public class LocateCommand {
         return null;
     }
 
-    private static int countInputs(RiverCell cell, ContinentsDensityProvider provider, RandomState randomState) {
+    private static int countInputs(RiverCell cell, CellDensityProvider provider, RandomState randomState) {
         int inputs = 0;
         RiverCellKey key = cell.getKey();
-        FlowDirection[] cardinals = {FlowDirection.NORTH, FlowDirection.SOUTH, FlowDirection.EAST, FlowDirection.WEST};
+        PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
 
-        for (FlowDirection direction : cardinals) {
+        for (PathDirection direction : cardinals) {
             RiverCellKey neighborKey = direction.neighbor(key);
             RiverCell neighbor = RiverCellManager.getOrCreate(neighborKey, provider, randomState);
 
@@ -267,13 +267,13 @@ public class LocateCommand {
         source.sendSuccess(() -> message, false);
     }
 
-    private static CellClassification classify(RiverCellKey key, int cellSize, ContinentsDensityProvider provider) {
+    private static CellClassification classify(RiverCellKey key, int cellSize, CellDensityProvider provider) {
         boolean hasLand = false;
         boolean hasOcean = false;
-        double step = cellSize / 7.0;
+        double step = cellSize / 8.0;
 
-        for (int row = 0; row < 7; row++) {
-            for (int col = 0; col < 7; col++) {
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
                 int sampleX = key.worldX() + (int) (col * step);
                 int sampleZ = key.worldZ() + (int) (row * step);
                 if (provider.isOcean(sampleX, sampleZ)) {

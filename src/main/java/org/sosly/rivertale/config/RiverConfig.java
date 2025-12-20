@@ -16,8 +16,6 @@ public class RiverConfig {
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
-        builder.push("river_cells");
-
         CELL_SIZE = builder
             .comment("Size of each river cell in blocks. Larger cells improve performance but reduce detail.")
             .defineInRange("cellSize", 256, 128, 4096);
@@ -45,8 +43,6 @@ public class RiverConfig {
         UPSTREAM_DEPTH_LIMIT = builder
             .comment("Maximum recursion depth when counting upstream cells for river width calculation.")
             .defineInRange("upstreamDepthLimit", 3, 1, 10);
-
-        builder.pop();
 
         SPEC = builder.build();
     }

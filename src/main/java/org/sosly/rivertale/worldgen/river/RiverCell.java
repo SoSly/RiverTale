@@ -19,11 +19,11 @@ public class RiverCell {
     private final CellClassification classification;
     private final boolean participating;
 
-    private FlowDirection primaryOutput;
-    private Set<FlowDirection> secondaryOutputs;
+    private PathDirection primaryOutput;
+    private Set<PathDirection> secondaryOutputs;
     private int distanceToTerminus;
     private boolean isBasin;
-    private Map<FlowDirection, List<int[]>> riverPaths;
+    private Map<PathDirection, List<int[]>> riverPaths;
 
     public RiverCell(RiverCellKey key, double density, double[][] subcellDensities,
                      CellClassification classification, boolean participating) {
@@ -32,7 +32,7 @@ public class RiverCell {
         this.subcellDensities = subcellDensities;
         this.classification = classification;
         this.participating = participating;
-        this.primaryOutput = FlowDirection.NONE;
+        this.primaryOutput = PathDirection.NONE;
         this.secondaryOutputs = new HashSet<>();
         this.distanceToTerminus = -1;
         this.isBasin = false;
@@ -59,19 +59,19 @@ public class RiverCell {
         return participating;
     }
 
-    public FlowDirection getPrimaryOutput() {
+    public PathDirection getPrimaryOutput() {
         return primaryOutput;
     }
 
-    public void setPrimaryOutput(FlowDirection primaryOutput) {
+    public void setPrimaryOutput(PathDirection primaryOutput) {
         this.primaryOutput = primaryOutput;
     }
 
-    public Set<FlowDirection> getSecondaryOutputs() {
+    public Set<PathDirection> getSecondaryOutputs() {
         return secondaryOutputs;
     }
 
-    public void setSecondaryOutputs(Set<FlowDirection> secondaryOutputs) {
+    public void setSecondaryOutputs(Set<PathDirection> secondaryOutputs) {
         this.secondaryOutputs = secondaryOutputs;
     }
 
@@ -91,11 +91,11 @@ public class RiverCell {
         this.isBasin = basin;
     }
 
-    public Map<FlowDirection, List<int[]>> getRiverPaths() {
+    public Map<PathDirection, List<int[]>> getRiverPaths() {
         return riverPaths;
     }
 
-    public void setRiverPaths(Map<FlowDirection, List<int[]>> riverPaths) {
+    public void setRiverPaths(Map<PathDirection, List<int[]>> riverPaths) {
         this.riverPaths = riverPaths;
     }
 
@@ -107,10 +107,10 @@ public class RiverCell {
 
         tag.putDouble("density", density);
 
-        double[] flatDensities = new double[49];
-        for (int i = 0; i < 7; i++) {
-            for (int j = 0; j < 7; j++) {
-                flatDensities[i * 7 + j] = subcellDensities[i][j];
+        double[] flatDensities = new double[64];
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                flatDensities[i * 8 + j] = subcellDensities[i][j];
             }
         }
         tag.putIntArray("subcellDensities", convertDoubleArrayToIntArray(flatDensities));
@@ -120,7 +120,7 @@ public class RiverCell {
         tag.putString("primaryOutput", primaryOutput.name());
 
         ListTag secondaryList = new ListTag();
-        for (FlowDirection direction : secondaryOutputs) {
+        for (PathDirection direction : secondaryOutputs) {
             CompoundTag dirTag = new CompoundTag();
             dirTag.putString("direction", direction.name());
             secondaryList.add(dirTag);
@@ -132,7 +132,7 @@ public class RiverCell {
 
         if (!riverPaths.isEmpty()) {
             ListTag pathsListTag = new ListTag();
-            for (Map.Entry<FlowDirection, List<int[]>> entry : riverPaths.entrySet()) {
+            for (Map.Entry<PathDirection, List<int[]>> entry : riverPaths.entrySet()) {
                 CompoundTag pathEntryTag = new CompoundTag();
                 pathEntryTag.putString("direction", entry.getKey().name());
 
@@ -160,10 +160,10 @@ public class RiverCell {
 
         int[] flatDensitiesInt = tag.getIntArray("subcellDensities");
         double[] flatDensities = convertIntArrayToDoubleArray(flatDensitiesInt);
-        double[][] subcellDensities = new double[7][7];
-        for (int i = 0; i < 7; i++) {
-            for (int j = 0; j < 7; j++) {
-                subcellDensities[i][j] = flatDensities[i * 7 + j];
+        double[][] subcellDensities = new double[8][8];
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                subcellDensities[i][j] = flatDensities[i * 8 + j];
             }
         }
 
@@ -172,13 +172,13 @@ public class RiverCell {
 
         RiverCell cell = new RiverCell(key, density, subcellDensities, classification, participating);
 
-        cell.setPrimaryOutput(FlowDirection.valueOf(tag.getString("primaryOutput")));
+        cell.setPrimaryOutput(PathDirection.valueOf(tag.getString("primaryOutput")));
 
-        Set<FlowDirection> secondaryOutputs = new HashSet<>();
+        Set<PathDirection> secondaryOutputs = new HashSet<>();
         ListTag secondaryList = tag.getList("secondaryOutputs", Tag.TAG_COMPOUND);
         for (int i = 0; i < secondaryList.size(); i++) {
             CompoundTag dirTag = secondaryList.getCompound(i);
-            secondaryOutputs.add(FlowDirection.valueOf(dirTag.getString("direction")));
+            secondaryOutputs.add(PathDirection.valueOf(dirTag.getString("direction")));
         }
         cell.setSecondaryOutputs(secondaryOutputs);
 
@@ -186,11 +186,11 @@ public class RiverCell {
         cell.setBasin(tag.getBoolean("isBasin"));
 
         if (tag.contains("riverPaths")) {
-            Map<FlowDirection, List<int[]>> riverPaths = new HashMap<>();
+            Map<PathDirection, List<int[]>> riverPaths = new HashMap<>();
             ListTag pathsListTag = tag.getList("riverPaths", Tag.TAG_COMPOUND);
             for (int i = 0; i < pathsListTag.size(); i++) {
                 CompoundTag pathEntryTag = pathsListTag.getCompound(i);
-                FlowDirection direction = FlowDirection.valueOf(pathEntryTag.getString("direction"));
+                PathDirection direction = PathDirection.valueOf(pathEntryTag.getString("direction"));
 
                 int[] flatPath = pathEntryTag.getIntArray("path");
                 List<int[]> path = new ArrayList<>();

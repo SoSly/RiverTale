@@ -15,6 +15,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import org.sosly.rivertale.config.RiverConfig;
 import org.sosly.rivertale.poc.carve.CardinalDirection;
 import org.sosly.rivertale.poc.carve.CarveConfig;
 import org.sosly.rivertale.poc.carve.RiverCarveExecutor;
@@ -77,6 +78,74 @@ public class RiverTaleCommand {
             .then(LocateCommand.register())
             .then(VisualizeCommand.register())
             .then(Commands.literal("poc")
+                .then(Commands.literal("d")
+                    .then(Commands.argument("x", IntegerArgumentType.integer())
+                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                            .executes(context -> {
+                                CommandSourceStack source = context.getSource();
+                                ServerLevel level = source.getLevel();
+
+                                int x = IntegerArgumentType.getInteger(context, "x");
+                                int z = IntegerArgumentType.getInteger(context, "z");
+
+                                int chunkX = x >> 4;
+                                int chunkZ = z >> 4;
+
+                                RandomState randomState = level.getChunkSource().randomState();
+                                NoiseRouter router = randomState.router();
+
+                                DensityFunction.SinglePointContext ctx =
+                                    new DensityFunction.SinglePointContext(x, 63, z);
+
+                                double continentsBefore = router.continents().compute(ctx);
+                                double depthBefore = router.depth().compute(ctx);
+                                double depthWeight = RiverConfig.DEPTH_WEIGHT.get();
+                                double densityBefore = continentsBefore + (depthBefore * depthWeight);
+
+                                boolean wasLoaded = level.hasChunk(chunkX, chunkZ);
+
+                                source.sendSuccess(() -> Component.literal(String.format(
+                                    "BEFORE chunk load at (%d, %d) [chunk %d, %d]:",
+                                    x, z, chunkX, chunkZ))
+                                    .withStyle(ChatFormatting.YELLOW), false);
+                                source.sendSuccess(() -> Component.literal(String.format(
+                                    "  Continents: %.6f, Depth: %.6f, Combined: %.6f",
+                                    continentsBefore, depthBefore, densityBefore))
+                                    .withStyle(ChatFormatting.WHITE), false);
+                                source.sendSuccess(() -> Component.literal(String.format(
+                                    "  Chunk was %s",
+                                    wasLoaded ? "already loaded" : "NOT loaded"))
+                                    .withStyle(wasLoaded ? ChatFormatting.GREEN : ChatFormatting.RED), false);
+
+                                level.getChunk(chunkX, chunkZ);
+
+                                double continentsAfter = router.continents().compute(ctx);
+                                double depthAfter = router.depth().compute(ctx);
+                                double densityAfter = continentsAfter + (depthAfter * depthWeight);
+
+                                source.sendSuccess(() -> Component.literal("AFTER chunk load:")
+                                    .withStyle(ChatFormatting.YELLOW), false);
+                                source.sendSuccess(() -> Component.literal(String.format(
+                                    "  Continents: %.6f, Depth: %.6f, Combined: %.6f",
+                                    continentsAfter, depthAfter, densityAfter))
+                                    .withStyle(ChatFormatting.WHITE), false);
+
+                                boolean match = densityBefore == densityAfter;
+
+                                if (match) {
+                                    source.sendSuccess(() -> Component.literal("RESULT: Density is DETERMINISTIC")
+                                        .withStyle(ChatFormatting.GREEN), false);
+                                } else {
+                                    source.sendFailure(Component.literal(String.format(
+                                        "RESULT: Density CHANGED! Diff: %.6f",
+                                        densityAfter - densityBefore)));
+                                }
+
+                                return 1;
+                            })
+                        )
+                    )
+                )
                 .then(Commands.literal("carve")
                     .then(Commands.argument("entryX", IntegerArgumentType.integer())
                         .then(Commands.argument("entryZ", IntegerArgumentType.integer())

@@ -6,7 +6,7 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
-import org.sosly.rivertale.worldgen.river.ContinentsDensityProvider;
+import org.sosly.rivertale.worldgen.river.CellDensityProvider;
 import org.sosly.rivertale.worldgen.river.RiverCellKey;
 import org.sosly.rivertale.worldgen.river.RiverCellManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -27,7 +27,7 @@ public abstract class ChunkGeneratorMixin {
             int cellCountY,
             CallbackInfoReturnable<ChunkAccess> cir) {
 
-        ContinentsDensityProvider provider = new ContinentsDensityProvider(randomState);
+        CellDensityProvider provider = new CellDensityProvider(randomState);
         ChunkPos chunkPos = chunk.getPos();
         int minX = chunkPos.getMinBlockX();
         int minZ = chunkPos.getMinBlockZ();

@@ -5,15 +5,15 @@ import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.config.RiverConfig;
 
-public class ContinentsDensityProvider implements DensityProvider {
+public class CellDensityProvider implements DensityProvider {
 
     private static final int SAMPLE_Y = 63;
-    private static final int SUBCELL_SAMPLES = 7;
+    private static final int SUBCELL_SAMPLES = 8;
 
     private final DensityFunction continentsFunction;
     private final DensityFunction depthFunction;
 
-    public ContinentsDensityProvider(RandomState randomState) {
+    public CellDensityProvider(RandomState randomState) {
         NoiseRouter router = randomState.router();
         this.continentsFunction = router.continents();
         this.depthFunction = router.depth();

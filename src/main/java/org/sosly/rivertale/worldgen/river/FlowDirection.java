@@ -1,42 +1,30 @@
 package org.sosly.rivertale.worldgen.river;
 
 public enum FlowDirection {
-    NORTH(0, -1),
-    SOUTH(0, 1),
-    EAST(1, 0),
-    WEST(-1, 0),
-    NONE(0, 0);
+    NORTH,
+    SOUTH,
+    EAST,
+    WEST,
+    NORTHEAST,
+    NORTHWEST,
+    SOUTHEAST,
+    SOUTHWEST,
+    SINK;
 
-    private final int dx;
-    private final int dz;
-
-    FlowDirection(int dx, int dz) {
-        this.dx = dx;
-        this.dz = dz;
+    public int dRow() {
+        return switch (this) {
+            case NORTH, NORTHEAST, NORTHWEST -> -1;
+            case SOUTH, SOUTHEAST, SOUTHWEST -> 1;
+            case EAST, WEST, SINK -> 0;
+        };
     }
 
-    public int dx() {
-        return dx;
-    }
-
-    public int dz() {
-        return dz;
-    }
-
-    public RiverCellKey neighbor(RiverCellKey from) {
-        if (this == NONE) {
-            return null;
-        }
-        return new RiverCellKey(from.cellX() + dx, from.cellZ() + dz);
-    }
-
-    public static FlowDirection fromDelta(int dx, int dz) {
-        for (FlowDirection direction : values()) {
-            if (direction.dx == dx && direction.dz == dz) {
-                return direction;
-            }
-        }
-        return NONE;
+    public int dCol() {
+        return switch (this) {
+            case EAST, NORTHEAST, SOUTHEAST -> 1;
+            case WEST, NORTHWEST, SOUTHWEST -> -1;
+            case NORTH, SOUTH, SINK -> 0;
+        };
     }
 
     public FlowDirection opposite() {
@@ -45,7 +33,11 @@ public enum FlowDirection {
             case SOUTH -> NORTH;
             case EAST -> WEST;
             case WEST -> EAST;
-            case NONE -> NONE;
+            case NORTHEAST -> SOUTHWEST;
+            case NORTHWEST -> SOUTHEAST;
+            case SOUTHEAST -> NORTHWEST;
+            case SOUTHWEST -> NORTHEAST;
+            case SINK -> SINK;
         };
     }
 }

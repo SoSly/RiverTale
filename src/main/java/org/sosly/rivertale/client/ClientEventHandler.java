@@ -11,6 +11,6 @@ public class ClientEventHandler {
 
     @SubscribeEvent
     public static void onPlayerLogout(ClientPlayerNetworkEvent.LoggingOut event) {
-        ClientCellCache.setEnabled(false);
+        ClientD8Cache.setEnabled(false);
     }
 }
