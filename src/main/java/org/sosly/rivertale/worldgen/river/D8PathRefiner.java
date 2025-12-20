@@ -52,7 +52,7 @@ public class D8PathRefiner {
                 riverPaths, confluenceSubcells);
         } else if (isBasin) {
             traceBasinPaths(crossings, riverPaths);
-            collectBasinTerminuses(crossings, terminusList);
+            collectPathEndpoints(riverPaths, terminusList);
         } else if (classification == RegionClassification.SHORE) {
             traceShorePaths(flowDirection, crossings, cellOriginX, cellOriginZ, subcellSpacing,
                 continentsSampler, depthSampler, oceanThreshold, lakeThreshold,
@@ -261,19 +261,6 @@ public class D8PathRefiner {
             }
         }
         return false;
-    }
-
-    private static void collectBasinTerminuses(EdgeCrossing[] crossings, List<int[]> terminusList) {
-        for (int dir = 0; dir < 4; dir++) {
-            EdgeCrossing crossing = crossings[dir];
-            if (crossing == null) {
-                continue;
-            }
-            if (crossing.direction() == EdgeCrossing.Direction.OUT) {
-                continue;
-            }
-            terminusList.add(new int[]{crossing.row(), crossing.col()});
-        }
     }
 
     private static void collectPathEndpoints(Map<PathDirection, List<int[]>> riverPaths, List<int[]> terminusList) {

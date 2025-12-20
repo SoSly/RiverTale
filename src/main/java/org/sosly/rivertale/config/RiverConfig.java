@@ -25,7 +25,7 @@ public class RiverConfig {
 
         OCEAN_THRESHOLD = builder
             .comment("Continents density value below which terrain is considered ocean.")
-            .defineInRange("oceanThreshold", -0.13, -1.0, 0.0);
+            .defineInRange("oceanThreshold", -0.16, -1.0, 0.0);
 
         LAKE_THRESHOLD = builder
             .comment("Depth density value below which terrain is considered a lake (if not ocean).")
