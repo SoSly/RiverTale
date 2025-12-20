@@ -6,6 +6,7 @@ import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.command.VisualizeCommand;
+import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
 import org.sosly.rivertale.worldgen.river.RiverRegionKey;
 
 import java.util.HashMap;
@@ -57,5 +58,6 @@ public class VisualizeSyncHandler {
     public static void onServerStopping(ServerStoppingEvent event) {
         LAST_KNOWN_REGION.clear();
         VisualizeCommand.clearEnabledPlayers();
+        RegionDensityProvider.clearCaches();
     }
 }

@@ -14,7 +14,7 @@ public class RiverRegionManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(RiverRegionManager.class);
     private static final int MAX_RECURSION_DEPTH = 1000;
 
-    static RiverRegion createCell(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
+    static RiverRegion createRegion(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
         long startTime = System.nanoTime();
 
         double[][] cellDensities = provider.sampleCellDensities(key.worldX(), key.worldZ(), RiverRegionKey.getRegionSize());
@@ -22,16 +22,16 @@ public class RiverRegionManager {
         RegionClassification classification = classifyRegion(key, provider);
         boolean participating = ParticipationCalculator.isParticipating(key, randomState);
 
-        RiverRegion cell = new RiverRegion(key, density, cellDensities, classification, participating);
+        RiverRegion region = new RiverRegion(key, density, cellDensities, classification, participating);
 
         if (participating && classification == RegionClassification.LAND) {
-            computeFlow(cell, provider, randomState);
+            computeFlow(region, provider, randomState);
         }
 
         long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
-        LOGGER.debug("Cell ({}, {}) created in {}ms [{}]", key.regionX(), key.regionZ(), elapsedMs, classification);
+        LOGGER.debug("Region ({}, {}) created in {}ms [{}]", key.regionX(), key.regionZ(), elapsedMs, classification);
 
-        return cell;
+        return region;
     }
 
     private static RegionClassification classifyRegion(RiverRegionKey key, DensityProvider provider) {
@@ -73,20 +73,20 @@ public class RiverRegionManager {
         return RegionClassification.LAND;
     }
 
-    private static void computeFlow(RiverRegion cell, DensityProvider provider, RandomState randomState) {
-        RegionClassification classification = cell.getClassification();
+    private static void computeFlow(RiverRegion region, DensityProvider provider, RandomState randomState) {
+        RegionClassification classification = region.getClassification();
 
         if (classification == RegionClassification.OCEAN || classification == RegionClassification.LAKE) {
-            cell.setPrimaryOutput(PathDirection.NONE);
+            region.setPrimaryOutput(PathDirection.NONE);
             return;
         }
 
         if (classification == RegionClassification.COASTAL || classification == RegionClassification.LAKESHORE) {
-            cell.setPrimaryOutput(PathDirection.NONE);
+            region.setPrimaryOutput(PathDirection.NONE);
             return;
         }
 
-        RiverRegionKey key = cell.getKey();
+        RiverRegionKey key = region.getKey();
         RegionDensityProvider cdp = (RegionDensityProvider) provider;
 
         BiFunction<Integer, Integer, Double> densitySampler = cdp::getDensity;
@@ -115,8 +115,8 @@ public class RiverRegionManager {
             densitySampler, continentsSampler, depthSampler,
             oceanThreshold, lakeThreshold);
 
-        cell.setPrimaryOutput(result.primaryOutputDirection());
-        cell.setBasin(result.isBasin());
+        region.setPrimaryOutput(result.primaryOutputDirection());
+        region.setBasin(result.isBasin());
 
         Set<PathDirection> secondaries = new HashSet<>();
         EdgeCrossing[] crossings = result.crossings();
@@ -128,19 +128,19 @@ public class RiverRegionManager {
                 }
             }
         }
-        cell.setSecondaryOutputs(secondaries);
+        region.setSecondaryOutputs(secondaries);
     }
 
     public static RiverRegion getOrCreate(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
-        return RiverRegionCache.getOrCompute(key, k -> createCell(k, provider, randomState));
+        return RiverRegionCache.getOrCompute(key, k -> createRegion(k, provider, randomState));
     }
 
-    public static void ensurePaths(RiverRegion cell, DensityProvider provider, RandomState randomState) {
-        if (!cell.getRiverPaths().isEmpty()) {
+    public static void ensurePaths(RiverRegion region, DensityProvider provider, RandomState randomState) {
+        if (!region.getRiverPaths().isEmpty()) {
             return;
         }
 
-        RiverRegionKey key = cell.getKey();
+        RiverRegionKey key = region.getKey();
         RegionDensityProvider cdp = (RegionDensityProvider) provider;
 
         BiFunction<Integer, Integer, Double> densitySampler = cdp::getDensity;
@@ -151,7 +151,7 @@ public class RiverRegionManager {
         double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
 
         FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(key, densitySampler);
-        RegionClassification classification = cell.getClassification();
+        RegionClassification classification = region.getClassification();
 
         FlowDirection[][][] neighborFlowDirections = new FlowDirection[4][][];
         RegionClassification[] neighborClassifications = ensureNeighborsLoaded(key, provider, randomState);
@@ -168,7 +168,7 @@ public class RiverRegionManager {
             densitySampler, continentsSampler, depthSampler,
             oceanThreshold, lakeThreshold);
 
-        cell.setRiverPaths(result.riverPaths());
+        region.setRiverPaths(result.riverPaths());
     }
 
     public static RegionClassification[] ensureNeighborsLoaded(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
@@ -184,43 +184,43 @@ public class RiverRegionManager {
         return neighborClassifications;
     }
 
-    public static int getDistanceToTerminus(RiverRegion cell, DensityProvider provider, RandomState randomState) {
-        return getDistanceToTerminusRecursive(cell, provider, randomState, 0);
+    public static int getDistanceToTerminus(RiverRegion region, DensityProvider provider, RandomState randomState) {
+        return getDistanceToTerminusRecursive(region, provider, randomState, 0);
     }
 
-    private static int getDistanceToTerminusRecursive(RiverRegion cell, DensityProvider provider, RandomState randomState, int depth) {
-        if (cell.getDistanceToTerminus() >= 0) {
-            return cell.getDistanceToTerminus();
+    private static int getDistanceToTerminusRecursive(RiverRegion region, DensityProvider provider, RandomState randomState, int depth) {
+        if (region.getDistanceToTerminus() >= 0) {
+            return region.getDistanceToTerminus();
         }
 
-        RegionClassification classification = cell.getClassification();
+        RegionClassification classification = region.getClassification();
         if (classification == RegionClassification.OCEAN
                 || classification == RegionClassification.COASTAL
                 || classification == RegionClassification.LAKE
                 || classification == RegionClassification.LAKESHORE
-                || cell.isBasin()) {
-            cell.setDistanceToTerminus(0);
+                || region.isBasin()) {
+            region.setDistanceToTerminus(0);
             return 0;
         }
 
         if (depth > MAX_RECURSION_DEPTH) {
-            LOGGER.warn("Distance calculation exceeded max depth at cell {}", cell.getKey());
+            LOGGER.warn("Distance calculation exceeded max depth at region {}", region.getKey());
             return depth;
         }
 
-        if (!cell.isParticipating() || cell.getPrimaryOutput() == PathDirection.NONE) {
-            cell.setDistanceToTerminus(0);
+        if (!region.isParticipating() || region.getPrimaryOutput() == PathDirection.NONE) {
+            region.setDistanceToTerminus(0);
             return 0;
         }
 
-        PathDirection primaryOutput = cell.getPrimaryOutput();
-        RiverRegionKey downstreamKey = primaryOutput.neighbor(cell.getKey());
-        RiverRegion downstreamCell = RiverRegionCache.getOrCompute(downstreamKey, k -> createCell(k, provider, randomState));
+        PathDirection primaryOutput = region.getPrimaryOutput();
+        RiverRegionKey downstreamKey = primaryOutput.neighbor(region.getKey());
+        RiverRegion downstream = RiverRegionCache.getOrCompute(downstreamKey, k -> createRegion(k, provider, randomState));
 
-        int downstreamDistance = getDistanceToTerminusRecursive(downstreamCell, provider, randomState, depth + 1);
+        int downstreamDistance = getDistanceToTerminusRecursive(downstream, provider, randomState, depth + 1);
         int distance = 1 + downstreamDistance;
 
-        cell.setDistanceToTerminus(distance);
+        region.setDistanceToTerminus(distance);
         return distance;
     }
 

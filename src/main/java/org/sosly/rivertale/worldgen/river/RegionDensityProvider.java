@@ -10,6 +10,9 @@ public class RegionDensityProvider implements DensityProvider {
     private static final int SAMPLE_Y = 63;
     private static final int SUBCELL_SAMPLES = 8;
 
+    private static final CellSampleDensityCache CONTINENTS_CACHE = new CellSampleDensityCache();
+    private static final CellSampleDensityCache DEPTH_CACHE = new CellSampleDensityCache();
+
     private final DensityFunction continentsFunction;
     private final DensityFunction depthFunction;
 
@@ -19,12 +22,15 @@ public class RegionDensityProvider implements DensityProvider {
         this.depthFunction = router.depth();
     }
 
+    public static void clearCaches() {
+        CONTINENTS_CACHE.clear();
+        DEPTH_CACHE.clear();
+    }
+
     @Override
     public double getDensity(int worldX, int worldZ) {
-        DensityFunction.SinglePointContext context =
-            new DensityFunction.SinglePointContext(worldX, SAMPLE_Y, worldZ);
-        double continents = continentsFunction.compute(context);
-        double depth = depthFunction.compute(context);
+        double continents = getContinents(worldX, worldZ);
+        double depth = getDepth(worldX, worldZ);
         return continents + (depth * RiverConfig.DEPTH_WEIGHT.get());
     }
 
@@ -63,9 +69,11 @@ public class RegionDensityProvider implements DensityProvider {
     }
 
     public double getContinents(int worldX, int worldZ) {
-        DensityFunction.SinglePointContext context =
-            new DensityFunction.SinglePointContext(worldX, SAMPLE_Y, worldZ);
-        return continentsFunction.compute(context);
+        return CONTINENTS_CACHE.getOrCompute(worldX, worldZ, (x, z) -> {
+            DensityFunction.SinglePointContext context =
+                new DensityFunction.SinglePointContext(x, SAMPLE_Y, z);
+            return continentsFunction.compute(context);
+        });
     }
 
     @Override
@@ -74,9 +82,11 @@ public class RegionDensityProvider implements DensityProvider {
     }
 
     public double getDepth(int worldX, int worldZ) {
-        DensityFunction.SinglePointContext context =
-            new DensityFunction.SinglePointContext(worldX, SAMPLE_Y, worldZ);
-        return depthFunction.compute(context);
+        return DEPTH_CACHE.getOrCompute(worldX, worldZ, (x, z) -> {
+            DensityFunction.SinglePointContext context =
+                new DensityFunction.SinglePointContext(x, SAMPLE_Y, z);
+            return depthFunction.compute(context);
+        });
     }
 
     @Override

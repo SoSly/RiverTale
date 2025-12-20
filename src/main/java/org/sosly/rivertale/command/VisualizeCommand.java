@@ -19,7 +19,6 @@ import org.sosly.rivertale.worldgen.river.D8FlowResult;
 import org.sosly.rivertale.worldgen.river.D8PathRefiner;
 import org.sosly.rivertale.worldgen.river.FlowDirection;
 import org.sosly.rivertale.worldgen.river.RiverRegionKey;
-import org.sosly.rivertale.worldgen.river.CellSampleDensityCache;
 import org.sosly.rivertale.config.RiverConfig;
 
 import java.util.ArrayList;
@@ -83,18 +82,9 @@ public class VisualizeCommand {
         double oceanThreshold = RiverConfig.OCEAN_THRESHOLD.get();
         double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
 
-        CellSampleDensityCache densityCache = new CellSampleDensityCache();
-        CellSampleDensityCache continentsCache = new CellSampleDensityCache();
-        CellSampleDensityCache depthCache = new CellSampleDensityCache();
-
-        BiFunction<Integer, Integer, Double> cachedDensitySampler = (x, z) ->
-            densityCache.getOrCompute(x, z, provider::getDensity);
-
-        BiFunction<Integer, Integer, Double> cachedContinentsSampler = (x, z) ->
-            continentsCache.getOrCompute(x, z, provider::getContinents);
-
-        BiFunction<Integer, Integer, Double> cachedDepthSampler = (x, z) ->
-            depthCache.getOrCompute(x, z, provider::getDepth);
+        BiFunction<Integer, Integer, Double> densitySampler = provider::getDensity;
+        BiFunction<Integer, Integer, Double> continentsSampler = provider::getContinents;
+        BiFunction<Integer, Integer, Double> depthSampler = provider::getDepth;
 
         RiverRegionKey playerRegion = RiverRegionKey.fromBlockPos(pos.getX(), pos.getZ());
 
@@ -106,9 +96,9 @@ public class VisualizeCommand {
             for (int dz = -outerRadius; dz <= outerRadius; dz++) {
                 RiverRegionKey key = new RiverRegionKey(playerRegion.regionX() + dx, playerRegion.regionZ() + dz);
 
-                FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(key, cachedDensitySampler);
+                FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(key, densitySampler);
                 RegionClassification classification = D8FlowCalculator.classifyRegion(
-                    key, cachedContinentsSampler, cachedDepthSampler, oceanThreshold, lakeThreshold);
+                    key, continentsSampler, depthSampler, oceanThreshold, lakeThreshold);
 
                 flowDataMap.put(key, flowDirections);
                 classificationMap.put(key, classification);
@@ -145,7 +135,7 @@ public class VisualizeCommand {
                 D8FlowResult d8Result = D8PathRefiner.refine(
                     key, flowDirection, classification,
                     neighborFlowDirections, neighborClassifications,
-                    cachedDensitySampler, cachedContinentsSampler, cachedDepthSampler,
+                    densitySampler, continentsSampler, depthSampler,
                     oceanThreshold, lakeThreshold);
 
                 regionDataList.add(new D8RegionData(
