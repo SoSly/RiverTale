@@ -54,10 +54,7 @@ public class RegionCommand {
                     return 1;
                 }
 
-                boolean isTerminus = classification == RegionClassification.OCEAN
-                        || classification == RegionClassification.COASTAL
-                        || classification == RegionClassification.LAKE
-                        || classification == RegionClassification.LAKESHORE;
+                boolean isTerminus = classification != RegionClassification.LAND;
 
                 if (isTerminus) {
                     source.sendSuccess(() -> Component.literal(String.format("  Center: (%,d, %,d)", key.centerX(), key.centerZ()))
@@ -71,7 +68,7 @@ public class RegionCommand {
                     source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                         .withStyle(ChatFormatting.WHITE), false);
 
-                    if (classification == RegionClassification.COASTAL || classification == RegionClassification.LAKESHORE) {
+                    if (classification == RegionClassification.SHORE) {
                         int upstreamCount = RiverRegionManager.getUpstreamCount(key, provider, randomState);
                         source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
                             .withStyle(ChatFormatting.WHITE), false);

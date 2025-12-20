@@ -24,7 +24,7 @@ public class RiverRegionManager {
 
         RiverRegion region = new RiverRegion(key, density, cellDensities, classification, participating);
 
-        if (participating && classification == RegionClassification.LAND) {
+        if (participating && classification != RegionClassification.BODY) {
             computeFlow(region, provider, randomState);
         }
 
@@ -38,8 +38,7 @@ public class RiverRegionManager {
         int regionSize = RiverRegionKey.getRegionSize();
         double step = regionSize / 8.0;
 
-        boolean hasOcean = false;
-        boolean hasLake = false;
+        boolean hasWater = false;
         boolean hasLand = false;
 
         for (int i = 0; i < 8; i++) {
@@ -47,27 +46,19 @@ public class RiverRegionManager {
                 int sampleX = key.worldX() + (int) (i * step);
                 int sampleZ = key.worldZ() + (int) (j * step);
 
-                if (provider.isOcean(sampleX, sampleZ)) {
-                    hasOcean = true;
-                } else if (provider.isLake(sampleX, sampleZ)) {
-                    hasLake = true;
+                if (provider.isOcean(sampleX, sampleZ) || provider.isLake(sampleX, sampleZ)) {
+                    hasWater = true;
                 } else {
                     hasLand = true;
                 }
             }
         }
 
-        if (hasOcean && (hasLand || hasLake)) {
-            return RegionClassification.COASTAL;
+        if (hasWater && hasLand) {
+            return RegionClassification.SHORE;
         }
-        if (hasOcean) {
-            return RegionClassification.OCEAN;
-        }
-        if (hasLake && hasLand) {
-            return RegionClassification.LAKESHORE;
-        }
-        if (hasLake) {
-            return RegionClassification.LAKE;
+        if (hasWater) {
+            return RegionClassification.BODY;
         }
 
         return RegionClassification.LAND;
@@ -76,14 +67,13 @@ public class RiverRegionManager {
     private static void computeFlow(RiverRegion region, DensityProvider provider, RandomState randomState) {
         RegionClassification classification = region.getClassification();
 
-        if (classification == RegionClassification.OCEAN || classification == RegionClassification.LAKE) {
+        if (classification == RegionClassification.BODY) {
             region.setPrimaryOutput(PathDirection.NONE);
             return;
         }
 
-        if (classification == RegionClassification.COASTAL || classification == RegionClassification.LAKESHORE) {
+        if (classification == RegionClassification.SHORE) {
             region.setPrimaryOutput(PathDirection.NONE);
-            return;
         }
 
         RiverRegionKey key = region.getKey();
@@ -194,11 +184,7 @@ public class RiverRegionManager {
         }
 
         RegionClassification classification = region.getClassification();
-        if (classification == RegionClassification.OCEAN
-                || classification == RegionClassification.COASTAL
-                || classification == RegionClassification.LAKE
-                || classification == RegionClassification.LAKESHORE
-                || region.isBasin()) {
+        if (classification != RegionClassification.LAND || region.isBasin()) {
             region.setDistanceToTerminus(0);
             return 0;
         }
@@ -232,10 +218,10 @@ public class RiverRegionManager {
     public static RegionFeatureType getRegionFeatureType(RiverRegion region, DensityProvider provider, RandomState randomState) {
         RegionClassification classification = region.getClassification();
 
-        if (classification == RegionClassification.OCEAN || classification == RegionClassification.LAKE) {
+        if (classification == RegionClassification.BODY) {
             return RegionFeatureType.BODY;
         }
-        if (classification == RegionClassification.COASTAL || classification == RegionClassification.LAKESHORE) {
+        if (classification == RegionClassification.SHORE) {
             return RegionFeatureType.SHORE;
         }
         if (!region.isParticipating()) {
@@ -302,9 +288,7 @@ public class RiverRegionManager {
 
     private static boolean isTerminusCell(RiverRegion region, int row, int col) {
         RegionClassification classification = region.getClassification();
-        if (classification != RegionClassification.COASTAL
-                && classification != RegionClassification.LAKESHORE
-                && !region.isBasin()) {
+        if (classification != RegionClassification.SHORE && !region.isBasin()) {
             return false;
         }
 

@@ -44,8 +44,7 @@ public class D8FlowCalculator {
         int cellSize = RiverRegionKey.getRegionSize();
         double step = cellSize / 8.0;
 
-        boolean hasOcean = false;
-        boolean hasLake = false;
+        boolean hasWater = false;
         boolean hasLand = false;
 
         for (int i = 0; i < 8; i++) {
@@ -55,11 +54,11 @@ public class D8FlowCalculator {
 
                 double continents = continentsSampler.apply(sampleX, sampleZ);
                 if (continents < oceanThreshold) {
-                    hasOcean = true;
+                    hasWater = true;
                 } else {
                     double depth = depthSampler.apply(sampleX, sampleZ);
                     if (depth < lakeThreshold) {
-                        hasLake = true;
+                        hasWater = true;
                     } else {
                         hasLand = true;
                     }
@@ -67,17 +66,11 @@ public class D8FlowCalculator {
             }
         }
 
-        if (hasOcean && (hasLand || hasLake)) {
-            return RegionClassification.COASTAL;
+        if (hasWater && hasLand) {
+            return RegionClassification.SHORE;
         }
-        if (hasOcean) {
-            return RegionClassification.OCEAN;
-        }
-        if (hasLake && hasLand) {
-            return RegionClassification.LAKESHORE;
-        }
-        if (hasLake) {
-            return RegionClassification.LAKE;
+        if (hasWater) {
+            return RegionClassification.BODY;
         }
 
         return RegionClassification.LAND;

@@ -33,10 +33,7 @@ public class D8PathRefiner {
         EdgeCrossing[] crossings = new EdgeCrossing[4];
         double[] crossingStrengths = new double[4];
 
-        boolean isTerminus = classification == RegionClassification.COASTAL
-            || classification == RegionClassification.LAKESHORE;
-
-        if (!isTerminus) {
+        if (classification != RegionClassification.BODY) {
             computeEdgeCrossings(cellOriginX, cellOriginZ, subcellSpacing, densitySampler,
                 flowDirection, neighborFlowDirections, neighborClassifications,
                 crossings, crossingStrengths);
@@ -44,35 +41,26 @@ public class D8PathRefiner {
 
         PathDirection primaryOutputDirection = computePrimaryOutput(flowDirection, crossings);
 
-        boolean isBasin = !hasAnyOutput(crossings) && !isTerminus;
+        boolean isBasin = classification == RegionClassification.LAND && !hasAnyOutput(crossings);
 
         List<int[]> terminusList = new ArrayList<>();
-
-        if (classification == RegionClassification.COASTAL) {
-            int[] terminus = findThresholdTerminus(cellOriginX, cellOriginZ, subcellSpacing,
-                continentsSampler, oceanThreshold);
-            if (terminus[0] >= 0) {
-                terminusList.add(terminus);
-            }
-        } else if (classification == RegionClassification.LAKESHORE) {
-            int[] terminus = findThresholdTerminus(cellOriginX, cellOriginZ, subcellSpacing,
-                depthSampler, lakeThreshold);
-            if (terminus[0] >= 0) {
-                terminusList.add(terminus);
-            }
-        } else if (isBasin) {
-            collectBasinTerminuses(crossings, terminusList);
-        }
-
-        int[][] terminusSubcells = terminusList.toArray(new int[0][]);
-
         Map<PathDirection, List<int[]>> riverPaths = new HashMap<>();
         List<int[]> confluenceSubcells = new ArrayList<>();
 
         if (classification == RegionClassification.LAND && primaryOutputDirection != PathDirection.NONE) {
             tracePaths(flowDirection, crossings, primaryOutputDirection,
                 riverPaths, confluenceSubcells);
+        } else if (isBasin) {
+            traceBasinPaths(crossings, riverPaths);
+            collectBasinTerminuses(crossings, terminusList);
+        } else if (classification == RegionClassification.SHORE) {
+            traceShorePaths(flowDirection, crossings, cellOriginX, cellOriginZ, subcellSpacing,
+                continentsSampler, depthSampler, oceanThreshold, lakeThreshold,
+                riverPaths, confluenceSubcells);
+            collectPathEndpoints(riverPaths, terminusList);
         }
+
+        int[][] terminusSubcells = terminusList.toArray(new int[0][]);
 
         return new D8FlowResult(flowDirection, crossings,
             crossingStrengths, primaryOutputDirection, isBasin, terminusSubcells,
@@ -288,6 +276,15 @@ public class D8PathRefiner {
         }
     }
 
+    private static void collectPathEndpoints(Map<PathDirection, List<int[]>> riverPaths, List<int[]> terminusList) {
+        for (List<int[]> path : riverPaths.values()) {
+            if (path.isEmpty()) {
+                continue;
+            }
+            terminusList.add(path.get(path.size() - 1));
+        }
+    }
+
     private static int[] findThresholdTerminus(
             int cellOriginX, int cellOriginZ, int subcellSpacing,
             BiFunction<Integer, Integer, Double> sampler, double threshold) {
@@ -356,6 +353,188 @@ public class D8PathRefiner {
 
             riverPaths.put(inputDir, path);
         }
+    }
+
+    private static void traceBasinPaths(
+            EdgeCrossing[] crossings,
+            Map<PathDirection, List<int[]>> riverPaths) {
+
+        for (int dir = 0; dir < 4; dir++) {
+            EdgeCrossing crossing = crossings[dir];
+            if (crossing == null) {
+                continue;
+            }
+            if (crossing.direction() != EdgeCrossing.Direction.IN) {
+                continue;
+            }
+
+            List<int[]> path = List.of(new int[]{crossing.row(), crossing.col()});
+            PathDirection pathDir = PathDirection.values()[dir];
+            riverPaths.put(pathDir, path);
+        }
+    }
+
+    private static void traceShorePaths(
+            FlowDirection[][] flowDirection,
+            EdgeCrossing[] crossings,
+            int cellOriginX,
+            int cellOriginZ,
+            int subcellSpacing,
+            BiFunction<Integer, Integer, Double> continentsSampler,
+            BiFunction<Integer, Integer, Double> depthSampler,
+            double oceanThreshold,
+            double lakeThreshold,
+            Map<PathDirection, List<int[]>> riverPaths,
+            List<int[]> confluenceSubcells) {
+
+        boolean[][] pathCovered = new boolean[GRID_SIZE][GRID_SIZE];
+
+        for (int dir = 0; dir < 4; dir++) {
+            EdgeCrossing crossing = crossings[dir];
+            if (crossing == null) {
+                continue;
+            }
+            if (crossing.direction() != EdgeCrossing.Direction.IN) {
+                continue;
+            }
+
+            int[] inputSubcell = new int[]{crossing.row(), crossing.col()};
+            PathDirection pathDir = PathDirection.values()[dir];
+
+            List<int[]> path = tracePathUntilWater(
+                flowDirection, inputSubcell, cellOriginX, cellOriginZ, subcellSpacing,
+                continentsSampler, depthSampler, oceanThreshold, lakeThreshold,
+                pathCovered, confluenceSubcells);
+
+            for (int[] subcell : path) {
+                pathCovered[subcell[0]][subcell[1]] = true;
+            }
+
+            riverPaths.put(pathDir, path);
+        }
+    }
+
+    private static boolean isWater(int worldX, int worldZ,
+            BiFunction<Integer, Integer, Double> continentsSampler,
+            BiFunction<Integer, Integer, Double> depthSampler,
+            double oceanThreshold, double lakeThreshold) {
+
+        double continents = continentsSampler.apply(worldX, worldZ);
+        if (continents < oceanThreshold) {
+            return true;
+        }
+        double depth = depthSampler.apply(worldX, worldZ);
+        return depth < lakeThreshold;
+    }
+
+    private static List<int[]> tracePathUntilWater(
+            FlowDirection[][] flowDirection,
+            int[] start,
+            int cellOriginX,
+            int cellOriginZ,
+            int subcellSpacing,
+            BiFunction<Integer, Integer, Double> continentsSampler,
+            BiFunction<Integer, Integer, Double> depthSampler,
+            double oceanThreshold,
+            double lakeThreshold,
+            boolean[][] pathCovered,
+            List<int[]> confluenceSubcells) {
+
+        List<int[]> path = new ArrayList<>();
+        boolean[][] visited = new boolean[GRID_SIZE][GRID_SIZE];
+        boolean confluenceMarked = false;
+
+        int row = start[0];
+        int col = start[1];
+
+        while (true) {
+            int worldX = cellOriginX + col * subcellSpacing + subcellSpacing / 2;
+            int worldZ = cellOriginZ + row * subcellSpacing + subcellSpacing / 2;
+
+            path.add(new int[]{row, col});
+            visited[row][col] = true;
+
+            if (pathCovered[row][col] && !confluenceMarked) {
+                confluenceSubcells.add(new int[]{row, col});
+                confluenceMarked = true;
+            }
+
+            if (isWater(worldX, worldZ, continentsSampler, depthSampler, oceanThreshold, lakeThreshold)) {
+                break;
+            }
+
+            FlowDirection d8Dir = flowDirection[row][col];
+            int[] d8Next = getNeighborInDirection(row, col, d8Dir);
+
+            boolean d8Valid = d8Dir != FlowDirection.SINK
+                && d8Next[0] >= 0 && d8Next[0] < GRID_SIZE
+                && d8Next[1] >= 0 && d8Next[1] < GRID_SIZE
+                && !visited[d8Next[0]][d8Next[1]];
+
+            if (d8Valid) {
+                row = d8Next[0];
+                col = d8Next[1];
+                continue;
+            }
+
+            int[] fallback = findNeighborTowardWater(row, col, cellOriginX, cellOriginZ, subcellSpacing,
+                continentsSampler, depthSampler, oceanThreshold, lakeThreshold, visited);
+            if (fallback == null) {
+                break;
+            }
+            row = fallback[0];
+            col = fallback[1];
+        }
+
+        return path;
+    }
+
+    private static int[] findNeighborTowardWater(
+            int row, int col,
+            int cellOriginX, int cellOriginZ, int subcellSpacing,
+            BiFunction<Integer, Integer, Double> continentsSampler,
+            BiFunction<Integer, Integer, Double> depthSampler,
+            double oceanThreshold, double lakeThreshold,
+            boolean[][] visited) {
+
+        int[][] neighbors = {
+            {row - 1, col},
+            {row + 1, col},
+            {row, col + 1},
+            {row, col - 1}
+        };
+
+        int[] waterNeighbor = null;
+        int[] best = null;
+        double lowestContinents = Double.MAX_VALUE;
+
+        for (int[] neighbor : neighbors) {
+            int r = neighbor[0];
+            int c = neighbor[1];
+
+            if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) {
+                continue;
+            }
+            if (visited[r][c]) {
+                continue;
+            }
+
+            int worldX = cellOriginX + c * subcellSpacing + subcellSpacing / 2;
+            int worldZ = cellOriginZ + r * subcellSpacing + subcellSpacing / 2;
+
+            if (isWater(worldX, worldZ, continentsSampler, depthSampler, oceanThreshold, lakeThreshold)) {
+                waterNeighbor = neighbor;
+                continue;
+            }
+
+            double continents = continentsSampler.apply(worldX, worldZ);
+            if (continents < lowestContinents) {
+                lowestContinents = continents;
+                best = neighbor;
+            }
+        }
+
+        return waterNeighbor != null ? waterNeighbor : best;
     }
 
     private static List<int[]> tracePathToOutput(
