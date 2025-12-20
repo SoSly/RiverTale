@@ -4,9 +4,9 @@ public interface DensityProvider {
 
     double getDensity(int worldX, int worldZ);
 
-    double getAveragedDensity(int worldX, int worldZ, int cellSize);
+    double getAveragedDensity(int worldX, int worldZ, int regionSize);
 
-    double[][] sampleSubcellDensities(int worldX, int worldZ, int cellSize);
+    double[][] sampleCellDensities(int worldX, int worldZ, int regionSize);
 
     boolean isOcean(int worldX, int worldZ);
 

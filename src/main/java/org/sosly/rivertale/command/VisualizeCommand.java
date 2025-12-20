@@ -11,14 +11,14 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.network.RiverTaleNetwork;
 import org.sosly.rivertale.network.VisualizeD8Packet;
-import org.sosly.rivertale.network.VisualizeD8Packet.D8CellData;
-import org.sosly.rivertale.worldgen.river.CellClassification;
-import org.sosly.rivertale.worldgen.river.CellDensityProvider;
+import org.sosly.rivertale.network.VisualizeD8Packet.D8RegionData;
+import org.sosly.rivertale.worldgen.river.RegionClassification;
+import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
 import org.sosly.rivertale.worldgen.river.D8FlowCalculator;
 import org.sosly.rivertale.worldgen.river.D8FlowResult;
 import org.sosly.rivertale.worldgen.river.D8PathRefiner;
 import org.sosly.rivertale.worldgen.river.FlowDirection;
-import org.sosly.rivertale.worldgen.river.RiverCellKey;
+import org.sosly.rivertale.worldgen.river.RiverRegionKey;
 import org.sosly.rivertale.worldgen.river.CellSampleDensityCache;
 import org.sosly.rivertale.config.RiverConfig;
 
@@ -34,7 +34,7 @@ import java.util.function.BiFunction;
 public class VisualizeCommand {
 
     private static final Set<UUID> ENABLED_PLAYERS = new HashSet<>();
-    private static final int CELL_RADIUS = 2;
+    private static final int REGION_RADIUS = 2;
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         return Commands.literal("visualize")
@@ -58,13 +58,13 @@ public class VisualizeCommand {
 
                 ENABLED_PLAYERS.add(playerId);
                 long startTime = System.nanoTime();
-                sendCellDataToPlayer(player);
+                sendRegionDataToPlayer(player);
                 long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
-                int totalCells = (CELL_RADIUS * 2 + 1) * (CELL_RADIUS * 2 + 1);
-                double msPerCell = (double) elapsedMs / totalCells;
+                int totalRegions = (REGION_RADIUS * 2 + 1) * (REGION_RADIUS * 2 + 1);
+                double msPerRegion = (double) elapsedMs / totalRegions;
                 source.sendSuccess(() -> Component.literal(
-                    String.format("River visualization enabled (computed in %dms for %d cells, %.2fms/cell)",
-                        elapsedMs, totalCells, msPerCell))
+                    String.format("River visualization enabled (computed in %dms for %d regions, %.2fms/region)",
+                        elapsedMs, totalRegions, msPerRegion))
                     .withStyle(ChatFormatting.GREEN), false);
                 return 1;
             });
@@ -74,12 +74,12 @@ public class VisualizeCommand {
         return ENABLED_PLAYERS.contains(playerId);
     }
 
-    public static void sendCellDataToPlayer(ServerPlayer player) {
+    public static void sendRegionDataToPlayer(ServerPlayer player) {
         ServerLevel level = player.serverLevel();
         BlockPos pos = player.blockPosition();
         RandomState randomState = level.getChunkSource().randomState();
 
-        CellDensityProvider provider = new CellDensityProvider(randomState);
+        RegionDensityProvider provider = new RegionDensityProvider(randomState);
         double oceanThreshold = RiverConfig.OCEAN_THRESHOLD.get();
         double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
 
@@ -96,18 +96,18 @@ public class VisualizeCommand {
         BiFunction<Integer, Integer, Double> cachedDepthSampler = (x, z) ->
             depthCache.getOrCompute(x, z, provider::getDepth);
 
-        RiverCellKey playerCell = RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
+        RiverRegionKey playerRegion = RiverRegionKey.fromBlockPos(pos.getX(), pos.getZ());
 
-        Map<RiverCellKey, FlowDirection[][]> flowDataMap = new HashMap<>();
-        Map<RiverCellKey, CellClassification> classificationMap = new HashMap<>();
+        Map<RiverRegionKey, FlowDirection[][]> flowDataMap = new HashMap<>();
+        Map<RiverRegionKey, RegionClassification> classificationMap = new HashMap<>();
 
-        int outerRadius = CELL_RADIUS + 1;
+        int outerRadius = REGION_RADIUS + 1;
         for (int dx = -outerRadius; dx <= outerRadius; dx++) {
             for (int dz = -outerRadius; dz <= outerRadius; dz++) {
-                RiverCellKey key = new RiverCellKey(playerCell.cellX() + dx, playerCell.cellZ() + dz);
+                RiverRegionKey key = new RiverRegionKey(playerRegion.regionX() + dx, playerRegion.regionZ() + dz);
 
                 FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(key, cachedDensitySampler);
-                CellClassification classification = D8FlowCalculator.classifyCell(
+                RegionClassification classification = D8FlowCalculator.classifyRegion(
                     key, cachedContinentsSampler, cachedDepthSampler, oceanThreshold, lakeThreshold);
 
                 flowDataMap.put(key, flowDirections);
@@ -115,22 +115,22 @@ public class VisualizeCommand {
             }
         }
 
-        List<D8CellData> cellDataList = new ArrayList<>();
+        List<D8RegionData> regionDataList = new ArrayList<>();
 
-        for (int dx = -CELL_RADIUS; dx <= CELL_RADIUS; dx++) {
-            for (int dz = -CELL_RADIUS; dz <= CELL_RADIUS; dz++) {
-                RiverCellKey key = new RiverCellKey(playerCell.cellX() + dx, playerCell.cellZ() + dz);
+        for (int dx = -REGION_RADIUS; dx <= REGION_RADIUS; dx++) {
+            for (int dz = -REGION_RADIUS; dz <= REGION_RADIUS; dz++) {
+                RiverRegionKey key = new RiverRegionKey(playerRegion.regionX() + dx, playerRegion.regionZ() + dz);
 
                 FlowDirection[][] flowDirection = flowDataMap.get(key);
-                CellClassification classification = classificationMap.get(key);
+                RegionClassification classification = classificationMap.get(key);
 
                 FlowDirection[][][] neighborFlowDirections = new FlowDirection[4][][];
-                CellClassification[] neighborClassifications = new CellClassification[4];
+                RegionClassification[] neighborClassifications = new RegionClassification[4];
 
-                RiverCellKey northKey = new RiverCellKey(key.cellX(), key.cellZ() - 1);
-                RiverCellKey southKey = new RiverCellKey(key.cellX(), key.cellZ() + 1);
-                RiverCellKey eastKey = new RiverCellKey(key.cellX() + 1, key.cellZ());
-                RiverCellKey westKey = new RiverCellKey(key.cellX() - 1, key.cellZ());
+                RiverRegionKey northKey = new RiverRegionKey(key.regionX(), key.regionZ() - 1);
+                RiverRegionKey southKey = new RiverRegionKey(key.regionX(), key.regionZ() + 1);
+                RiverRegionKey eastKey = new RiverRegionKey(key.regionX() + 1, key.regionZ());
+                RiverRegionKey westKey = new RiverRegionKey(key.regionX() - 1, key.regionZ());
 
                 neighborFlowDirections[0] = flowDataMap.get(northKey);
                 neighborFlowDirections[1] = flowDataMap.get(southKey);
@@ -148,8 +148,8 @@ public class VisualizeCommand {
                     cachedDensitySampler, cachedContinentsSampler, cachedDepthSampler,
                     oceanThreshold, lakeThreshold);
 
-                cellDataList.add(new D8CellData(
-                    key.cellX(), key.cellZ(),
+                regionDataList.add(new D8RegionData(
+                    key.regionX(), key.regionZ(),
                     classification, d8Result.isBasin(),
                     d8Result.crossings(),
                     d8Result.primaryOutputDirection(), d8Result.flowDirection(),
@@ -159,12 +159,12 @@ public class VisualizeCommand {
             }
         }
 
-        RiverTaleNetwork.sendToPlayer(new VisualizeD8Packet(true, cellDataList), player);
+        RiverTaleNetwork.sendToPlayer(new VisualizeD8Packet(true, regionDataList), player);
     }
 
-    public static RiverCellKey getPlayerCell(ServerPlayer player) {
+    public static RiverRegionKey getPlayerRegion(ServerPlayer player) {
         BlockPos pos = player.blockPosition();
-        return RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
+        return RiverRegionKey.fromBlockPos(pos.getX(), pos.getZ());
     }
 
     public static void clearEnabledPlayers() {

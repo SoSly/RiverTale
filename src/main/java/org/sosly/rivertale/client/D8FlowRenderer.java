@@ -14,11 +14,11 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.RiverTale;
-import org.sosly.rivertale.network.VisualizeD8Packet.D8CellData;
+import org.sosly.rivertale.network.VisualizeD8Packet.D8RegionData;
 import org.sosly.rivertale.worldgen.river.EdgeCrossing;
 import org.sosly.rivertale.worldgen.river.FlowDirection;
 import org.sosly.rivertale.worldgen.river.PathDirection;
-import org.sosly.rivertale.worldgen.river.RiverCellKey;
+import org.sosly.rivertale.worldgen.river.RiverRegionKey;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class D8FlowRenderer {
@@ -30,12 +30,12 @@ public class D8FlowRenderer {
     private static final double DIAG_COMPONENT = ARROW_LENGTH / Math.sqrt(2.0);
     private static final double DIAG_HEAD = ARROWHEAD_SIZE / Math.sqrt(2.0);
 
-    private static int getCellSize() {
-        return RiverCellKey.getCellSize();
+    private static int getRegionSize() {
+        return RiverRegionKey.getRegionSize();
     }
 
     private static double getSubcellStep() {
-        return getCellSize() / 8.0;
+        return getRegionSize() / 8.0;
     }
 
     private static final float[] COLOR_BORDER = {1.0f, 1.0f, 1.0f, 0.5f};
@@ -63,16 +63,16 @@ public class D8FlowRenderer {
         Tesselator tesselator = Tesselator.getInstance();
         BufferBuilder bufferBuilder = tesselator.getBuilder();
 
-        renderCellBorders(poseStack, camPos, bufferBuilder);
+        renderRegionBorders(poseStack, camPos, bufferBuilder);
 
-        for (D8CellData cell : ClientD8Cache.getCells()) {
-            renderCell(cell, poseStack, camPos, bufferBuilder);
+        for (D8RegionData region : ClientD8Cache.getRegions()) {
+            renderRegion(region, poseStack, camPos, bufferBuilder);
         }
 
-        renderCrossCellConnections(poseStack, camPos, bufferBuilder);
+        renderCrossRegionConnections(poseStack, camPos, bufferBuilder);
     }
 
-    private static void renderCellBorders(PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
+    private static void renderRegionBorders(PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -81,12 +81,12 @@ public class D8FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        for (D8CellData cell : ClientD8Cache.getCells()) {
-            int cellSize = getCellSize();
-            double minX = cell.cellX * cellSize;
-            double maxX = minX + cellSize;
-            double minZ = cell.cellZ * cellSize;
-            double maxZ = minZ + cellSize;
+        for (D8RegionData region : ClientD8Cache.getRegions()) {
+            int regionSize = getRegionSize();
+            double minX = region.regionX * regionSize;
+            double maxX = minX + regionSize;
+            double minZ = region.regionZ * regionSize;
+            double maxZ = minZ + regionSize;
 
             Vec3 nw = new Vec3(minX, SEA_LEVEL, minZ);
             Vec3 ne = new Vec3(maxX, SEA_LEVEL, minZ);
@@ -104,18 +104,18 @@ public class D8FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static void renderCell(D8CellData cell, PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
-        int cellWorldX = cell.cellX * getCellSize();
-        int cellWorldZ = cell.cellZ * getCellSize();
+    private static void renderRegion(D8RegionData region, PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
+        int regionWorldX = region.regionX * getRegionSize();
+        int regionWorldZ = region.regionZ * getRegionSize();
 
-        renderFlowArrows(cell, cellWorldX, cellWorldZ, poseStack, camPos, bufferBuilder);
-        renderRiverPaths(cell, cellWorldX, cellWorldZ, poseStack, camPos, bufferBuilder);
-        renderTerminus(cell, cellWorldX, cellWorldZ, poseStack, camPos, bufferBuilder);
-        renderConfluences(cell, cellWorldX, cellWorldZ, poseStack, camPos, bufferBuilder);
-        renderCrossings(cell, cellWorldX, cellWorldZ, poseStack, camPos, bufferBuilder);
+        renderFlowArrows(region, regionWorldX, regionWorldZ, poseStack, camPos, bufferBuilder);
+        renderRiverPaths(region, regionWorldX, regionWorldZ, poseStack, camPos, bufferBuilder);
+        renderTerminus(region, regionWorldX, regionWorldZ, poseStack, camPos, bufferBuilder);
+        renderConfluences(region, regionWorldX, regionWorldZ, poseStack, camPos, bufferBuilder);
+        renderCrossings(region, regionWorldX, regionWorldZ, poseStack, camPos, bufferBuilder);
     }
 
-    private static void renderCrossCellConnections(PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
+    private static void renderCrossRegionConnections(PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -124,18 +124,18 @@ public class D8FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        for (D8CellData cell : ClientD8Cache.getCells()) {
-            int cellWorldX = cell.cellX * getCellSize();
-            int cellWorldZ = cell.cellZ * getCellSize();
+        for (D8RegionData region : ClientD8Cache.getRegions()) {
+            int regionWorldX = region.regionX * getRegionSize();
+            int regionWorldZ = region.regionZ * getRegionSize();
 
             for (int dir = 0; dir < 4; dir++) {
-                EdgeCrossing crossing = cell.crossings[dir];
+                EdgeCrossing crossing = region.crossings[dir];
                 if (crossing == null || crossing.direction() != EdgeCrossing.Direction.OUT) {
                     continue;
                 }
 
                 PathDirection pathDir = PathDirection.values()[dir];
-                D8CellData neighbor = findNeighborCell(cell.cellX, cell.cellZ, pathDir);
+                D8RegionData neighbor = findNeighborRegion(region.regionX, region.regionZ, pathDir);
                 if (neighbor == null) {
                     continue;
                 }
@@ -146,10 +146,10 @@ public class D8FlowRenderer {
                     continue;
                 }
 
-                int neighborWorldX = neighbor.cellX * getCellSize();
-                int neighborWorldZ = neighbor.cellZ * getCellSize();
+                int neighborWorldX = neighbor.regionX * getRegionSize();
+                int neighborWorldZ = neighbor.regionZ * getRegionSize();
 
-                Vec3 outputPos = subcellToWorld(new int[]{crossing.row(), crossing.col()}, cellWorldX, cellWorldZ);
+                Vec3 outputPos = subcellToWorld(new int[]{crossing.row(), crossing.col()}, regionWorldX, regionWorldZ);
                 Vec3 inputPos = subcellToWorld(new int[]{neighborInput.row(), neighborInput.col()}, neighborWorldX, neighborWorldZ);
 
                 drawLine(poseStack, bufferBuilder, outputPos, inputPos, camPos, COLOR_RIVER_PATH);
@@ -161,9 +161,9 @@ public class D8FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static D8CellData findNeighborCell(int cellX, int cellZ, PathDirection dir) {
-        int neighborX = cellX;
-        int neighborZ = cellZ;
+    private static D8RegionData findNeighborRegion(int regionX, int regionZ, PathDirection dir) {
+        int neighborX = regionX;
+        int neighborZ = regionZ;
 
         switch (dir) {
             case NORTH -> neighborZ--;
@@ -173,9 +173,9 @@ public class D8FlowRenderer {
             default -> { }
         }
 
-        for (D8CellData cell : ClientD8Cache.getCells()) {
-            if (cell.cellX == neighborX && cell.cellZ == neighborZ) {
-                return cell;
+        for (D8RegionData region : ClientD8Cache.getRegions()) {
+            if (region.regionX == neighborX && region.regionZ == neighborZ) {
+                return region;
             }
         }
         return null;
@@ -191,7 +191,7 @@ public class D8FlowRenderer {
         };
     }
 
-    private static void renderCrossings(D8CellData cell, int cellWorldX, int cellWorldZ,
+    private static void renderCrossings(D8RegionData region, int regionWorldX, int regionWorldZ,
                                          PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.enableBlend();
@@ -205,38 +205,38 @@ public class D8FlowRenderer {
         double margin = 1.0;
 
         for (int dir = 0; dir < 4; dir++) {
-            EdgeCrossing crossing = cell.crossings[dir];
+            EdgeCrossing crossing = region.crossings[dir];
             if (crossing == null) {
                 continue;
             }
             if (crossing.direction() != EdgeCrossing.Direction.IN) {
                 continue;
             }
-            renderCrossingBox(cellWorldX, cellWorldZ, crossing, subcellStep, margin,
+            renderCrossingBox(regionWorldX, regionWorldZ, crossing, subcellStep, margin,
                 poseStack, bufferBuilder, camPos, COLOR_INPUT);
         }
 
         for (int dir = 0; dir < 4; dir++) {
-            EdgeCrossing crossing = cell.crossings[dir];
+            EdgeCrossing crossing = region.crossings[dir];
             if (crossing == null) {
                 continue;
             }
-            if (crossing.direction() != EdgeCrossing.Direction.OUT || PathDirection.values()[dir] == cell.primaryOutputDirection) {
+            if (crossing.direction() != EdgeCrossing.Direction.OUT || PathDirection.values()[dir] == region.primaryOutputDirection) {
                 continue;
             }
-            renderCrossingBox(cellWorldX, cellWorldZ, crossing, subcellStep, margin,
+            renderCrossingBox(regionWorldX, regionWorldZ, crossing, subcellStep, margin,
                 poseStack, bufferBuilder, camPos, COLOR_SECONDARY_OUTPUT);
         }
 
         for (int dir = 0; dir < 4; dir++) {
-            EdgeCrossing crossing = cell.crossings[dir];
+            EdgeCrossing crossing = region.crossings[dir];
             if (crossing == null) {
                 continue;
             }
-            if (crossing.direction() != EdgeCrossing.Direction.OUT || PathDirection.values()[dir] != cell.primaryOutputDirection) {
+            if (crossing.direction() != EdgeCrossing.Direction.OUT || PathDirection.values()[dir] != region.primaryOutputDirection) {
                 continue;
             }
-            renderCrossingBox(cellWorldX, cellWorldZ, crossing, subcellStep, margin,
+            renderCrossingBox(regionWorldX, regionWorldZ, crossing, subcellStep, margin,
                 poseStack, bufferBuilder, camPos, COLOR_PRIMARY_OUTPUT);
         }
 
@@ -245,17 +245,17 @@ public class D8FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static void renderCrossingBox(int cellWorldX, int cellWorldZ, EdgeCrossing crossing,
+    private static void renderCrossingBox(int regionWorldX, int regionWorldZ, EdgeCrossing crossing,
                                            double subcellStep, double margin,
                                            PoseStack poseStack, BufferBuilder bufferBuilder,
                                            Vec3 camPos, float[] color) {
         int row = crossing.row();
         int col = crossing.col();
 
-        double minX = cellWorldX + col * subcellStep + margin;
-        double maxX = cellWorldX + (col + 1) * subcellStep - margin;
-        double minZ = cellWorldZ + row * subcellStep + margin;
-        double maxZ = cellWorldZ + (row + 1) * subcellStep - margin;
+        double minX = regionWorldX + col * subcellStep + margin;
+        double maxX = regionWorldX + (col + 1) * subcellStep - margin;
+        double minZ = regionWorldZ + row * subcellStep + margin;
+        double maxZ = regionWorldZ + (row + 1) * subcellStep - margin;
 
         Vec3 nw = new Vec3(minX, SEA_LEVEL, minZ);
         Vec3 ne = new Vec3(maxX, SEA_LEVEL, minZ);
@@ -268,9 +268,9 @@ public class D8FlowRenderer {
         drawLine(poseStack, bufferBuilder, sw, nw, camPos, color);
     }
 
-    private static void renderTerminus(D8CellData cell, int cellWorldX, int cellWorldZ,
+    private static void renderTerminus(D8RegionData region, int regionWorldX, int regionWorldZ,
                                         PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
-        if (cell.terminusSubcells == null || cell.terminusSubcells.length == 0) {
+        if (region.terminusSubcells == null || region.terminusSubcells.length == 0) {
             return;
         }
 
@@ -285,14 +285,14 @@ public class D8FlowRenderer {
         double subcellStep = getSubcellStep();
         double margin = 1.0;
 
-        for (int[] terminus : cell.terminusSubcells) {
+        for (int[] terminus : region.terminusSubcells) {
             int row = terminus[0];
             int col = terminus[1];
 
-            double minX = cellWorldX + col * subcellStep + margin;
-            double maxX = cellWorldX + (col + 1) * subcellStep - margin;
-            double minZ = cellWorldZ + row * subcellStep + margin;
-            double maxZ = cellWorldZ + (row + 1) * subcellStep - margin;
+            double minX = regionWorldX + col * subcellStep + margin;
+            double maxX = regionWorldX + (col + 1) * subcellStep - margin;
+            double minZ = regionWorldZ + row * subcellStep + margin;
+            double maxZ = regionWorldZ + (row + 1) * subcellStep - margin;
 
             Vec3 nw = new Vec3(minX, SEA_LEVEL, minZ);
             Vec3 ne = new Vec3(maxX, SEA_LEVEL, minZ);
@@ -310,9 +310,9 @@ public class D8FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static void renderRiverPaths(D8CellData cell, int cellWorldX, int cellWorldZ,
+    private static void renderRiverPaths(D8RegionData region, int regionWorldX, int regionWorldZ,
                                           PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
-        if (cell.riverPaths == null || cell.riverPaths.isEmpty()) {
+        if (region.riverPaths == null || region.riverPaths.isEmpty()) {
             return;
         }
 
@@ -324,10 +324,10 @@ public class D8FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        for (java.util.List<int[]> path : cell.riverPaths.values()) {
+        for (java.util.List<int[]> path : region.riverPaths.values()) {
             for (int i = 0; i < path.size() - 1; i++) {
-                Vec3 start = subcellToWorld(path.get(i), cellWorldX, cellWorldZ);
-                Vec3 end = subcellToWorld(path.get(i + 1), cellWorldX, cellWorldZ);
+                Vec3 start = subcellToWorld(path.get(i), regionWorldX, regionWorldZ);
+                Vec3 end = subcellToWorld(path.get(i + 1), regionWorldX, regionWorldZ);
                 drawLine(poseStack, bufferBuilder, start, end, camPos, COLOR_RIVER_PATH);
             }
         }
@@ -337,9 +337,9 @@ public class D8FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static void renderConfluences(D8CellData cell, int cellWorldX, int cellWorldZ,
+    private static void renderConfluences(D8RegionData region, int regionWorldX, int regionWorldZ,
                                            PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
-        if (cell.confluenceSubcells == null || cell.confluenceSubcells.isEmpty()) {
+        if (region.confluenceSubcells == null || region.confluenceSubcells.isEmpty()) {
             return;
         }
 
@@ -354,14 +354,14 @@ public class D8FlowRenderer {
         double subcellStep = getSubcellStep();
         double margin = 1.0;
 
-        for (int[] confluence : cell.confluenceSubcells) {
+        for (int[] confluence : region.confluenceSubcells) {
             int row = confluence[0];
             int col = confluence[1];
 
-            double minX = cellWorldX + col * subcellStep + margin;
-            double maxX = cellWorldX + (col + 1) * subcellStep - margin;
-            double minZ = cellWorldZ + row * subcellStep + margin;
-            double maxZ = cellWorldZ + (row + 1) * subcellStep - margin;
+            double minX = regionWorldX + col * subcellStep + margin;
+            double maxX = regionWorldX + (col + 1) * subcellStep - margin;
+            double minZ = regionWorldZ + row * subcellStep + margin;
+            double maxZ = regionWorldZ + (row + 1) * subcellStep - margin;
 
             Vec3 nw = new Vec3(minX, SEA_LEVEL, minZ);
             Vec3 ne = new Vec3(maxX, SEA_LEVEL, minZ);
@@ -379,7 +379,7 @@ public class D8FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static void renderFlowArrows(D8CellData cell, int cellWorldX, int cellWorldZ,
+    private static void renderFlowArrows(D8RegionData region, int regionWorldX, int regionWorldZ,
                                         PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
         RenderSystem.enableBlend();
@@ -391,13 +391,13 @@ public class D8FlowRenderer {
 
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
-                FlowDirection flowDirection = cell.flowDirections[row][col];
+                FlowDirection flowDirection = region.flowDirections[row][col];
 
                 if (flowDirection == FlowDirection.SINK) {
                     continue;
                 }
 
-                Vec3 center = subcellToWorld(new int[]{row, col}, cellWorldX, cellWorldZ);
+                Vec3 center = subcellToWorld(new int[]{row, col}, regionWorldX, regionWorldZ);
                 Vec3 arrowEnd = calculateArrowEnd(center, flowDirection);
 
                 drawLine(poseStack, bufferBuilder, center, arrowEnd, camPos, COLOR_ARROW);
@@ -465,12 +465,12 @@ public class D8FlowRenderer {
         };
     }
 
-    private static Vec3 subcellToWorld(int[] subcell, int cellWorldX, int cellWorldZ) {
+    private static Vec3 subcellToWorld(int[] subcell, int regionWorldX, int regionWorldZ) {
         int row = subcell[0];
         int col = subcell[1];
 
-        double worldX = cellWorldX + (col * getSubcellStep()) + (getSubcellStep() / 2);
-        double worldZ = cellWorldZ + (row * getSubcellStep()) + (getSubcellStep() / 2);
+        double worldX = regionWorldX + (col * getSubcellStep()) + (getSubcellStep() / 2);
+        double worldZ = regionWorldZ + (row * getSubcellStep()) + (getSubcellStep() / 2);
 
         return new Vec3(worldX, SEA_LEVEL, worldZ);
     }

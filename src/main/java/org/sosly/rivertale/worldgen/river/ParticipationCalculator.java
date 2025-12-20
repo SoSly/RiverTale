@@ -8,10 +8,10 @@ import org.sosly.rivertale.config.RiverConfig;
 
 public class ParticipationCalculator {
 
-    public static boolean isParticipating(RiverCellKey key, RandomState randomState) {
+    public static boolean isParticipating(RiverRegionKey key, RandomState randomState) {
         PositionalRandomFactory factory = randomState.getOrCreateRandomFactory(
             new ResourceLocation("rivertale", "participation"));
-        RandomSource rng = factory.at(key.cellX(), 0, key.cellZ());
+        RandomSource rng = factory.at(key.regionX(), 0, key.regionZ());
         return rng.nextDouble() < RiverConfig.PARTICIPATION_RATE.get();
     }
 }

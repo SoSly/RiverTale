@@ -5,7 +5,7 @@ import net.minecraftforge.common.ForgeConfigSpec;
 public class RiverConfig {
 
     public static final ForgeConfigSpec SPEC;
-    public static final ForgeConfigSpec.IntValue CELL_SIZE;
+    public static final ForgeConfigSpec.IntValue REGION_SIZE;
     public static final ForgeConfigSpec.DoubleValue PARTICIPATION_RATE;
     public static final ForgeConfigSpec.DoubleValue DENSITY_EQUALITY_THRESHOLD;
     public static final ForgeConfigSpec.DoubleValue OCEAN_THRESHOLD;
@@ -16,9 +16,9 @@ public class RiverConfig {
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
-        CELL_SIZE = builder
-            .comment("Size of each river cell in blocks. Larger cells improve performance but reduce detail.")
-            .defineInRange("cellSize", 256, 128, 4096);
+        REGION_SIZE = builder
+            .comment("Size of each river region in blocks. Larger regions improve performance but reduce detail.")
+            .defineInRange("regionSize", 256, 128, 4096);
 
         PARTICIPATION_RATE = builder
             .comment("Probability that a land cell will participate in river generation (0.0 to 1.0).")

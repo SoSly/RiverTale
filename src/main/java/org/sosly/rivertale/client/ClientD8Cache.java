@@ -2,7 +2,7 @@ package org.sosly.rivertale.client;
 
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
-import org.sosly.rivertale.network.VisualizeD8Packet.D8CellData;
+import org.sosly.rivertale.network.VisualizeD8Packet.D8RegionData;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -13,7 +13,7 @@ import java.util.Map;
 public class ClientD8Cache {
 
     private static boolean enabled = false;
-    private static final Map<CellKey, D8CellData> CELLS = new HashMap<>();
+    private static final Map<RegionKey, D8RegionData> REGIONS = new HashMap<>();
 
     public static void setEnabled(boolean enabled) {
         ClientD8Cache.enabled = enabled;
@@ -26,24 +26,24 @@ public class ClientD8Cache {
         return enabled;
     }
 
-    public static void updateCells(List<D8CellData> newCells) {
-        CELLS.clear();
-        for (D8CellData cell : newCells) {
-            CELLS.put(new CellKey(cell.cellX, cell.cellZ), cell);
+    public static void updateRegions(List<D8RegionData> newRegions) {
+        REGIONS.clear();
+        for (D8RegionData region : newRegions) {
+            REGIONS.put(new RegionKey(region.regionX, region.regionZ), region);
         }
     }
 
-    public static List<D8CellData> getCells() {
-        return new ArrayList<>(CELLS.values());
+    public static List<D8RegionData> getRegions() {
+        return new ArrayList<>(REGIONS.values());
     }
 
-    public static D8CellData getCell(int cellX, int cellZ) {
-        return CELLS.get(new CellKey(cellX, cellZ));
+    public static D8RegionData getRegion(int regionX, int regionZ) {
+        return REGIONS.get(new RegionKey(regionX, regionZ));
     }
 
     public static void clear() {
-        CELLS.clear();
+        REGIONS.clear();
     }
 
-    private record CellKey(int x, int z) {}
+    private record RegionKey(int x, int z) {}
 }

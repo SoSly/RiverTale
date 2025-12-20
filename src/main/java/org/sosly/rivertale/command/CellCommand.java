@@ -8,18 +8,15 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
-import org.sosly.rivertale.worldgen.river.CellClassification;
-import org.sosly.rivertale.worldgen.river.CellDensityProvider;
-import org.sosly.rivertale.worldgen.river.PathDirection;
-import org.sosly.rivertale.worldgen.river.RiverCell;
-import org.sosly.rivertale.worldgen.river.RiverCellCache;
-import org.sosly.rivertale.worldgen.river.RiverCellKey;
-import org.sosly.rivertale.worldgen.river.RiverCellManager;
+import org.sosly.rivertale.worldgen.river.CellFeatureType;
+import org.sosly.rivertale.worldgen.river.D8FlowCalculator;
+import org.sosly.rivertale.worldgen.river.FlowDirection;
+import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
+import org.sosly.rivertale.worldgen.river.RiverRegion;
+import org.sosly.rivertale.worldgen.river.RiverRegionKey;
+import org.sosly.rivertale.worldgen.river.RiverRegionManager;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.function.BiFunction;
 
 public class CellCommand {
 
@@ -31,141 +28,43 @@ public class CellCommand {
                 BlockPos pos = BlockPos.containing(source.getPosition());
                 RandomState randomState = level.getChunkSource().randomState();
 
-                CellDensityProvider provider = new CellDensityProvider(randomState);
+                RegionDensityProvider provider = new RegionDensityProvider(randomState);
 
-                RiverCellKey key = RiverCellKey.fromBlockPos(pos.getX(), pos.getZ());
-                boolean wasCached = RiverCellCache.getIfPresent(key) != null;
-                RiverCell cell = RiverCellManager.getOrCreate(key, provider, randomState);
+                int playerX = pos.getX();
+                int playerZ = pos.getZ();
 
-                String cacheStatus = wasCached ? "[cached]" : "[computed]";
+                RiverRegionKey regionKey = RiverRegionKey.fromBlockPos(playerX, playerZ);
+                RiverRegion region = RiverRegionManager.getOrCreate(regionKey, provider, randomState);
+                RiverRegionManager.ensurePaths(region, provider, randomState);
+
+                int regionSize = RiverRegionKey.getRegionSize();
+                int cellSpacing = regionSize / 8;
+
+                int localX = Math.floorMod(playerX - regionKey.worldX(), regionSize);
+                int localZ = Math.floorMod(playerZ - regionKey.worldZ(), regionSize);
+                int col = localX / cellSpacing;
+                int row = localZ / cellSpacing;
+
+                int cellCenterX = regionKey.worldX() + col * cellSpacing + cellSpacing / 2;
+                int cellCenterZ = regionKey.worldZ() + row * cellSpacing + cellSpacing / 2;
+
+                BiFunction<Integer, Integer, Double> densitySampler = provider::getDensity;
+                FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(regionKey, densitySampler);
+                FlowDirection flowDirection = flowDirections[row][col];
+
+                CellFeatureType featureType = RiverRegionManager.getCellFeatureType(region, row, col, flowDirections);
+
                 source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
-                source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d): %s", key.cellX(), key.cellZ(), cacheStatus))
+                source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d) in Region (%d, %d)", row, col, regionKey.regionX(), regionKey.regionZ()))
                     .withStyle(ChatFormatting.YELLOW), false);
-
-                if (!cell.isParticipating()) {
-                    source.sendSuccess(() -> Component.literal("  Participating: false")
-                        .withStyle(ChatFormatting.WHITE), false);
-                    return 1;
-                }
-
-                CellClassification classification = cell.getClassification();
-
-                boolean isTerminus = classification == CellClassification.OCEAN
-                        || classification == CellClassification.COASTAL
-                        || classification == CellClassification.LAKE
-                        || classification == CellClassification.LAKESHORE;
-
-                if (isTerminus) {
-                    source.sendSuccess(() -> Component.literal(String.format("  Center: (%,d, %,d)", key.centerX(), key.centerZ()))
-                        .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Density: %.3f", cell.getDensity()))
-                        .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Classification: %s", classification))
-                        .withStyle(ChatFormatting.WHITE), false);
-
-                    int distance = RiverCellManager.getDistanceToTerminus(cell, provider, randomState);
-                    source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
-                        .withStyle(ChatFormatting.WHITE), false);
-
-                    if (classification == CellClassification.COASTAL || classification == CellClassification.LAKESHORE) {
-                        int upstreamCount = RiverCellManager.getUpstreamCount(key, provider, randomState);
-                        source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
-                            .withStyle(ChatFormatting.WHITE), false);
-                    }
-
-                    RiverCellManager.ensurePaths(cell, provider, randomState);
-                    Map<PathDirection, List<int[]>> terminusPaths = cell.getRiverPaths();
-                    if (!terminusPaths.isEmpty()) {
-                        for (Map.Entry<PathDirection, List<int[]>> entry : terminusPaths.entrySet()) {
-                            PathDirection inputDirection = entry.getKey();
-                            List<int[]> path = entry.getValue();
-                            String pathStr = path.stream()
-                                .map(coords -> String.format("(%d,%d)", coords[0], coords[1]))
-                                .collect(Collectors.joining(" -> "));
-                            source.sendSuccess(() -> Component.literal(String.format("  Path from %s: %s", inputDirection, pathStr))
-                                .withStyle(ChatFormatting.WHITE), false);
-                        }
-                    }
-                    return 1;
-                }
-
-                source.sendSuccess(() -> Component.literal(String.format("  Center: (%,d, %,d)", key.centerX(), key.centerZ()))
+                source.sendSuccess(() -> Component.literal(String.format("  World position: (%,d, %,d)", cellCenterX, cellCenterZ))
                     .withStyle(ChatFormatting.WHITE), false);
-                source.sendSuccess(() -> Component.literal(String.format("  Density: %.3f", cell.getDensity()))
+                source.sendSuccess(() -> Component.literal(String.format("  Flow Direction: %s", flowDirection))
                     .withStyle(ChatFormatting.WHITE), false);
-                source.sendSuccess(() -> Component.literal(String.format("  Classification: %s", classification))
+                source.sendSuccess(() -> Component.literal(String.format("  Cell Type: %s", featureType))
                     .withStyle(ChatFormatting.WHITE), false);
-                source.sendSuccess(() -> Component.literal("  Participating: true")
-                    .withStyle(ChatFormatting.WHITE), false);
-
-                PathDirection primaryOutput = cell.getPrimaryOutput();
-                source.sendSuccess(() -> Component.literal(String.format("  Output: %s", primaryOutput))
-                    .withStyle(ChatFormatting.WHITE), false);
-
-                Set<PathDirection> secondaryOutputs = cell.getSecondaryOutputs();
-                if (!secondaryOutputs.isEmpty()) {
-                    String secondaryStr = secondaryOutputs.stream()
-                        .map(PathDirection::toString)
-                        .sorted()
-                        .collect(Collectors.joining(", "));
-                    source.sendSuccess(() -> Component.literal(String.format("  Secondary outputs: %s", secondaryStr))
-                        .withStyle(ChatFormatting.WHITE), false);
-                }
-
-                if (classification == CellClassification.LAND) {
-                    source.sendSuccess(() -> Component.literal(String.format("  Basin: %s", cell.isBasin()))
-                        .withStyle(ChatFormatting.WHITE), false);
-                }
-
-                int distance = RiverCellManager.getDistanceToTerminus(cell, provider, randomState);
-                source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
-                    .withStyle(ChatFormatting.WHITE), false);
-
-                if (classification == CellClassification.LAND) {
-                    int upstreamCount = RiverCellManager.getUpstreamCount(key, provider, randomState);
-                    source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
-                        .withStyle(ChatFormatting.WHITE), false);
-                }
-
-                RiverCellManager.ensurePaths(cell, provider, randomState);
-                Map<PathDirection, List<int[]>> paths = cell.getRiverPaths();
-                if (!paths.isEmpty()) {
-                    for (Map.Entry<PathDirection, List<int[]>> entry : paths.entrySet()) {
-                        PathDirection inputDirection = entry.getKey();
-                        List<int[]> path = entry.getValue();
-                        String pathStr = path.stream()
-                            .map(coords -> String.format("(%d,%d)", coords[0], coords[1]))
-                            .collect(Collectors.joining(" -> "));
-                        String label = formatPathLabel(inputDirection, primaryOutput, cell);
-                        source.sendSuccess(() -> Component.literal(String.format("  %s: %s", label, pathStr))
-                            .withStyle(ChatFormatting.WHITE), false);
-                    }
-                }
 
                 return 1;
             });
-    }
-
-    private static String formatPathLabel(PathDirection key, PathDirection primaryOutput, RiverCell cell) {
-        if (key == primaryOutput && !isEdgeDirection(key, cell)) {
-            return String.format("Source to %s", primaryOutput);
-        }
-
-        if (cell.getSecondaryOutputs().contains(key)) {
-            return String.format("Secondary source to %s", key);
-        }
-
-        return String.format("Path from %s to %s", key, primaryOutput);
-    }
-
-    private static boolean isEdgeDirection(PathDirection key, RiverCell cell) {
-        List<int[]> path = cell.getRiverPaths().get(key);
-        if (path == null || path.isEmpty()) {
-            return false;
-        }
-        int[] start = path.get(0);
-        int row = start[0];
-        int col = start[1];
-        return row == 0 || row == 7 || col == 0 || col == 7;
     }
 }

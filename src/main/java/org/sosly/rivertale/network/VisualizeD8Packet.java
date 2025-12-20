@@ -5,7 +5,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 import org.sosly.rivertale.client.ClientD8Cache;
-import org.sosly.rivertale.worldgen.river.CellClassification;
+import org.sosly.rivertale.worldgen.river.RegionClassification;
 import org.sosly.rivertale.worldgen.river.EdgeCrossing;
 import org.sosly.rivertale.worldgen.river.FlowDirection;
 import org.sosly.rivertale.worldgen.river.PathDirection;
@@ -19,25 +19,25 @@ import java.util.function.Supplier;
 public class VisualizeD8Packet {
 
     private final boolean enabled;
-    private final List<D8CellData> cells;
+    private final List<D8RegionData> regions;
 
-    public VisualizeD8Packet(boolean enabled, List<D8CellData> cells) {
+    public VisualizeD8Packet(boolean enabled, List<D8RegionData> regions) {
         this.enabled = enabled;
-        this.cells = cells != null ? cells : new ArrayList<>();
+        this.regions = regions != null ? regions : new ArrayList<>();
     }
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeBoolean(enabled);
-        buf.writeInt(cells.size());
+        buf.writeInt(regions.size());
 
-        for (D8CellData cell : cells) {
-            buf.writeInt(cell.cellX);
-            buf.writeInt(cell.cellZ);
-            buf.writeEnum(cell.classification);
-            buf.writeBoolean(cell.isBasin);
+        for (D8RegionData region : regions) {
+            buf.writeInt(region.regionX);
+            buf.writeInt(region.regionZ);
+            buf.writeEnum(region.classification);
+            buf.writeBoolean(region.isBasin);
 
             for (int i = 0; i < 4; i++) {
-                EdgeCrossing crossing = cell.crossings[i];
+                EdgeCrossing crossing = region.crossings[i];
                 buf.writeBoolean(crossing != null);
                 if (crossing != null) {
                     buf.writeInt(crossing.row());
@@ -45,22 +45,22 @@ public class VisualizeD8Packet {
                     buf.writeBoolean(crossing.direction() == EdgeCrossing.Direction.OUT);
                 }
             }
-            buf.writeEnum(cell.primaryOutputDirection);
+            buf.writeEnum(region.primaryOutputDirection);
 
             for (int row = 0; row < 8; row++) {
                 for (int col = 0; col < 8; col++) {
-                    buf.writeEnum(cell.flowDirections[row][col]);
+                    buf.writeEnum(region.flowDirections[row][col]);
                 }
             }
 
-            buf.writeInt(cell.terminusSubcells.length);
-            for (int[] terminus : cell.terminusSubcells) {
+            buf.writeInt(region.terminusSubcells.length);
+            for (int[] terminus : region.terminusSubcells) {
                 buf.writeInt(terminus[0]);
                 buf.writeInt(terminus[1]);
             }
 
-            buf.writeInt(cell.riverPaths.size());
-            for (Map.Entry<PathDirection, List<int[]>> entry : cell.riverPaths.entrySet()) {
+            buf.writeInt(region.riverPaths.size());
+            for (Map.Entry<PathDirection, List<int[]>> entry : region.riverPaths.entrySet()) {
                 buf.writeEnum(entry.getKey());
                 buf.writeInt(entry.getValue().size());
                 for (int[] subcell : entry.getValue()) {
@@ -69,8 +69,8 @@ public class VisualizeD8Packet {
                 }
             }
 
-            buf.writeInt(cell.confluenceSubcells.size());
-            for (int[] confluence : cell.confluenceSubcells) {
+            buf.writeInt(region.confluenceSubcells.size());
+            for (int[] confluence : region.confluenceSubcells) {
                 buf.writeInt(confluence[0]);
                 buf.writeInt(confluence[1]);
             }
@@ -79,13 +79,13 @@ public class VisualizeD8Packet {
 
     public static VisualizeD8Packet decode(FriendlyByteBuf buf) {
         boolean enabled = buf.readBoolean();
-        int cellCount = buf.readInt();
-        List<D8CellData> cells = new ArrayList<>(cellCount);
+        int regionCount = buf.readInt();
+        List<D8RegionData> regions = new ArrayList<>(regionCount);
 
-        for (int i = 0; i < cellCount; i++) {
-            int cellX = buf.readInt();
-            int cellZ = buf.readInt();
-            CellClassification classification = buf.readEnum(CellClassification.class);
+        for (int i = 0; i < regionCount; i++) {
+            int regionX = buf.readInt();
+            int regionZ = buf.readInt();
+            RegionClassification classification = buf.readEnum(RegionClassification.class);
             boolean isBasin = buf.readBoolean();
 
             EdgeCrossing[] crossings = new EdgeCrossing[4];
@@ -135,12 +135,12 @@ public class VisualizeD8Packet {
                 confluenceSubcells.add(new int[]{buf.readInt(), buf.readInt()});
             }
 
-            cells.add(new D8CellData(cellX, cellZ, classification, isBasin,
+            regions.add(new D8RegionData(regionX, regionZ, classification, isBasin,
                 crossings, primaryOutputDirection, flowDirections,
                 terminusSubcells, riverPaths, confluenceSubcells));
         }
 
-        return new VisualizeD8Packet(enabled, cells);
+        return new VisualizeD8Packet(enabled, regions);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -155,14 +155,14 @@ public class VisualizeD8Packet {
     private void handleClient() {
         ClientD8Cache.setEnabled(enabled);
         if (enabled) {
-            ClientD8Cache.updateCells(cells);
+            ClientD8Cache.updateRegions(regions);
         }
     }
 
-    public static class D8CellData {
-        public final int cellX;
-        public final int cellZ;
-        public final CellClassification classification;
+    public static class D8RegionData {
+        public final int regionX;
+        public final int regionZ;
+        public final RegionClassification classification;
         public final boolean isBasin;
         public final EdgeCrossing[] crossings;
         public final PathDirection primaryOutputDirection;
@@ -171,13 +171,13 @@ public class VisualizeD8Packet {
         public final Map<PathDirection, List<int[]>> riverPaths;
         public final List<int[]> confluenceSubcells;
 
-        public D8CellData(int cellX, int cellZ, CellClassification classification,
+        public D8RegionData(int regionX, int regionZ, RegionClassification classification,
                           boolean isBasin, EdgeCrossing[] crossings,
                           PathDirection primaryOutputDirection, FlowDirection[][] flowDirections,
                           int[][] terminusSubcells, Map<PathDirection, List<int[]>> riverPaths,
                           List<int[]> confluenceSubcells) {
-            this.cellX = cellX;
-            this.cellZ = cellZ;
+            this.regionX = regionX;
+            this.regionZ = regionZ;
             this.classification = classification;
             this.isBasin = isBasin;
             this.crossings = crossings;

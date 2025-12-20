@@ -75,6 +75,7 @@ public class RiverTaleCommand {
                 })
             )
             .then(CellCommand.register())
+            .then(RegionCommand.register())
             .then(LocateCommand.register())
             .then(VisualizeCommand.register())
             .then(Commands.literal("poc")

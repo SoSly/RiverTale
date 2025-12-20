@@ -5,7 +5,7 @@ import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.config.RiverConfig;
 
-public class CellDensityProvider implements DensityProvider {
+public class RegionDensityProvider implements DensityProvider {
 
     private static final int SAMPLE_Y = 63;
     private static final int SUBCELL_SAMPLES = 8;
@@ -13,7 +13,7 @@ public class CellDensityProvider implements DensityProvider {
     private final DensityFunction continentsFunction;
     private final DensityFunction depthFunction;
 
-    public CellDensityProvider(RandomState randomState) {
+    public RegionDensityProvider(RandomState randomState) {
         NoiseRouter router = randomState.router();
         this.continentsFunction = router.continents();
         this.depthFunction = router.depth();
@@ -29,8 +29,8 @@ public class CellDensityProvider implements DensityProvider {
     }
 
     @Override
-    public double getAveragedDensity(int worldX, int worldZ, int cellSize) {
-        double step = cellSize / (double) SUBCELL_SAMPLES;
+    public double getAveragedDensity(int worldX, int worldZ, int regionSize) {
+        double step = regionSize / (double) SUBCELL_SAMPLES;
         double sum = 0.0;
         int count = 0;
 
@@ -47,8 +47,8 @@ public class CellDensityProvider implements DensityProvider {
     }
 
     @Override
-    public double[][] sampleSubcellDensities(int worldX, int worldZ, int cellSize) {
-        double step = cellSize / (double) SUBCELL_SAMPLES;
+    public double[][] sampleCellDensities(int worldX, int worldZ, int regionSize) {
+        double step = regionSize / (double) SUBCELL_SAMPLES;
         double[][] densities = new double[SUBCELL_SAMPLES][SUBCELL_SAMPLES];
 
         for (int i = 0; i < SUBCELL_SAMPLES; i++) {

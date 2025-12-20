@@ -23,11 +23,11 @@ public enum PathDirection {
         return dz;
     }
 
-    public RiverCellKey neighbor(RiverCellKey from) {
+    public RiverRegionKey neighbor(RiverRegionKey from) {
         if (this == NONE) {
             return null;
         }
-        return new RiverCellKey(from.cellX() + dx, from.cellZ() + dz);
+        return new RiverRegionKey(from.regionX() + dx, from.regionZ() + dz);
     }
 
     public static PathDirection fromDelta(int dx, int dz) {

@@ -6,7 +6,7 @@ import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.command.VisualizeCommand;
-import org.sosly.rivertale.worldgen.river.RiverCellKey;
+import org.sosly.rivertale.worldgen.river.RiverRegionKey;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -15,7 +15,7 @@ import java.util.UUID;
 @Mod.EventBusSubscriber
 public class VisualizeSyncHandler {
 
-    private static final Map<UUID, RiverCellKey> LAST_KNOWN_CELL = new HashMap<>();
+    private static final Map<UUID, RiverRegionKey> LAST_KNOWN_REGION = new HashMap<>();
     private static int tickCounter = 0;
     private static final int SYNC_INTERVAL = 20;
 
@@ -43,19 +43,19 @@ public class VisualizeSyncHandler {
                 continue;
             }
 
-            RiverCellKey currentCell = VisualizeCommand.getPlayerCell(player);
-            RiverCellKey lastCell = LAST_KNOWN_CELL.get(playerId);
+            RiverRegionKey currentRegion = VisualizeCommand.getPlayerRegion(player);
+            RiverRegionKey lastRegion = LAST_KNOWN_REGION.get(playerId);
 
-            if (lastCell == null || !lastCell.equals(currentCell)) {
-                LAST_KNOWN_CELL.put(playerId, currentCell);
-                VisualizeCommand.sendCellDataToPlayer(player);
+            if (lastRegion == null || !lastRegion.equals(currentRegion)) {
+                LAST_KNOWN_REGION.put(playerId, currentRegion);
+                VisualizeCommand.sendRegionDataToPlayer(player);
             }
         }
     }
 
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
-        LAST_KNOWN_CELL.clear();
+        LAST_KNOWN_REGION.clear();
         VisualizeCommand.clearEnabledPlayers();
     }
 }

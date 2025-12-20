@@ -14,18 +14,18 @@ public class D8PathRefiner {
     }
 
     public static D8FlowResult refine(
-            RiverCellKey cellKey,
+            RiverRegionKey cellKey,
             FlowDirection[][] flowDirection,
-            CellClassification classification,
+            RegionClassification classification,
             FlowDirection[][][] neighborFlowDirections,
-            CellClassification[] neighborClassifications,
+            RegionClassification[] neighborClassifications,
             BiFunction<Integer, Integer, Double> densitySampler,
             BiFunction<Integer, Integer, Double> continentsSampler,
             BiFunction<Integer, Integer, Double> depthSampler,
             double oceanThreshold,
             double lakeThreshold) {
 
-        int cellSize = RiverCellKey.getCellSize();
+        int cellSize = RiverRegionKey.getRegionSize();
         int subcellSpacing = cellSize / GRID_SIZE;
         int cellOriginX = cellKey.worldX();
         int cellOriginZ = cellKey.worldZ();
@@ -33,8 +33,8 @@ public class D8PathRefiner {
         EdgeCrossing[] crossings = new EdgeCrossing[4];
         double[] crossingStrengths = new double[4];
 
-        boolean isTerminus = classification == CellClassification.COASTAL
-            || classification == CellClassification.LAKESHORE;
+        boolean isTerminus = classification == RegionClassification.COASTAL
+            || classification == RegionClassification.LAKESHORE;
 
         if (!isTerminus) {
             computeEdgeCrossings(cellOriginX, cellOriginZ, subcellSpacing, densitySampler,
@@ -48,13 +48,13 @@ public class D8PathRefiner {
 
         List<int[]> terminusList = new ArrayList<>();
 
-        if (classification == CellClassification.COASTAL) {
+        if (classification == RegionClassification.COASTAL) {
             int[] terminus = findThresholdTerminus(cellOriginX, cellOriginZ, subcellSpacing,
                 continentsSampler, oceanThreshold);
             if (terminus[0] >= 0) {
                 terminusList.add(terminus);
             }
-        } else if (classification == CellClassification.LAKESHORE) {
+        } else if (classification == RegionClassification.LAKESHORE) {
             int[] terminus = findThresholdTerminus(cellOriginX, cellOriginZ, subcellSpacing,
                 depthSampler, lakeThreshold);
             if (terminus[0] >= 0) {
@@ -69,7 +69,7 @@ public class D8PathRefiner {
         Map<PathDirection, List<int[]>> riverPaths = new HashMap<>();
         List<int[]> confluenceSubcells = new ArrayList<>();
 
-        if (classification == CellClassification.LAND && primaryOutputDirection != PathDirection.NONE) {
+        if (classification == RegionClassification.LAND && primaryOutputDirection != PathDirection.NONE) {
             tracePaths(flowDirection, crossings, primaryOutputDirection,
                 riverPaths, confluenceSubcells);
         }
@@ -84,7 +84,7 @@ public class D8PathRefiner {
             BiFunction<Integer, Integer, Double> densitySampler,
             FlowDirection[][] flowDirection,
             FlowDirection[][][] neighborFlowDirections,
-            CellClassification[] neighborClassifications,
+            RegionClassification[] neighborClassifications,
             EdgeCrossing[] crossings, double[] crossingStrengths) {
 
         computeCrossing(cellOriginX, cellOriginZ, subcellSpacing, densitySampler,
@@ -106,12 +106,12 @@ public class D8PathRefiner {
             BiFunction<Integer, Integer, Double> densitySampler,
             FlowDirection[][] flowDirection,
             FlowDirection[][][] neighborFlowDirections,
-            CellClassification[] neighborClassifications,
+            RegionClassification[] neighborClassifications,
             EdgeCrossing[] crossings, double[] crossingStrengths,
             PathDirection dir, int excludePos) {
 
         PathDirection oppositeDir = dir.opposite();
-        boolean neighborCanProvideInput = neighborClassifications[dir.ordinal()] == CellClassification.LAND
+        boolean neighborCanProvideInput = neighborClassifications[dir.ordinal()] == RegionClassification.LAND
             && neighborFlowDirections[dir.ordinal()] != null;
 
         int bestPos = -1;

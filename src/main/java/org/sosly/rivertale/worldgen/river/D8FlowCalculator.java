@@ -12,10 +12,10 @@ public class D8FlowCalculator {
     }
 
     public static FlowDirection[][] computeFlowDirections(
-            RiverCellKey cellKey,
+            RiverRegionKey cellKey,
             BiFunction<Integer, Integer, Double> densitySampler) {
 
-        int cellSize = RiverCellKey.getCellSize();
+        int cellSize = RiverRegionKey.getRegionSize();
         int subcellSpacing = cellSize / GRID_SIZE;
         int cellOriginX = cellKey.worldX();
         int cellOriginZ = cellKey.worldZ();
@@ -34,14 +34,14 @@ public class D8FlowCalculator {
         return flowDirection;
     }
 
-    public static CellClassification classifyCell(
-            RiverCellKey cellKey,
+    public static RegionClassification classifyRegion(
+            RiverRegionKey cellKey,
             BiFunction<Integer, Integer, Double> continentsSampler,
             BiFunction<Integer, Integer, Double> depthSampler,
             double oceanThreshold,
             double lakeThreshold) {
 
-        int cellSize = RiverCellKey.getCellSize();
+        int cellSize = RiverRegionKey.getRegionSize();
         double step = cellSize / 8.0;
 
         boolean hasOcean = false;
@@ -68,19 +68,19 @@ public class D8FlowCalculator {
         }
 
         if (hasOcean && (hasLand || hasLake)) {
-            return CellClassification.COASTAL;
+            return RegionClassification.COASTAL;
         }
         if (hasOcean) {
-            return CellClassification.OCEAN;
+            return RegionClassification.OCEAN;
         }
         if (hasLake && hasLand) {
-            return CellClassification.LAKESHORE;
+            return RegionClassification.LAKESHORE;
         }
         if (hasLake) {
-            return CellClassification.LAKE;
+            return RegionClassification.LAKE;
         }
 
-        return CellClassification.LAND;
+        return RegionClassification.LAND;
     }
 
     public static FlowDirection getNeighborEdgeD8(FlowDirection[][] neighborFlowDirections, PathDirection dirFromUs, int pos) {

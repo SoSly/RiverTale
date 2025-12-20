@@ -1,6 +1,6 @@
 package org.sosly.rivertale.worldgen.river;
 
-public enum CellClassification {
+public enum RegionClassification {
     LAND,
     OCEAN,
     COASTAL,
