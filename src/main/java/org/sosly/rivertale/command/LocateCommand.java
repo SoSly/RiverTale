@@ -9,172 +9,197 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
-import org.sosly.rivertale.worldgen.river.RegionClassification;
+import org.sosly.rivertale.worldgen.river.CellFeatureType;
 import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
-import org.sosly.rivertale.worldgen.river.PathDirection;
+import org.sosly.rivertale.worldgen.river.RegionFeatureType;
 import org.sosly.rivertale.worldgen.river.RiverRegion;
 import org.sosly.rivertale.worldgen.river.RiverRegionKey;
 import org.sosly.rivertale.worldgen.river.RiverRegionManager;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class LocateCommand {
 
     private static final int MAX_SEARCH_RADIUS = 10000;
+    private static final ExecutorService LOCATE_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "RiverTale-Locate");
+        thread.setDaemon(true);
+        return thread;
+    });
 
-    private enum FeatureType {
-        BASIN,
-        SOURCE,
-        CONFLUENCE
+    public static void shutdown() {
+        LOCATE_EXECUTOR.shutdownNow();
     }
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
-        return Commands.literal("locate")
-            .then(Commands.literal("ocean").executes(context -> locateOcean(context)))
-            .then(Commands.literal("coastal").executes(context -> locateCoastal(context)))
-            .then(Commands.literal("basin").executes(context -> locateBasin(context)))
-            .then(Commands.literal("source").executes(context -> locateSource(context)))
-            .then(Commands.literal("confluence").executes(context -> locateConfluence(context)));
+        LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal("locate");
+
+        for (RegionFeatureType type : RegionFeatureType.values()) {
+            builder = builder.then(Commands.literal(type.name().toLowerCase())
+                .executes(context -> locateRegionType(context, type)));
+        }
+
+        for (CellFeatureType type : CellFeatureType.values()) {
+            builder = builder.then(Commands.literal(type.name().toLowerCase())
+                .executes(context -> locateCellType(context, type)));
+        }
+
+        return builder;
     }
 
-    private static int locateOcean(CommandContext<CommandSourceStack> context) {
-        return locate(context, RegionClassification.OCEAN);
-    }
-
-    private static int locateCoastal(CommandContext<CommandSourceStack> context) {
-        return locate(context, RegionClassification.COASTAL);
-    }
-
-    private static int locateBasin(CommandContext<CommandSourceStack> context) {
-        return locateFlowFeature(context, FeatureType.BASIN);
-    }
-
-    private static int locateSource(CommandContext<CommandSourceStack> context) {
-        return locateFlowFeature(context, FeatureType.SOURCE);
-    }
-
-    private static int locateConfluence(CommandContext<CommandSourceStack> context) {
-        return locateFlowFeature(context, FeatureType.CONFLUENCE);
-    }
-
-    private static int locate(CommandContext<CommandSourceStack> context, RegionClassification target) {
+    private static int locateRegionType(CommandContext<CommandSourceStack> context, RegionFeatureType target) {
         CommandSourceStack source = context.getSource();
         ServerLevel level = source.getLevel();
+        MinecraftServer server = level.getServer();
         BlockPos pos = BlockPos.containing(source.getPosition());
 
         RandomState randomState = level.getChunkSource().randomState();
         RegionDensityProvider provider = new RegionDensityProvider(randomState);
 
         int playerX = pos.getX();
+        int playerY = pos.getY();
         int playerZ = pos.getZ();
-        int regionSize = RiverRegionKey.getRegionSize();
-        int playerRegionX = Math.floorDiv(playerX, regionSize);
-        int playerRegionZ = Math.floorDiv(playerZ, regionSize);
+        String featureName = target.name().toLowerCase();
 
-        int maxRegions = MAX_SEARCH_RADIUS / regionSize;
+        source.sendSuccess(() -> Component.literal(String.format("Searching for %s...", featureName))
+            .withStyle(ChatFormatting.GRAY), false);
 
-        for (int ring = 0; ring <= maxRegions; ring++) {
-            for (int dx = -ring; dx <= ring; dx++) {
-                BlockPos found = checkRegion(playerRegionX + dx, playerRegionZ - ring, regionSize, provider, target);
+        LOCATE_EXECUTOR.submit(() -> {
+            BlockPos found = searchForRegionType(playerX, playerY, playerZ, provider, randomState, target);
+            server.execute(() -> {
                 if (found != null) {
-                    sendSuccessMessage(source, found, playerX, playerZ, target);
-                    return 1;
+                    sendSuccessMessage(source, found, playerX, playerZ, featureName);
+                } else {
+                    source.sendFailure(Component.literal(String.format(
+                        "Could not find a %s region within %d blocks.",
+                        featureName, MAX_SEARCH_RADIUS)));
                 }
-                if (ring > 0) {
-                    found = checkRegion(playerRegionX + dx, playerRegionZ + ring, regionSize, provider, target);
-                    if (found != null) {
-                        sendSuccessMessage(source, found, playerX, playerZ, target);
-                        return 1;
-                    }
-                }
-            }
+            });
+        });
 
-            for (int dz = -ring + 1; dz < ring; dz++) {
-                BlockPos found = checkRegion(playerRegionX - ring, playerRegionZ + dz, regionSize, provider, target);
-                if (found != null) {
-                    sendSuccessMessage(source, found, playerX, playerZ, target);
-                    return 1;
-                }
-                found = checkRegion(playerRegionX + ring, playerRegionZ + dz, regionSize, provider, target);
-                if (found != null) {
-                    sendSuccessMessage(source, found, playerX, playerZ, target);
-                    return 1;
-                }
-            }
-        }
-
-        String featureName = target == RegionClassification.OCEAN ? "ocean" : "coastal";
-        source.sendFailure(Component.literal(String.format(
-            "Could not find an %s within %d blocks.",
-            featureName, MAX_SEARCH_RADIUS)));
-        return 0;
+        return 1;
     }
 
-    private static int locateFlowFeature(CommandContext<CommandSourceStack> context, FeatureType featureType) {
+    private static int locateCellType(CommandContext<CommandSourceStack> context, CellFeatureType target) {
         CommandSourceStack source = context.getSource();
         ServerLevel level = source.getLevel();
+        MinecraftServer server = level.getServer();
         BlockPos pos = BlockPos.containing(source.getPosition());
 
         RandomState randomState = level.getChunkSource().randomState();
         RegionDensityProvider provider = new RegionDensityProvider(randomState);
 
         int playerX = pos.getX();
+        int playerY = pos.getY();
         int playerZ = pos.getZ();
+        String featureName = target.name().toLowerCase();
+
+        source.sendSuccess(() -> Component.literal(String.format("Searching for %s...", featureName))
+            .withStyle(ChatFormatting.GRAY), false);
+
+        LOCATE_EXECUTOR.submit(() -> {
+            BlockPos found = searchForCellType(playerX, playerY, playerZ, provider, randomState, target);
+            server.execute(() -> {
+                if (found != null) {
+                    sendSuccessMessage(source, found, playerX, playerZ, featureName);
+                } else {
+                    source.sendFailure(Component.literal(String.format(
+                        "Could not find a %s cell within %d blocks.",
+                        featureName, MAX_SEARCH_RADIUS)));
+                }
+            });
+        });
+
+        return 1;
+    }
+
+    private static BlockPos searchForRegionType(int playerX, int playerY, int playerZ, RegionDensityProvider provider, RandomState randomState, RegionFeatureType target) {
         int regionSize = RiverRegionKey.getRegionSize();
         int playerRegionX = Math.floorDiv(playerX, regionSize);
         int playerRegionZ = Math.floorDiv(playerZ, regionSize);
-
         int maxRegions = MAX_SEARCH_RADIUS / regionSize;
 
         for (int ring = 0; ring <= maxRegions; ring++) {
             for (int dx = -ring; dx <= ring; dx++) {
-                BlockPos found = checkFlowFeatureRegion(playerRegionX + dx, playerRegionZ - ring, regionSize, provider, randomState, featureType);
+                BlockPos found = checkRegionType(playerRegionX + dx, playerRegionZ - ring, playerY, provider, randomState, target);
                 if (found != null) {
-                    sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
-                    return 1;
+                    return found;
                 }
                 if (ring > 0) {
-                    found = checkFlowFeatureRegion(playerRegionX + dx, playerRegionZ + ring, regionSize, provider, randomState, featureType);
+                    found = checkRegionType(playerRegionX + dx, playerRegionZ + ring, playerY, provider, randomState, target);
                     if (found != null) {
-                        sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
-                        return 1;
+                        return found;
                     }
                 }
             }
 
             for (int dz = -ring + 1; dz < ring; dz++) {
-                BlockPos found = checkFlowFeatureRegion(playerRegionX - ring, playerRegionZ + dz, regionSize, provider, randomState, featureType);
+                BlockPos found = checkRegionType(playerRegionX - ring, playerRegionZ + dz, playerY, provider, randomState, target);
                 if (found != null) {
-                    sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
-                    return 1;
+                    return found;
                 }
-                found = checkFlowFeatureRegion(playerRegionX + ring, playerRegionZ + dz, regionSize, provider, randomState, featureType);
+                found = checkRegionType(playerRegionX + ring, playerRegionZ + dz, playerY, provider, randomState, target);
                 if (found != null) {
-                    sendFlowFeatureMessage(source, found, playerX, playerZ, featureType);
-                    return 1;
+                    return found;
                 }
             }
-        }
-
-        String featureName = featureType.name().toLowerCase();
-        source.sendFailure(Component.literal(String.format(
-            "Could not find a %s within %d blocks.",
-            featureName, MAX_SEARCH_RADIUS)));
-        return 0;
-    }
-
-    private static BlockPos checkRegion(int regionX, int regionZ, int regionSize, RegionDensityProvider provider, RegionClassification target) {
-        RiverRegionKey key = new RiverRegionKey(regionX, regionZ);
-        RegionClassification classification = classify(key, regionSize, provider);
-
-        if (classification == target) {
-            return new BlockPos(key.centerX(), 63, key.centerZ());
         }
 
         return null;
     }
 
-    private static BlockPos checkFlowFeatureRegion(int regionX, int regionZ, int regionSize, RegionDensityProvider provider, RandomState randomState, FeatureType featureType) {
+    private static BlockPos searchForCellType(int playerX, int playerY, int playerZ, RegionDensityProvider provider, RandomState randomState, CellFeatureType target) {
+        int regionSize = RiverRegionKey.getRegionSize();
+        int playerRegionX = Math.floorDiv(playerX, regionSize);
+        int playerRegionZ = Math.floorDiv(playerZ, regionSize);
+        int maxRegions = MAX_SEARCH_RADIUS / regionSize;
+
+        for (int ring = 0; ring <= maxRegions; ring++) {
+            for (int dx = -ring; dx <= ring; dx++) {
+                BlockPos found = checkCellType(playerRegionX + dx, playerRegionZ - ring, playerY, provider, randomState, target);
+                if (found != null) {
+                    return found;
+                }
+                if (ring > 0) {
+                    found = checkCellType(playerRegionX + dx, playerRegionZ + ring, playerY, provider, randomState, target);
+                    if (found != null) {
+                        return found;
+                    }
+                }
+            }
+
+            for (int dz = -ring + 1; dz < ring; dz++) {
+                BlockPos found = checkCellType(playerRegionX - ring, playerRegionZ + dz, playerY, provider, randomState, target);
+                if (found != null) {
+                    return found;
+                }
+                found = checkCellType(playerRegionX + ring, playerRegionZ + dz, playerY, provider, randomState, target);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static BlockPos checkRegionType(int regionX, int regionZ, int playerY, RegionDensityProvider provider, RandomState randomState, RegionFeatureType target) {
+        RiverRegionKey key = new RiverRegionKey(regionX, regionZ);
+        RiverRegion region = RiverRegionManager.getOrCreate(key, provider, randomState);
+        RegionFeatureType type = RiverRegionManager.getRegionFeatureType(region, provider, randomState);
+
+        if (type == target) {
+            return new BlockPos(key.centerX(), playerY, key.centerZ());
+        }
+
+        return null;
+    }
+
+    private static BlockPos checkCellType(int regionX, int regionZ, int playerY, RegionDensityProvider provider, RandomState randomState, CellFeatureType target) {
         RiverRegionKey key = new RiverRegionKey(regionX, regionZ);
         RiverRegion region = RiverRegionManager.getOrCreate(key, provider, randomState);
 
@@ -182,57 +207,35 @@ public class LocateCommand {
             return null;
         }
 
-        if (region.getClassification() != RegionClassification.LAND) {
-            return null;
-        }
+        RiverRegionManager.ensurePaths(region, provider, randomState);
 
-        boolean matches = switch (featureType) {
-            case BASIN -> region.isBasin();
-            case SOURCE -> countInputs(region, provider, randomState) == 0;
-            case CONFLUENCE -> countInputs(region, provider, randomState) >= 2;
-        };
+        int regionSize = RiverRegionKey.getRegionSize();
+        int cellSpacing = regionSize / 8;
 
-        if (matches) {
-            return new BlockPos(key.centerX(), 63, key.centerZ());
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                CellFeatureType cellType = RiverRegionManager.getCellFeatureType(region, row, col);
+                if (cellType != null && cellType == target) {
+                    int cellX = key.worldX() + (col * cellSpacing) + (cellSpacing / 2);
+                    int cellZ = key.worldZ() + (row * cellSpacing) + (cellSpacing / 2);
+                    return new BlockPos(cellX, playerY, cellZ);
+                }
+            }
         }
 
         return null;
     }
 
-    private static int countInputs(RiverRegion region, RegionDensityProvider provider, RandomState randomState) {
-        int inputs = 0;
-        RiverRegionKey key = region.getKey();
-        PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
-
-        for (PathDirection direction : cardinals) {
-            RiverRegionKey neighborKey = direction.neighbor(key);
-            RiverRegion neighbor = RiverRegionManager.getOrCreate(neighborKey, provider, randomState);
-
-            if (!neighbor.isParticipating()) {
-                continue;
-            }
-
-            RiverRegionKey outputTarget = neighbor.getPrimaryOutput().neighbor(neighborKey);
-            if (outputTarget != null && outputTarget.equals(key)) {
-                inputs++;
-            }
-        }
-
-        return inputs;
-    }
-
-    private static void sendSuccessMessage(CommandSourceStack source, BlockPos target, int playerX, int playerZ, RegionClassification classification) {
+    private static void sendSuccessMessage(CommandSourceStack source, BlockPos target, int playerX, int playerZ, String featureName) {
         int distance = (int) Math.sqrt(
             Math.pow(target.getX() - playerX, 2) + Math.pow(target.getZ() - playerZ, 2)
         );
 
-        String featureName = classification == RegionClassification.OCEAN ? "ocean" : "coastal";
-
-        Component coords = Component.literal(String.format("[%d, 63, %d]", target.getX(), target.getZ()))
+        Component coords = Component.literal(String.format("[%d, %d, %d]", target.getX(), target.getY(), target.getZ()))
             .withStyle(style -> style
                 .withColor(ChatFormatting.GREEN)
                 .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND,
-                    String.format("/tp @s %d 63 %d", target.getX(), target.getZ())))
+                    String.format("/tp @s %d %d %d", target.getX(), target.getY(), target.getZ())))
                 .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
                     Component.literal("Click to teleport")))
             );
@@ -242,54 +245,5 @@ public class LocateCommand {
             .append(Component.literal(String.format(" (%d blocks away)", distance)));
 
         source.sendSuccess(() -> message, false);
-    }
-
-    private static void sendFlowFeatureMessage(CommandSourceStack source, BlockPos target, int playerX, int playerZ, FeatureType featureType) {
-        int distance = (int) Math.sqrt(
-            Math.pow(target.getX() - playerX, 2) + Math.pow(target.getZ() - playerZ, 2)
-        );
-
-        String featureName = featureType.name().toLowerCase();
-
-        Component coords = Component.literal(String.format("[%d, 63, %d]", target.getX(), target.getZ()))
-            .withStyle(style -> style
-                .withColor(ChatFormatting.GREEN)
-                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND,
-                    String.format("/tp @s %d 63 %d", target.getX(), target.getZ())))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                    Component.literal("Click to teleport")))
-            );
-
-        Component message = Component.literal(String.format("The nearest %s is at ", featureName))
-            .append(coords)
-            .append(Component.literal(String.format(" (%d blocks away)", distance)));
-
-        source.sendSuccess(() -> message, false);
-    }
-
-    private static RegionClassification classify(RiverRegionKey key, int regionSize, RegionDensityProvider provider) {
-        boolean hasLand = false;
-        boolean hasOcean = false;
-        double step = regionSize / 8.0;
-
-        for (int row = 0; row < 8; row++) {
-            for (int col = 0; col < 8; col++) {
-                int sampleX = key.worldX() + (int) (col * step);
-                int sampleZ = key.worldZ() + (int) (row * step);
-                if (provider.isOcean(sampleX, sampleZ)) {
-                    hasOcean = true;
-                } else {
-                    hasLand = true;
-                }
-            }
-        }
-
-        if (hasLand && hasOcean) {
-            return RegionClassification.COASTAL;
-        }
-        if (hasOcean) {
-            return RegionClassification.OCEAN;
-        }
-        return RegionClassification.LAND;
     }
 }

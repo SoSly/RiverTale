@@ -254,18 +254,18 @@ public class RiverRegionManager {
         return RegionFeatureType.FLUVIAL;
     }
 
-    public static CellFeatureType getCellFeatureType(RiverRegion region, int row, int col, FlowDirection[][] flowDirections) {
-        int inletCount = countInlets(flowDirections, row, col);
+    public static CellFeatureType getCellFeatureType(RiverRegion region, int row, int col) {
         boolean isOnPath = isCellOnRiverPath(region, row, col);
-
         if (!isOnPath) {
-            return CellFeatureType.COURSE;
+            return null;
         }
+
+        int inletCount = countInlets(region, row, col);
 
         if (isTerminusCell(region, row, col)) {
             return CellFeatureType.TERMINUS;
         }
-        if (isSourceCell(region, row, col, flowDirections, inletCount)) {
+        if (isSourceCell(region, row, col, inletCount)) {
             return CellFeatureType.SOURCE;
         }
         if (inletCount >= 2) {
@@ -274,28 +274,19 @@ public class RiverRegionManager {
         return CellFeatureType.COURSE;
     }
 
-    private static int countInlets(FlowDirection[][] flowDirections, int row, int col) {
-        int count = 0;
-        int[][] neighbors = {
-            {row - 1, col}, {row + 1, col}, {row, col - 1}, {row, col + 1},
-            {row - 1, col - 1}, {row - 1, col + 1}, {row + 1, col - 1}, {row + 1, col + 1}
-        };
-        FlowDirection[] expectedDirs = {
-            FlowDirection.SOUTH, FlowDirection.NORTH, FlowDirection.EAST, FlowDirection.WEST,
-            FlowDirection.SOUTHEAST, FlowDirection.SOUTHWEST, FlowDirection.NORTHEAST, FlowDirection.NORTHWEST
-        };
-
-        for (int i = 0; i < neighbors.length; i++) {
-            int nr = neighbors[i][0];
-            int nc = neighbors[i][1];
-            if (nr < 0 || nr >= 8 || nc < 0 || nc >= 8) {
-                continue;
-            }
-            if (flowDirections[nr][nc] == expectedDirs[i]) {
-                count++;
+    private static int countInlets(RiverRegion region, int row, int col) {
+        java.util.Set<Long> uniqueInlets = new java.util.HashSet<>();
+        for (java.util.List<int[]> path : region.getRiverPaths().values()) {
+            for (int i = 1; i < path.size(); i++) {
+                int[] current = path.get(i);
+                if (current[0] == row && current[1] == col) {
+                    int[] previous = path.get(i - 1);
+                    long key = ((long) previous[0] << 32) | (previous[1] & 0xFFFFFFFFL);
+                    uniqueInlets.add(key);
+                }
             }
         }
-        return count;
+        return uniqueInlets.size();
     }
 
     private static boolean isCellOnRiverPath(RiverRegion region, int row, int col) {
@@ -329,7 +320,7 @@ public class RiverRegionManager {
         return false;
     }
 
-    private static boolean isSourceCell(RiverRegion region, int row, int col, FlowDirection[][] flowDirections, int inletCount) {
+    private static boolean isSourceCell(RiverRegion region, int row, int col, int inletCount) {
         if (inletCount > 0) {
             return false;
         }
@@ -341,10 +332,7 @@ public class RiverRegionManager {
             }
             int[] firstPoint = path.get(0);
             if (firstPoint[0] == row && firstPoint[1] == col) {
-                boolean isEdge = row == 0 || row == 7 || col == 0 || col == 7;
-                if (!isEdge) {
-                    return true;
-                }
+                return true;
             }
         }
         return false;

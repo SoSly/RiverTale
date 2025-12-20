@@ -7,7 +7,6 @@ public class RiverConfig {
     public static final ForgeConfigSpec SPEC;
     public static final ForgeConfigSpec.IntValue REGION_SIZE;
     public static final ForgeConfigSpec.DoubleValue PARTICIPATION_RATE;
-    public static final ForgeConfigSpec.DoubleValue DENSITY_EQUALITY_THRESHOLD;
     public static final ForgeConfigSpec.DoubleValue OCEAN_THRESHOLD;
     public static final ForgeConfigSpec.DoubleValue LAKE_THRESHOLD;
     public static final ForgeConfigSpec.DoubleValue DEPTH_WEIGHT;
@@ -23,10 +22,6 @@ public class RiverConfig {
         PARTICIPATION_RATE = builder
             .comment("Probability that a land cell will participate in river generation (0.0 to 1.0).")
             .defineInRange("participationRate", 0.7, 0.0, 1.0);
-
-        DENSITY_EQUALITY_THRESHOLD = builder
-            .comment("Maximum density difference for two cells to be considered equal when determining flow direction.")
-            .defineInRange("densityEqualityThreshold", 0.01, 0.001, 0.1);
 
         OCEAN_THRESHOLD = builder
             .comment("Continents density value below which terrain is considered ocean.")

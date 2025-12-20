@@ -52,7 +52,7 @@ public class CellCommand {
                 FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(regionKey, densitySampler);
                 FlowDirection flowDirection = flowDirections[row][col];
 
-                CellFeatureType featureType = RiverRegionManager.getCellFeatureType(region, row, col, flowDirections);
+                CellFeatureType featureType = RiverRegionManager.getCellFeatureType(region, row, col);
 
                 source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
                 source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d) in Region (%d, %d)", row, col, regionKey.regionX(), regionKey.regionZ()))
