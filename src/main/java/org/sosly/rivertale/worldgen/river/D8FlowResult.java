@@ -8,7 +8,6 @@ public record D8FlowResult(
     EdgeCrossing[] crossings,
     double[] crossingStrengths,
     PathDirection primaryOutputDirection,
-    boolean isBasin,
     int[][] terminusCells,
     Map<PathDirection, List<int[]>> riverPaths,
     List<int[]> confluenceCells

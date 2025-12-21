@@ -12,13 +12,14 @@ import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.network.RiverTaleNetwork;
 import org.sosly.rivertale.network.VisualizeD8Packet;
 import org.sosly.rivertale.network.VisualizeD8Packet.D8RegionData;
-import org.sosly.rivertale.worldgen.river.RegionClassification;
 import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
+import org.sosly.rivertale.worldgen.river.RegionFeatureType;
 import org.sosly.rivertale.worldgen.river.D8FlowCalculator;
 import org.sosly.rivertale.worldgen.river.D8FlowResult;
 import org.sosly.rivertale.worldgen.river.D8PathRefiner;
 import org.sosly.rivertale.worldgen.river.FlowDirection;
 import org.sosly.rivertale.worldgen.river.RiverRegionKey;
+import org.sosly.rivertale.worldgen.river.RiverRegionManager;
 import org.sosly.rivertale.config.RiverConfig;
 
 import java.util.ArrayList;
@@ -89,7 +90,7 @@ public class VisualizeCommand {
         RiverRegionKey playerRegion = RiverRegionKey.fromBlockPos(pos.getX(), pos.getZ());
 
         Map<RiverRegionKey, FlowDirection[][]> flowDataMap = new HashMap<>();
-        Map<RiverRegionKey, RegionClassification> classificationMap = new HashMap<>();
+        Map<RiverRegionKey, RegionFeatureType> featureTypeMap = new HashMap<>();
 
         int outerRadius = REGION_RADIUS + 1;
         for (int dx = -outerRadius; dx <= outerRadius; dx++) {
@@ -97,11 +98,11 @@ public class VisualizeCommand {
                 RiverRegionKey key = new RiverRegionKey(playerRegion.regionX() + dx, playerRegion.regionZ() + dz);
 
                 FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(key, densitySampler);
-                RegionClassification classification = D8FlowCalculator.classifyRegion(
-                    key, continentsSampler, depthSampler, oceanThreshold, lakeThreshold);
+                RegionFeatureType terrain = RiverRegionManager.classifyTerrain(key, provider);
+                RegionFeatureType featureType = terrain != null ? terrain : RegionFeatureType.DIVIDE;
 
                 flowDataMap.put(key, flowDirections);
-                classificationMap.put(key, classification);
+                featureTypeMap.put(key, featureType);
             }
         }
 
@@ -112,10 +113,10 @@ public class VisualizeCommand {
                 RiverRegionKey key = new RiverRegionKey(playerRegion.regionX() + dx, playerRegion.regionZ() + dz);
 
                 FlowDirection[][] flowDirection = flowDataMap.get(key);
-                RegionClassification classification = classificationMap.get(key);
+                RegionFeatureType featureType = featureTypeMap.get(key);
 
                 FlowDirection[][][] neighborFlowDirections = new FlowDirection[4][][];
-                RegionClassification[] neighborClassifications = new RegionClassification[4];
+                RegionFeatureType[] neighborFeatureTypes = new RegionFeatureType[4];
 
                 RiverRegionKey northKey = new RiverRegionKey(key.regionX(), key.regionZ() - 1);
                 RiverRegionKey southKey = new RiverRegionKey(key.regionX(), key.regionZ() + 1);
@@ -127,20 +128,20 @@ public class VisualizeCommand {
                 neighborFlowDirections[2] = flowDataMap.get(eastKey);
                 neighborFlowDirections[3] = flowDataMap.get(westKey);
 
-                neighborClassifications[0] = classificationMap.get(northKey);
-                neighborClassifications[1] = classificationMap.get(southKey);
-                neighborClassifications[2] = classificationMap.get(eastKey);
-                neighborClassifications[3] = classificationMap.get(westKey);
+                neighborFeatureTypes[0] = featureTypeMap.get(northKey);
+                neighborFeatureTypes[1] = featureTypeMap.get(southKey);
+                neighborFeatureTypes[2] = featureTypeMap.get(eastKey);
+                neighborFeatureTypes[3] = featureTypeMap.get(westKey);
 
                 D8FlowResult d8Result = D8PathRefiner.refine(
-                    key, flowDirection, classification,
-                    neighborFlowDirections, neighborClassifications,
+                    key, flowDirection, featureType,
+                    neighborFlowDirections, neighborFeatureTypes,
                     densitySampler, continentsSampler, depthSampler,
                     oceanThreshold, lakeThreshold);
 
                 regionDataList.add(new D8RegionData(
                     key.regionX(), key.regionZ(),
-                    classification, d8Result.isBasin(),
+                    featureType,
                     d8Result.crossings(),
                     d8Result.primaryOutputDirection(), d8Result.flowDirection(),
                     d8Result.terminusCells(), d8Result.riverPaths(),

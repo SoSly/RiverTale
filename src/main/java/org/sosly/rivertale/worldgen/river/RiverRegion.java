@@ -11,26 +11,21 @@ public class RiverRegion {
     private final RiverRegionKey key;
     private final double density;
     private final double[][] cellDensities;
-    private final RegionClassification classification;
     private final boolean participating;
 
     private PathDirection primaryOutput;
     private Set<PathDirection> secondaryOutputs;
     private int distanceToTerminus;
-    private boolean isBasin;
     private Map<PathDirection, List<int[]>> riverPaths;
 
-    public RiverRegion(RiverRegionKey key, double density, double[][] cellDensities,
-                     RegionClassification classification, boolean participating) {
+    public RiverRegion(RiverRegionKey key, double density, double[][] cellDensities, boolean participating) {
         this.key = key;
         this.density = density;
         this.cellDensities = cellDensities;
-        this.classification = classification;
         this.participating = participating;
         this.primaryOutput = PathDirection.NONE;
         this.secondaryOutputs = new HashSet<>();
         this.distanceToTerminus = -1;
-        this.isBasin = false;
         this.riverPaths = new HashMap<>();
     }
 
@@ -44,10 +39,6 @@ public class RiverRegion {
 
     public double[][] getCellDensities() {
         return cellDensities;
-    }
-
-    public RegionClassification getClassification() {
-        return classification;
     }
 
     public boolean isParticipating() {
@@ -76,14 +67,6 @@ public class RiverRegion {
 
     public void setDistanceToTerminus(int distanceToTerminus) {
         this.distanceToTerminus = distanceToTerminus;
-    }
-
-    public boolean isBasin() {
-        return isBasin;
-    }
-
-    public void setBasin(boolean basin) {
-        this.isBasin = basin;
     }
 
     public Map<PathDirection, List<int[]>> getRiverPaths() {

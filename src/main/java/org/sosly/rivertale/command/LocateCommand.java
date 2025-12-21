@@ -214,7 +214,7 @@ public class LocateCommand {
 
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
-                CellFeatureType cellType = RiverRegionManager.getCellFeatureType(region, row, col);
+                CellFeatureType cellType = RiverRegionManager.getCellFeatureType(region, row, col, provider);
                 if (cellType != null && cellType == target) {
                     int cellX = key.worldX() + (col * cellSpacing) + (cellSpacing / 2);
                     int cellZ = key.worldZ() + (row * cellSpacing) + (cellSpacing / 2);

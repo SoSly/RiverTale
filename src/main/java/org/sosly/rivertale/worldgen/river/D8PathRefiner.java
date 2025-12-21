@@ -16,9 +16,9 @@ public class D8PathRefiner {
     public static D8FlowResult refine(
             RiverRegionKey cellKey,
             FlowDirection[][] flowDirection,
-            RegionClassification classification,
+            RegionFeatureType featureType,
             FlowDirection[][][] neighborFlowDirections,
-            RegionClassification[] neighborClassifications,
+            RegionFeatureType[] neighborFeatureTypes,
             BiFunction<Integer, Integer, Double> densitySampler,
             BiFunction<Integer, Integer, Double> continentsSampler,
             BiFunction<Integer, Integer, Double> depthSampler,
@@ -33,27 +33,28 @@ public class D8PathRefiner {
         EdgeCrossing[] crossings = new EdgeCrossing[4];
         double[] crossingStrengths = new double[4];
 
-        if (classification != RegionClassification.BODY) {
+        boolean isShore = featureType == RegionFeatureType.SHORE;
+        boolean isLand = featureType != RegionFeatureType.BODY && !isShore;
+
+        if (featureType != RegionFeatureType.BODY) {
             computeEdgeCrossings(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
-                flowDirection, neighborFlowDirections, neighborClassifications,
+                flowDirection, neighborFlowDirections, neighborFeatureTypes,
                 crossings, crossingStrengths);
         }
 
         PathDirection primaryOutputDirection = computePrimaryOutput(flowDirection, crossings);
 
-        boolean isBasin = classification == RegionClassification.LAND && !hasAnyOutput(crossings);
-
         List<int[]> terminusList = new ArrayList<>();
         Map<PathDirection, List<int[]>> riverPaths = new HashMap<>();
         List<int[]> confluenceCells = new ArrayList<>();
 
-        if (classification == RegionClassification.LAND && primaryOutputDirection != PathDirection.NONE) {
+        if (isLand && primaryOutputDirection != PathDirection.NONE) {
             tracePaths(flowDirection, crossings, primaryOutputDirection,
                 riverPaths, confluenceCells);
-        } else if (isBasin) {
+        } else if (isLand && !hasAnyOutput(crossings)) {
             traceBasinPaths(crossings, riverPaths);
             collectPathEndpoints(riverPaths, terminusList);
-        } else if (classification == RegionClassification.SHORE) {
+        } else if (isShore) {
             traceShorePaths(flowDirection, crossings, cellOriginX, cellOriginZ, cellSpacing,
                 continentsSampler, depthSampler, oceanThreshold, lakeThreshold,
                 riverPaths, confluenceCells);
@@ -63,7 +64,7 @@ public class D8PathRefiner {
         int[][] terminusCells = terminusList.toArray(new int[0][]);
 
         return new D8FlowResult(flowDirection, crossings,
-            crossingStrengths, primaryOutputDirection, isBasin, terminusCells,
+            crossingStrengths, primaryOutputDirection, terminusCells,
             riverPaths, confluenceCells);
     }
 
@@ -72,20 +73,20 @@ public class D8PathRefiner {
             BiFunction<Integer, Integer, Double> densitySampler,
             FlowDirection[][] flowDirection,
             FlowDirection[][][] neighborFlowDirections,
-            RegionClassification[] neighborClassifications,
+            RegionFeatureType[] neighborFeatureTypes,
             EdgeCrossing[] crossings, double[] crossingStrengths) {
 
         computeCrossing(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
-            flowDirection, neighborFlowDirections, neighborClassifications,
+            flowDirection, neighborFlowDirections, neighborFeatureTypes,
             crossings, crossingStrengths, PathDirection.NORTH, -1);
         computeCrossing(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
-            flowDirection, neighborFlowDirections, neighborClassifications,
+            flowDirection, neighborFlowDirections, neighborFeatureTypes,
             crossings, crossingStrengths, PathDirection.SOUTH, -1);
         computeCrossing(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
-            flowDirection, neighborFlowDirections, neighborClassifications,
+            flowDirection, neighborFlowDirections, neighborFeatureTypes,
             crossings, crossingStrengths, PathDirection.EAST, -1);
         computeCrossing(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
-            flowDirection, neighborFlowDirections, neighborClassifications,
+            flowDirection, neighborFlowDirections, neighborFeatureTypes,
             crossings, crossingStrengths, PathDirection.WEST, -1);
     }
 
@@ -94,12 +95,16 @@ public class D8PathRefiner {
             BiFunction<Integer, Integer, Double> densitySampler,
             FlowDirection[][] flowDirection,
             FlowDirection[][][] neighborFlowDirections,
-            RegionClassification[] neighborClassifications,
+            RegionFeatureType[] neighborFeatureTypes,
             EdgeCrossing[] crossings, double[] crossingStrengths,
             PathDirection dir, int excludePos) {
 
         PathDirection oppositeDir = dir.opposite();
-        boolean neighborCanProvideInput = neighborClassifications[dir.ordinal()] == RegionClassification.LAND
+        RegionFeatureType neighborType = neighborFeatureTypes[dir.ordinal()];
+        boolean neighborIsLand = neighborType != null
+            && neighborType != RegionFeatureType.BODY
+            && neighborType != RegionFeatureType.SHORE;
+        boolean neighborCanProvideInput = neighborIsLand
             && neighborFlowDirections[dir.ordinal()] != null;
 
         int bestPos = -1;

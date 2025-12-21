@@ -19,30 +19,30 @@ public class RiverRegionManager {
 
         double[][] cellDensities = provider.sampleCellDensities(key.worldX(), key.worldZ(), RiverRegionKey.getRegionSize());
         double density = provider.getAveragedDensity(key.worldX(), key.worldZ(), RiverRegionKey.getRegionSize());
-        RegionClassification classification = classifyRegion(key, provider);
         boolean participating = ParticipationCalculator.isParticipating(key, randomState);
 
-        RiverRegion region = new RiverRegion(key, density, cellDensities, classification, participating);
+        RiverRegion region = new RiverRegion(key, density, cellDensities, participating);
 
-        if (participating && classification != RegionClassification.BODY) {
-            computeFlow(region, provider, randomState);
+        RegionFeatureType terrain = classifyTerrain(key, provider);
+        if (participating && terrain != RegionFeatureType.BODY) {
+            computeFlow(region, terrain, provider, randomState);
         }
 
         long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
-        LOGGER.debug("Region ({}, {}) created in {}ms [{}]", key.regionX(), key.regionZ(), elapsedMs, classification);
+        LOGGER.debug("Region ({}, {}) created in {}ms [{}]", key.regionX(), key.regionZ(), elapsedMs, terrain);
 
         return region;
     }
 
-    private static RegionClassification classifyRegion(RiverRegionKey key, DensityProvider provider) {
+    public static RegionFeatureType classifyTerrain(RiverRegionKey key, DensityProvider provider) {
         int regionSize = RiverRegionKey.getRegionSize();
         double step = regionSize / 8.0;
 
         boolean hasWater = false;
         boolean hasLand = false;
 
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
+        for (int i = 0; i < 8 && (!hasWater || !hasLand); i++) {
+            for (int j = 0; j < 8 && (!hasWater || !hasLand); j++) {
                 int sampleX = key.worldX() + (int) (i * step);
                 int sampleZ = key.worldZ() + (int) (j * step);
 
@@ -55,24 +55,22 @@ public class RiverRegionManager {
         }
 
         if (hasWater && hasLand) {
-            return RegionClassification.SHORE;
+            return RegionFeatureType.SHORE;
         }
         if (hasWater) {
-            return RegionClassification.BODY;
+            return RegionFeatureType.BODY;
         }
 
-        return RegionClassification.LAND;
+        return null;
     }
 
-    private static void computeFlow(RiverRegion region, DensityProvider provider, RandomState randomState) {
-        RegionClassification classification = region.getClassification();
-
-        if (classification == RegionClassification.BODY) {
+    private static void computeFlow(RiverRegion region, RegionFeatureType terrain, DensityProvider provider, RandomState randomState) {
+        if (terrain == RegionFeatureType.BODY) {
             region.setPrimaryOutput(PathDirection.NONE);
             return;
         }
 
-        if (classification == RegionClassification.SHORE) {
+        if (terrain == RegionFeatureType.SHORE) {
             region.setPrimaryOutput(PathDirection.NONE);
         }
 
@@ -89,24 +87,24 @@ public class RiverRegionManager {
         FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(key, densitySampler);
 
         FlowDirection[][][] neighborFlowDirections = new FlowDirection[4][][];
-        RegionClassification[] neighborClassifications = new RegionClassification[4];
+        RegionFeatureType[] neighborFeatureTypes = new RegionFeatureType[4];
         PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
 
         for (int i = 0; i < 4; i++) {
             RiverRegionKey neighborKey = cardinals[i].neighbor(key);
             neighborFlowDirections[i] = D8FlowCalculator.computeFlowDirections(neighborKey, densitySampler);
-            neighborClassifications[i] = D8FlowCalculator.classifyRegion(
-                neighborKey, continentsSampler, depthSampler, oceanThreshold, lakeThreshold);
+            RegionFeatureType neighborTerrain = classifyTerrain(neighborKey, provider);
+            neighborFeatureTypes[i] = neighborTerrain != null ? neighborTerrain : RegionFeatureType.DIVIDE;
         }
 
+        RegionFeatureType featureType = terrain != null ? terrain : RegionFeatureType.DIVIDE;
         D8FlowResult result = D8PathRefiner.refine(
-            key, flowDirections, classification,
-            neighborFlowDirections, neighborClassifications,
+            key, flowDirections, featureType,
+            neighborFlowDirections, neighborFeatureTypes,
             densitySampler, continentsSampler, depthSampler,
             oceanThreshold, lakeThreshold);
 
         region.setPrimaryOutput(result.primaryOutputDirection());
-        region.setBasin(result.isBasin());
 
         Set<PathDirection> secondaries = new HashSet<>();
         EdgeCrossing[] crossings = result.crossings();
@@ -141,10 +139,11 @@ public class RiverRegionManager {
         double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
 
         FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(key, densitySampler);
-        RegionClassification classification = region.getClassification();
+        RegionFeatureType terrain = classifyTerrain(key, provider);
+        RegionFeatureType featureType = terrain != null ? terrain : RegionFeatureType.DIVIDE;
 
         FlowDirection[][][] neighborFlowDirections = new FlowDirection[4][][];
-        RegionClassification[] neighborClassifications = ensureNeighborsLoaded(key, provider, randomState);
+        RegionFeatureType[] neighborFeatureTypes = ensureNeighborsLoaded(key, provider, randomState);
         PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
 
         for (int i = 0; i < 4; i++) {
@@ -153,25 +152,26 @@ public class RiverRegionManager {
         }
 
         D8FlowResult result = D8PathRefiner.refine(
-            key, flowDirections, classification,
-            neighborFlowDirections, neighborClassifications,
+            key, flowDirections, featureType,
+            neighborFlowDirections, neighborFeatureTypes,
             densitySampler, continentsSampler, depthSampler,
             oceanThreshold, lakeThreshold);
 
         region.setRiverPaths(result.riverPaths());
     }
 
-    public static RegionClassification[] ensureNeighborsLoaded(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
-        RegionClassification[] neighborClassifications = new RegionClassification[4];
+    public static RegionFeatureType[] ensureNeighborsLoaded(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
+        RegionFeatureType[] neighborFeatureTypes = new RegionFeatureType[4];
         PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
 
         for (int i = 0; i < cardinals.length; i++) {
             RiverRegionKey neighborKey = cardinals[i].neighbor(key);
-            RiverRegion neighbor = getOrCreate(neighborKey, provider, randomState);
-            neighborClassifications[i] = neighbor.getClassification();
+            getOrCreate(neighborKey, provider, randomState);
+            RegionFeatureType terrain = classifyTerrain(neighborKey, provider);
+            neighborFeatureTypes[i] = terrain != null ? terrain : RegionFeatureType.DIVIDE;
         }
 
-        return neighborClassifications;
+        return neighborFeatureTypes;
     }
 
     public static int getDistanceToTerminus(RiverRegion region, DensityProvider provider, RandomState randomState) {
@@ -183,8 +183,10 @@ public class RiverRegionManager {
             return region.getDistanceToTerminus();
         }
 
-        RegionClassification classification = region.getClassification();
-        if (classification != RegionClassification.LAND || region.isBasin()) {
+        RegionFeatureType featureType = getRegionFeatureType(region, provider, randomState);
+        if (featureType == RegionFeatureType.BODY
+                || featureType == RegionFeatureType.SHORE
+                || featureType == RegionFeatureType.BASIN) {
             region.setDistanceToTerminus(0);
             return 0;
         }
@@ -216,31 +218,44 @@ public class RiverRegionManager {
     }
 
     public static RegionFeatureType getRegionFeatureType(RiverRegion region, DensityProvider provider, RandomState randomState) {
-        RegionClassification classification = region.getClassification();
+        RiverRegionKey key = region.getKey();
+        int regionSize = RiverRegionKey.getRegionSize();
+        double step = regionSize / 8.0;
+        boolean hasWater = false;
+        boolean hasLand = false;
 
-        if (classification == RegionClassification.BODY) {
-            return RegionFeatureType.BODY;
+        for (int i = 0; i < 8 && (!hasWater || !hasLand); i++) {
+            for (int j = 0; j < 8 && (!hasWater || !hasLand); j++) {
+                int sampleX = key.worldX() + (int) (i * step);
+                int sampleZ = key.worldZ() + (int) (j * step);
+                if (provider.isOcean(sampleX, sampleZ) || provider.isLake(sampleX, sampleZ)) {
+                    hasWater = true;
+                } else {
+                    hasLand = true;
+                }
+            }
         }
-        if (classification == RegionClassification.SHORE) {
+
+        if (hasWater && hasLand) {
             return RegionFeatureType.SHORE;
         }
+        if (hasWater) {
+            return RegionFeatureType.BODY;
+        }
+
         if (!region.isParticipating()) {
             return RegionFeatureType.BARREN;
         }
-        if (region.isBasin()) {
+
+        if (region.getPrimaryOutput() == PathDirection.NONE && region.getSecondaryOutputs().isEmpty()) {
             return RegionFeatureType.BASIN;
         }
 
-        int upstreamCount = getUpstreamCount(region.getKey(), provider, randomState);
-
-        if (upstreamCount == 0) {
-            return RegionFeatureType.DIVIDE;
-        }
-
-        return RegionFeatureType.FLUVIAL;
+        int upstreamCount = getUpstreamCount(key, provider, randomState);
+        return upstreamCount == 0 ? RegionFeatureType.DIVIDE : RegionFeatureType.FLUVIAL;
     }
 
-    public static CellFeatureType getCellFeatureType(RiverRegion region, int row, int col) {
+    public static CellFeatureType getCellFeatureType(RiverRegion region, int row, int col, DensityProvider provider) {
         boolean isOnPath = isCellOnRiverPath(region, row, col);
         if (!isOnPath) {
             return null;
@@ -248,7 +263,7 @@ public class RiverRegionManager {
 
         int inletCount = countInlets(region, row, col);
 
-        if (isTerminusCell(region, row, col)) {
+        if (isTerminusCell(region, row, col, provider)) {
             return CellFeatureType.TERMINUS;
         }
         if (isSourceCell(region, row, col, inletCount)) {
@@ -286,9 +301,13 @@ public class RiverRegionManager {
         return false;
     }
 
-    private static boolean isTerminusCell(RiverRegion region, int row, int col) {
-        RegionClassification classification = region.getClassification();
-        if (classification != RegionClassification.SHORE && !region.isBasin()) {
+    private static boolean isTerminusCell(RiverRegion region, int row, int col, DensityProvider provider) {
+        RegionFeatureType terrain = classifyTerrain(region.getKey(), provider);
+        boolean isShore = terrain == RegionFeatureType.SHORE;
+        boolean isBasin = region.getPrimaryOutput() == PathDirection.NONE
+            && region.getSecondaryOutputs().isEmpty();
+
+        if (!isShore && !isBasin) {
             return false;
         }
 

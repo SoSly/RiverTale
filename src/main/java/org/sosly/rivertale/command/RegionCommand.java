@@ -9,7 +9,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.worldgen.river.PathDirection;
-import org.sosly.rivertale.worldgen.river.RegionClassification;
 import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
 import org.sosly.rivertale.worldgen.river.RegionFeatureType;
 import org.sosly.rivertale.worldgen.river.RiverRegion;
@@ -43,7 +42,6 @@ public class RegionCommand {
                 source.sendSuccess(() -> Component.literal(String.format("Region (%d, %d): %s", key.regionX(), key.regionZ(), cacheStatus))
                     .withStyle(ChatFormatting.YELLOW), false);
 
-                RegionClassification classification = region.getClassification();
                 RegionFeatureType featureType = RiverRegionManager.getRegionFeatureType(region, provider, randomState);
 
                 if (!region.isParticipating()) {
@@ -54,7 +52,7 @@ public class RegionCommand {
                     return 1;
                 }
 
-                boolean isTerminus = classification != RegionClassification.LAND;
+                boolean isTerminus = featureType == RegionFeatureType.BODY || featureType == RegionFeatureType.SHORE;
 
                 if (isTerminus) {
                     source.sendSuccess(() -> Component.literal(String.format("  Center: (%,d, %,d)", key.centerX(), key.centerZ()))
@@ -68,7 +66,7 @@ public class RegionCommand {
                     source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                         .withStyle(ChatFormatting.WHITE), false);
 
-                    if (classification == RegionClassification.SHORE) {
+                    if (featureType == RegionFeatureType.SHORE) {
                         int upstreamCount = RiverRegionManager.getUpstreamCount(key, provider, randomState);
                         source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
                             .withStyle(ChatFormatting.WHITE), false);
@@ -117,11 +115,9 @@ public class RegionCommand {
                 source.sendSuccess(() -> Component.literal(String.format("  Distance to terminus: %d", distance))
                     .withStyle(ChatFormatting.WHITE), false);
 
-                if (classification == RegionClassification.LAND) {
-                    int upstreamCount = RiverRegionManager.getUpstreamCount(key, provider, randomState);
-                    source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
-                        .withStyle(ChatFormatting.WHITE), false);
-                }
+                int upstreamCount = RiverRegionManager.getUpstreamCount(key, provider, randomState);
+                source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
+                    .withStyle(ChatFormatting.WHITE), false);
 
                 RiverRegionManager.ensurePaths(region, provider, randomState);
                 Map<PathDirection, List<int[]>> paths = region.getRiverPaths();

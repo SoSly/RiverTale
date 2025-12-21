@@ -34,48 +34,6 @@ public class D8FlowCalculator {
         return flowDirection;
     }
 
-    public static RegionClassification classifyRegion(
-            RiverRegionKey cellKey,
-            BiFunction<Integer, Integer, Double> continentsSampler,
-            BiFunction<Integer, Integer, Double> depthSampler,
-            double oceanThreshold,
-            double lakeThreshold) {
-
-        int cellSize = RiverRegionKey.getRegionSize();
-        double step = cellSize / 8.0;
-
-        boolean hasWater = false;
-        boolean hasLand = false;
-
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
-                int sampleX = cellKey.worldX() + (int) (i * step);
-                int sampleZ = cellKey.worldZ() + (int) (j * step);
-
-                double continents = continentsSampler.apply(sampleX, sampleZ);
-                if (continents < oceanThreshold) {
-                    hasWater = true;
-                } else {
-                    double depth = depthSampler.apply(sampleX, sampleZ);
-                    if (depth < lakeThreshold) {
-                        hasWater = true;
-                    } else {
-                        hasLand = true;
-                    }
-                }
-            }
-        }
-
-        if (hasWater && hasLand) {
-            return RegionClassification.SHORE;
-        }
-        if (hasWater) {
-            return RegionClassification.BODY;
-        }
-
-        return RegionClassification.LAND;
-    }
-
     public static FlowDirection getNeighborEdgeD8(FlowDirection[][] neighborFlowDirections, PathDirection dirFromUs, int pos) {
         return switch (dirFromUs) {
             case NORTH -> neighborFlowDirections[GRID_SIZE - 1][pos];

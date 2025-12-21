@@ -5,10 +5,10 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 import org.sosly.rivertale.client.ClientD8Cache;
-import org.sosly.rivertale.worldgen.river.RegionClassification;
 import org.sosly.rivertale.worldgen.river.EdgeCrossing;
 import org.sosly.rivertale.worldgen.river.FlowDirection;
 import org.sosly.rivertale.worldgen.river.PathDirection;
+import org.sosly.rivertale.worldgen.river.RegionFeatureType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,8 +33,7 @@ public class VisualizeD8Packet {
         for (D8RegionData region : regions) {
             buf.writeInt(region.regionX);
             buf.writeInt(region.regionZ);
-            buf.writeEnum(region.classification);
-            buf.writeBoolean(region.isBasin);
+            buf.writeEnum(region.featureType);
 
             for (int i = 0; i < 4; i++) {
                 EdgeCrossing crossing = region.crossings[i];
@@ -85,8 +84,7 @@ public class VisualizeD8Packet {
         for (int i = 0; i < regionCount; i++) {
             int regionX = buf.readInt();
             int regionZ = buf.readInt();
-            RegionClassification classification = buf.readEnum(RegionClassification.class);
-            boolean isBasin = buf.readBoolean();
+            RegionFeatureType featureType = buf.readEnum(RegionFeatureType.class);
 
             EdgeCrossing[] crossings = new EdgeCrossing[4];
             for (int j = 0; j < 4; j++) {
@@ -135,7 +133,7 @@ public class VisualizeD8Packet {
                 confluenceCells.add(new int[]{buf.readInt(), buf.readInt()});
             }
 
-            regions.add(new D8RegionData(regionX, regionZ, classification, isBasin,
+            regions.add(new D8RegionData(regionX, regionZ, featureType,
                 crossings, primaryOutputDirection, flowDirections,
                 terminusCells, riverPaths, confluenceCells));
         }
@@ -162,8 +160,7 @@ public class VisualizeD8Packet {
     public static class D8RegionData {
         public final int regionX;
         public final int regionZ;
-        public final RegionClassification classification;
-        public final boolean isBasin;
+        public final RegionFeatureType featureType;
         public final EdgeCrossing[] crossings;
         public final PathDirection primaryOutputDirection;
         public final FlowDirection[][] flowDirections;
@@ -171,15 +168,14 @@ public class VisualizeD8Packet {
         public final Map<PathDirection, List<int[]>> riverPaths;
         public final List<int[]> confluenceCells;
 
-        public D8RegionData(int regionX, int regionZ, RegionClassification classification,
-                          boolean isBasin, EdgeCrossing[] crossings,
+        public D8RegionData(int regionX, int regionZ, RegionFeatureType featureType,
+                          EdgeCrossing[] crossings,
                           PathDirection primaryOutputDirection, FlowDirection[][] flowDirections,
                           int[][] terminusCells, Map<PathDirection, List<int[]>> riverPaths,
                           List<int[]> confluenceCells) {
             this.regionX = regionX;
             this.regionZ = regionZ;
-            this.classification = classification;
-            this.isBasin = isBasin;
+            this.featureType = featureType;
             this.crossings = crossings;
             this.primaryOutputDirection = primaryOutputDirection;
             this.flowDirections = flowDirections;
