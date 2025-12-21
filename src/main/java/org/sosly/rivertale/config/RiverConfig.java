@@ -17,7 +17,7 @@ public class RiverConfig {
 
         REGION_SIZE = builder
             .comment("Size of each river region in blocks. Larger regions improve performance but reduce detail.")
-            .defineInRange("regionSize", 256, 128, 4096);
+            .defineInRange("regionSize", 384, 384, 4096);
 
         PARTICIPATION_RATE = builder
             .comment("Probability that a land cell will participate in river generation (0.0 to 1.0).")

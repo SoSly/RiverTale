@@ -21,9 +21,9 @@ Density represents distance from ocean. High density = continental interior. Low
 
 **Density sampling:**
 
-A region's density is averaged across a 7×7 grid of cells, not taken from a single center point. This captures the region's overall terrain character rather than an arbitrary point that might be anomalous (a mountain peak, a local depression, etc.).
+A region's density is averaged across a 8×8 grid of cells, not taken from a single center point. This captures the region's overall terrain character rather than an arbitrary point that might be anomalous (a mountain peak, a local depression, etc.).
 
-The same 7×7 cell grid is reused for river path refinement, so the density values sampled here are cached and available for pathfinding within the region.
+The same 8×8 cell grid is reused for river path refinement, so the density values sampled here are available for pathfinding within the region.
 
 **Participation:**
 
@@ -41,7 +41,7 @@ Participation rate is a configurable percentage, independent of region size. Thi
 
 ## Flow Determination
 
-Each region determines its flow by comparing its density to its participating neighbors. Non-participating neighbors are ignored entirely. This comparison happens once, on first access, and the result is cached permanently.
+Each region determines its flow by comparing its density to its participating neighbors. Non-participating neighbors are ignored entirely. This comparison is deterministic—same coordinates and world seed always produce the same result.
 
 **Outputs:**
 
@@ -83,28 +83,24 @@ A region receives water from participating neighbors with higher density. Each h
 
 Multiple inflows each pathfind toward the exit. When paths intersect, they merge at that point and share the remaining route. If paths don't intersect until the exit, they merge there—two streams dumping into the same output edge is a valid confluence.
 
-**Region classification:**
+**Region type:**
 
 Regions are classified based on their cell densities. Two thresholds apply:
 - **Ocean threshold** (continents < -0.13) — saltwater ocean
 - **Lake threshold** (depth < 0) — terrain at or below sea level (y=63)
 
-Classifications form two parallel hierarchies:
+Region types:
 
-| Classification | Condition | Behavior |
-|----------------|-----------|----------|
-| OCEAN | all cells below ocean threshold | Terminus, no participation |
-| COASTAL | mixed ocean/land cells | Terminus, participates (river mouth to ocean) |
-| LAKE | all cells depth < 0 (not ocean) | Terminus, no participation |
-| LAKESHORE | mixed positive/negative depth cells | Terminus, participates (river drains into lake) |
-| LAND | all cells depth ≥ 0 and not ocean | Normal flow rules apply |
+| RegionType | Description | Behavior |
+|------------|-------------|----------|
+| Body | Minecraft placed water here (ocean or lake) | Terminus, no participation |
+| Shore | Adjacent to Body regions | Terminus, participates (river ends at water's edge) |
+| Fluvial | River passes through | Normal flow rules apply |
+| Divide | Flow originates here (local maximum) | River source, normal flow rules apply |
+| Basin | Flow-based local minimum | Terminus, rivers collect here |
+| Barren | No visible water system | Not participating in river network |
 
-Additionally, LAND regions can become **basins** if no participating neighbor has lower density. Basins are local minima where water pools, forming new lakes distinct from terrain-based LAKE regions.
-
-- **LAKE/LAKESHORE** = existing water bodies (terrain already below sea level)
-- **Basin** = potential water bodies (flow-based local minima where rivers collect)
-
-Classification is determined during region creation by checking the 7×7 cell densities against both thresholds. No additional sampling required.
+Region type is determined during region creation by checking the 8×8 cell densities against both thresholds. No additional sampling required.
 
 **Ocean termination:**
 
@@ -147,7 +143,7 @@ reaches an ocean cell—perhaps (3,4) or (2,4). The river mouth
 forms at the actual coastline, not at an arbitrary edge center.
 ```
 
-This classification provides a hook for future estuary and delta features. A coastal region carries the context those systems need: cell-level coastline geography, upstream accumulation, and the specific cells where river meets ocean.
+This region type provides a hook for future estuary and delta features. A coastal region carries the context those systems need: cell-level coastline geography, upstream accumulation, and the specific cells where river meets ocean.
 
 ## Edge Centers
 
@@ -161,9 +157,9 @@ Knowing a region's inputs and outputs tells you WHERE water enters and exits, bu
 
 **Refinement step:**
 
-After all regions have determined their flow direction, a refinement algorithm runs to determine the actual river course within each participating region. This uses a 7×7 cell grid to sample density and route the river toward lower-density areas while connecting the required entry and exit points.
+After all regions have determined their flow direction, a refinement algorithm runs to determine the actual river course within each participating region. This uses a 8×8 cell grid to sample density and route the river toward lower-density areas while connecting the required entry and exit points.
 
-Why 7×7? An odd subdivision guarantees a true center cell on each edge. With 7×7, the edge center is always cell 3 (indices 0-6). Entry and exit points land cleanly in a single cell, making flow decisions straightforward.
+The 8×8 grid provides 64 cells per region for detailed path refinement.
 
 ```
 Region with input from WEST, output to EAST:
@@ -299,7 +295,7 @@ closer to the exit. Once past the ridge, the path follows lower costs
 smoothly to the exit.
 ```
 
-The refinement grid is the same 7×7 cell grid used for tributaries. This serves two purposes:
+The refinement grid is the same 8×8 cell grid used for tributaries. This serves two purposes:
 1. Determines the actual path the main river takes
 2. Provides the grid that tributaries flow toward
 
@@ -324,14 +320,10 @@ F asks E: "What's your distance?"
 E asks D: "What's your distance?"
 D responds: "Zero. I'm ocean."
 E calculates: 0 + 1 = 1. Returns 1 to F.
-F calculates: 1 + 1 = 2. Caches distance 2.
+F calculates: 1 + 1 = 2.
 ```
 
-**Caching:**
-
-Each region calculates its distance once. The result caches permanently. Subsequent queries—whether from upstream regions or from chunk generation—return the cached value immediately.
-
-The recursion only happens on first access. After that, queries are instant lookups.
+Distance calculation recurses downstream until reaching a terminus, then returns. This is fast—even a massive continent is only ~25 regions across.
 
 ## Upstream Accumulation
 
@@ -394,69 +386,16 @@ Those concerns belong to separate systems that consume region data.
 
 Cell-based Networks provides connectivity data. A separate river carving and decoration system is responsible for querying regions and placing actual blocks during chunk generation. How that system determines which regions to query, how it interpolates river paths within regions, and how it coordinates with Minecraft's chunk generation pipeline are outside this document's scope. The boundary is the data regions provide; the consumption of that data is another system's concern.
 
-## Caching Strategy
-
-**What to cache per region:**
-
-- Participation flag
-- Primary output direction (N/S/E/W or none)
-- Secondary output directions (for tributary sources)
-- Distance to terminus
-- Basin terminus flag
-
-Upstream feeder count is not cached. It's computed on demand via limited-depth traversal each time it's needed. This keeps the count accurate regardless of exploration order, and the computation is cheap (only a few steps up).
-
-**When to cache:**
-
-On first access. A region's data never changes after initial calculation.
-
-**Cache persistence:**
-
-The cache survives world save/load. Once calculated, a region's networking data is permanent for that world.
-
-**Cache invalidation:**
-
-None. Region data derives from seed-based density values that never change. There's no scenario where cached data becomes stale.
-
 ## Performance Characteristics
 
-**First access:**
+**Computation cost:**
 
-Querying an uncached region triggers recursive downstream queries until reaching ocean. In the worst case (region at maximum distance from ocean), this touches every region along the path.
+Region data is computed on demand, not cached. This keeps the system simple and makes determinism errors obvious—if two queries for the same region produce different results, something is broken.
 
-However, each region in the chain caches its result. The next query to any region in that chain is instant.
-
-**First-access cost:**
-
-The worst-case first access is expensive. A player spawning mid-continent triggers a chain that walks potentially 50+ regions downstream before returning. This happens synchronously during the first chunk generation request that needs that region.
-
-Mitigations:
-
-1. **Chain length is bounded.** With 4096-block regions, even a massive continent 100km across is only ~25 regions. The actual worst case is "one continent's worth of regions," not infinite.
-
-2. **Region computation is cheap.** Each region in the chain does density sampling (already computed by the terrain system) and neighbor comparison. No pathfinding, no flood fill.
-
-3. **Chains cache aggressively.** Once any region in the chain is computed, queries from further upstream stop there. Exploration from the coast pre-warms the cache.
-
-4. **Distance computation is separable.** Flow direction and participation can be computed without distance. If first-access proves problematic during testing, distance calculation can be deferred until river carving actually needs it—by which point more of the downstream chain may be cached.
-
-If profiling shows this is still a problem, the implementation can compute distance asynchronously and block only when carving actually needs the value. But this is an optimization to consider during implementation, not a design change.
-
-**Subsequent access:**
-
-Cache lookup only. No recursion, no density sampling, no neighbor comparison.
-
-**Parallel exploration:**
-
-Multiple threads may query regions concurrently during chunk generation. When two threads query the same uncached region simultaneously, one thread performs the calculation while others block waiting for the result. The cache serves as the synchronization point—once a region is cached, all subsequent queries return immediately without blocking.
-
-The recursive distance-to-ocean query may touch many regions in sequence, but each region in the chain is computed and cached independently. Threads only contend on individual regions, not entire query chains.
-
-**Memory footprint:**
-
-Each cached region stores: key (3 ints), density (double), flags (booleans), output directions (enum references), and distance (int). With Java object overhead, this is roughly 80-120 bytes per region.
-
-With 4096-block regions, a world explored to 10 million blocks radius contains ~2500 regions per axis, or ~6 million regions total. At 100 bytes per region, that's ~600MB. In practice, most worlds won't be explored that far.
+Computation is fast:
+1. **Region computation is cheap.** Each region does density sampling and neighbor comparison. No pathfinding, no flood fill.
+2. **Chain length is bounded.** Distance-to-terminus recurses downstream, but even a massive continent is only ~25 regions across.
+3. **All inputs are deterministic.** Density derives from world seed. Same coordinates = same result, always.
 
 **World borders:**
 

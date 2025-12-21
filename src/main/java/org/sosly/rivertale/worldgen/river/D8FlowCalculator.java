@@ -16,7 +16,7 @@ public class D8FlowCalculator {
             BiFunction<Integer, Integer, Double> densitySampler) {
 
         int cellSize = RiverRegionKey.getRegionSize();
-        int subcellSpacing = cellSize / GRID_SIZE;
+        int cellSpacing = cellSize / GRID_SIZE;
         int cellOriginX = cellKey.worldX();
         int cellOriginZ = cellKey.worldZ();
 
@@ -24,10 +24,10 @@ public class D8FlowCalculator {
 
         for (int row = 0; row < GRID_SIZE; row++) {
             for (int col = 0; col < GRID_SIZE; col++) {
-                int worldX = cellOriginX + col * subcellSpacing + subcellSpacing / 2;
-                int worldZ = cellOriginZ + row * subcellSpacing + subcellSpacing / 2;
+                int worldX = cellOriginX + col * cellSpacing + cellSpacing / 2;
+                int worldZ = cellOriginZ + row * cellSpacing + cellSpacing / 2;
                 flowDirection[row][col] = findSteepestNeighbor(
-                    worldX, worldZ, subcellSpacing, densitySampler);
+                    worldX, worldZ, cellSpacing, densitySampler);
             }
         }
 
@@ -113,63 +113,63 @@ public class D8FlowCalculator {
     private static FlowDirection findSteepestNeighbor(
             int worldX,
             int worldZ,
-            int subcellSpacing,
+            int cellSpacing,
             BiFunction<Integer, Integer, Double> densitySampler) {
 
         double currentDensity = densitySampler.apply(worldX, worldZ);
         double steepestSlope = 0;
         FlowDirection steepestDirection = FlowDirection.SINK;
 
-        double northDensity = densitySampler.apply(worldX, worldZ - subcellSpacing);
+        double northDensity = densitySampler.apply(worldX, worldZ - cellSpacing);
         double northSlope = currentDensity - northDensity;
         if (northSlope > steepestSlope) {
             steepestSlope = northSlope;
             steepestDirection = FlowDirection.NORTH;
         }
 
-        double southDensity = densitySampler.apply(worldX, worldZ + subcellSpacing);
+        double southDensity = densitySampler.apply(worldX, worldZ + cellSpacing);
         double southSlope = currentDensity - southDensity;
         if (southSlope > steepestSlope) {
             steepestSlope = southSlope;
             steepestDirection = FlowDirection.SOUTH;
         }
 
-        double eastDensity = densitySampler.apply(worldX + subcellSpacing, worldZ);
+        double eastDensity = densitySampler.apply(worldX + cellSpacing, worldZ);
         double eastSlope = currentDensity - eastDensity;
         if (eastSlope > steepestSlope) {
             steepestSlope = eastSlope;
             steepestDirection = FlowDirection.EAST;
         }
 
-        double westDensity = densitySampler.apply(worldX - subcellSpacing, worldZ);
+        double westDensity = densitySampler.apply(worldX - cellSpacing, worldZ);
         double westSlope = currentDensity - westDensity;
         if (westSlope > steepestSlope) {
             steepestSlope = westSlope;
             steepestDirection = FlowDirection.WEST;
         }
 
-        double neDensity = densitySampler.apply(worldX + subcellSpacing, worldZ - subcellSpacing);
+        double neDensity = densitySampler.apply(worldX + cellSpacing, worldZ - cellSpacing);
         double neSlope = (currentDensity - neDensity) / SQRT2;
         if (neSlope > steepestSlope) {
             steepestSlope = neSlope;
             steepestDirection = FlowDirection.NORTHEAST;
         }
 
-        double nwDensity = densitySampler.apply(worldX - subcellSpacing, worldZ - subcellSpacing);
+        double nwDensity = densitySampler.apply(worldX - cellSpacing, worldZ - cellSpacing);
         double nwSlope = (currentDensity - nwDensity) / SQRT2;
         if (nwSlope > steepestSlope) {
             steepestSlope = nwSlope;
             steepestDirection = FlowDirection.NORTHWEST;
         }
 
-        double seDensity = densitySampler.apply(worldX + subcellSpacing, worldZ + subcellSpacing);
+        double seDensity = densitySampler.apply(worldX + cellSpacing, worldZ + cellSpacing);
         double seSlope = (currentDensity - seDensity) / SQRT2;
         if (seSlope > steepestSlope) {
             steepestSlope = seSlope;
             steepestDirection = FlowDirection.SOUTHEAST;
         }
 
-        double swDensity = densitySampler.apply(worldX - subcellSpacing, worldZ + subcellSpacing);
+        double swDensity = densitySampler.apply(worldX - cellSpacing, worldZ + cellSpacing);
         double swSlope = (currentDensity - swDensity) / SQRT2;
         if (swSlope > steepestSlope) {
             steepestDirection = FlowDirection.SOUTHWEST;

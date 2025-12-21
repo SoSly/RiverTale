@@ -8,7 +8,7 @@ import org.sosly.rivertale.config.RiverConfig;
 public class RegionDensityProvider implements DensityProvider {
 
     private static final int SAMPLE_Y = 63;
-    private static final int SUBCELL_SAMPLES = 8;
+    private static final int CELL_SAMPLES = 8;
 
     private static final CellSampleDensityCache CONTINENTS_CACHE = new CellSampleDensityCache();
     private static final CellSampleDensityCache DEPTH_CACHE = new CellSampleDensityCache();
@@ -36,12 +36,12 @@ public class RegionDensityProvider implements DensityProvider {
 
     @Override
     public double getAveragedDensity(int worldX, int worldZ, int regionSize) {
-        double step = regionSize / (double) SUBCELL_SAMPLES;
+        double step = regionSize / (double) CELL_SAMPLES;
         double sum = 0.0;
         int count = 0;
 
-        for (int i = 0; i < SUBCELL_SAMPLES; i++) {
-            for (int j = 0; j < SUBCELL_SAMPLES; j++) {
+        for (int i = 0; i < CELL_SAMPLES; i++) {
+            for (int j = 0; j < CELL_SAMPLES; j++) {
                 int sampleX = worldX + (int) (i * step);
                 int sampleZ = worldZ + (int) (j * step);
                 sum += getDensity(sampleX, sampleZ);
@@ -54,11 +54,11 @@ public class RegionDensityProvider implements DensityProvider {
 
     @Override
     public double[][] sampleCellDensities(int worldX, int worldZ, int regionSize) {
-        double step = regionSize / (double) SUBCELL_SAMPLES;
-        double[][] densities = new double[SUBCELL_SAMPLES][SUBCELL_SAMPLES];
+        double step = regionSize / (double) CELL_SAMPLES;
+        double[][] densities = new double[CELL_SAMPLES][CELL_SAMPLES];
 
-        for (int i = 0; i < SUBCELL_SAMPLES; i++) {
-            for (int j = 0; j < SUBCELL_SAMPLES; j++) {
+        for (int i = 0; i < CELL_SAMPLES; i++) {
+            for (int j = 0; j < CELL_SAMPLES; j++) {
                 int sampleX = worldX + (int) (i * step);
                 int sampleZ = worldZ + (int) (j * step);
                 densities[i][j] = getDensity(sampleX, sampleZ);

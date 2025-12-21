@@ -154,7 +154,7 @@ Two players with the same seed must see identical rivers. This rules out any app
 
 The planned approach divides the world into large regions. Each region determines its flow direction, upstream accumulation, and elevation by comparing its seed-derived density value to its neighbors. This makes all properties computable without requiring neighboring chunks to exist first.
 
-A separate technical document specifies the cell-based flow algorithm in detail.
+A separate technical document specifies the region-based flow algorithm in detail.
 
 ## Pillar Verification
 
@@ -194,7 +194,7 @@ River density should be configurable. Some players want river-rich worlds; other
 
 Width should vary along the river's length. Source streams are narrow. Rivers near the coast are wide enough to feel like real geographic features.
 
-Width could derive from distance to ocean (which propagates back during generation), from density values (lower density = wider), or from upstream cell count if that information is available. The technical specification must determine which approach is feasible.
+Width could derive from distance to ocean (which propagates back during generation), from density values (lower density = wider), or from upstream region count if that information is available. The technical specification must determine which approach is feasible.
 
 Width calculation should incorporate seeded randomness so that rivers have variety. Two rivers at similar positions in their networks shouldn't look identical.
 
@@ -228,7 +228,7 @@ That's it. Everything else—realistic tributary angles, perfect width accumulat
 
 - **Hydrological simulation**: We don't model rainfall, evaporation, or seasonal flow. Rivers exist because terrain density says so, not because we simulated a water cycle.
 
-- **Perfect accumulation**: If upstream cell count is expensive to propagate, width can derive from density or distance-to-ocean instead. The player experience is "rivers widen toward the coast," not "rivers widen by exactly the volume of their tributaries."
+- **Perfect accumulation**: If upstream region count is expensive to propagate, width can derive from density or distance-to-ocean instead. The player experience is "rivers widen toward the coast," not "rivers widen by exactly the volume of their tributaries."
 
 - **Dynamic rivers**: Rivers don't change after generation. No erosion, no course changes, no flooding. The river network is baked into terrain.
 
@@ -239,7 +239,6 @@ That's it. Everything else—realistic tributary angles, perfect width accumulat
 If any of the following become true, the implementation has crossed into Perfection Over Performance:
 
 - Generating a chunk requires calculating cells more than a few dozen chunks away.
-- River data requires more than a few bytes per cell to cache
 - A player exploring new terrain experiences noticeable lag from river generation
 - The solution requires pre-generating large regions before gameplay begins
 

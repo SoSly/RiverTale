@@ -143,8 +143,8 @@ public class VisualizeCommand {
                     classification, d8Result.isBasin(),
                     d8Result.crossings(),
                     d8Result.primaryOutputDirection(), d8Result.flowDirection(),
-                    d8Result.terminusSubcells(), d8Result.riverPaths(),
-                    d8Result.confluenceSubcells()
+                    d8Result.terminusCells(), d8Result.riverPaths(),
+                    d8Result.confluenceCells()
                 ));
             }
         }

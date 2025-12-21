@@ -6,7 +6,7 @@ status: draft
 
 # River Terrain Implementation Plan
 
-This document outlines the build order for the river terrain system described in `River Terrain Architecture.md`. The Cell-based Network (CBN) is complete and provides flow direction, distance, upstream count, and river paths. This plan covers turning that data into visible rivers.
+This document outlines the build order for the river terrain system described in `River Terrain Architecture.md`. The Region-based Network (CBN) is complete and provides flow direction, distance, upstream count, and river paths. This plan covers turning that data into visible rivers.
 
 ## Key Decisions
 
@@ -15,11 +15,11 @@ This document outlines the build order for the river terrain system described in
 | Injection point | TAIL of `fillFromNoise()` | We're terrain shaping, not surface decoration; SURFACE phase then decorates our embankments |
 | Embankment material | Stone (`defaultBlock`) | Surface rules automatically apply biome materials |
 | Heightmap strategy | `primeHeightmaps()` after all mods | Simpler than per-block updates; we're modifying many blocks anyway |
-| Path source | CBN's `riverPath` field | Already computed and cached; no recomputation needed |
+| Path source | CBN's `riverPath` field | Computed deterministically; no state needed |
 | Water placement timing | FEATURES phase | Terrain is final, surface rules complete, caves carved |
-| Water placement data | Re-query CBN | Stateless design; path math is cheap, CBN data is cached |
-| Subcell features | SOURCE, PATH, CONFLUENCE, TERMINUS | Position in network determines category |
-| Cell features | BASIN | Operates at cell level, not subcell |
+| Water placement data | Re-query CBN | Stateless design; path math is cheap, CBN data is deterministic |
+| Region features | SOURCE, PATH, CONFLUENCE, TERMINUS | Position in network determines category |
+| Region features | BASIN | Operates at region level, not cell |
 | Biome overlay | Mixin to `LevelChunkSection` | Expose biome setter; apply `minecraft:river` during terrain modification |
 | Structure handling | Carve through | Rivers are authoritative; structures in path get carved/flooded |
 | Cave intersection | Accept as-is | Source blocks don't drain; caves carved after us add natural terrain variation |
@@ -30,27 +30,27 @@ This document outlines the build order for the river terrain system described in
 ┌─────────────────────────────────────────────────────────────────┐
 │                    RiverCellManager (CBN)                       │
 │  - Provides: riverPath, distanceToTerminus, upstreamCount       │
-│  - Provides: classification, isBasin, primaryOutput             │
+│  - Provides: regionType, primaryOutput                       │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    RiverTerrainProcessor                        │
 │  - Called from fillFromNoise() mixin                            │
-│  - Iterates subcells, determines categories, invokes features   │
-│  - Handles cell-level BASIN separately from subcell features    │
+│  - Iterates cells, determines categories, invokes features   │
+│  - Handles region-level BASIN separately from cell features    │
 └─────────────────────────────────────────────────────────────────┘
                               │
                     ┌─────────┴─────────┐
                     ▼                   ▼
 ┌───────────────────────────┐ ┌───────────────────────────────────┐
 │    TerrainModifier        │ │        FeatureRegistry            │
-│  - ChannelCarver          │ │  Subcell features:                │
+│  - ChannelCarver          │ │  Region features:                │
 │  - ValleyCarver           │ │  - StreamFeature (SOURCE)         │
 │  - EmbankmentBuilder      │ │  - RiverFeature (PATH)            │
 │  - (shared utilities)     │ │  - JunctionFeature (CONFLUENCE)   │
 └───────────────────────────┘ │  - MouthFeature (TERMINUS)        │
-                              │  Cell feature:                    │
+                              │  Region feature:                    │
                               │  - EndorheicFeature (BASIN)       │
                               └───────────────────────────────────┘
                               │
@@ -68,16 +68,16 @@ From the Architecture doc, features are categorized by network position:
 
 | Category | Level | Basic Feature | Location |
 |----------|-------|---------------|----------|
-| SOURCE | Subcell | Stream | First subcell of a river (no inlets) |
-| PATH | Subcell | River | Standard segments along the river |
-| CONFLUENCE | Subcell | Junction | Subcell with 2+ inlets merging |
-| TERMINUS | Subcell | Mouth | Last subcell before ocean/lake/basin |
-| BASIN | Cell | Endorheic | Cell-level pool at flow minimum |
+| SOURCE | Region | Stream | First cell of a river (no inlets) |
+| PATH | Region | River | Standard segments along the river |
+| CONFLUENCE | Region | Junction | Region with 2+ inlets merging |
+| TERMINUS | Region | Mouth | Last cell before ocean/lake/basin |
+| BASIN | Region | Endorheic | Region-level pool at flow minimum |
 
 **Basin termination flow:**
-When a river reaches a basin cell:
-1. Entry subcell receives TERMINUS category → Mouth feature
-2. Cell receives BASIN category → Endorheic feature
+When a river reaches a basin region:
+1. Entry cell receives TERMINUS category → Mouth feature
+2. Region receives BASIN category → Endorheic feature
 3. The mouth flows into the basin pool
 
 ## Implementation Phases
@@ -101,7 +101,7 @@ Currently CBN is computed at HEAD of `buildSurface()`. We need it at TAIL of `fi
 // Move this logic into the new injection point:
 onFillFromNoiseComplete(blender, randomState, structureManager, chunk):
     // 1. Compute CBN for cells overlapping this chunk (moved from buildSurface)
-    for each cell overlapping chunk:
+    for each region overlapping chunk:
         RiverCellManager.getOrCreate(cellKey, provider, worldSeed, savedData)
 
     // 2. Process terrain (new)
@@ -117,12 +117,12 @@ RiverTerrainProcessor.process(region, chunk, randomState):
 
     cells = RiverCellManager.getCellsInChunk(level, chunkPos)
 
-    for cell in cells:
-        if not cell.isParticipating: continue
-        if cell.riverPath is null or empty: continue
+    for region in regions:
+        if not region.isParticipating: continue
+        if region.riverPath is null or empty: continue
 
         // For now, just log that we found river cells
-        log("Found river cell {} with {} path segments", cell.key, cell.riverPath.size)
+        log("Found river region {} with {} path segments", region.key, region.riverPath.size)
 
     // Heightmap recalculation (no-op for now, but structure in place)
     Heightmap.primeHeightmaps(chunk, [WORLD_SURFACE_WG, OCEAN_FLOOR_WG])
@@ -131,7 +131,7 @@ RiverTerrainProcessor.process(region, chunk, randomState):
 **Validation:**
 1. Build compiles
 2. Create new world
-3. Check logs: "Found river cell..." messages appear during chunk generation
+3. Check logs: "Found river region..." messages appear during chunk generation
 4. No errors, no visual changes yet
 
 ---
@@ -174,15 +174,15 @@ ChannelCarver.carve(chunk, centerX, centerZ, waterY, width, depth):
 **PathInterpolator (minimal):**
 
 ```
-subcellToWorld(cell, subcellRow, subcellCol) -> BlockPos:
-    cellWorldX = cell.key.cellX * CELL_SIZE
-    cellWorldZ = cell.key.cellZ * CELL_SIZE
-    subcellSize = CELL_SIZE / 7
+cellToWorld(region, cellRow, cellCol) -> BlockPos:
+    regionWorldX = region.key.regionX * REGION_SIZE
+    regionWorldZ = region.key.regionZ * REGION_SIZE
+    cellSize = REGION_SIZE / 8
 
     return BlockPos(
-        cellWorldX + (subcellCol * subcellSize) + (subcellSize / 2),
+        cellWorldX + (cellCol * cellSize) + (cellSize / 2),
         0,
-        cellWorldZ + (subcellRow * subcellSize) + (subcellSize / 2)
+        cellWorldZ + (cellRow * cellSize) + (cellSize / 2)
     )
 ```
 
@@ -199,12 +199,12 @@ RiverTerrainProcessor.process(region, chunk, randomState):
     DEPTH = 4
     ELEVATION = 64  // Fixed elevation for testing
 
-    for cell in cells:
-        if not cell.isParticipating: continue
-        if cell.riverPath is null or empty: continue
+    for region in regions:
+        if not region.isParticipating: continue
+        if region.riverPath is null or empty: continue
 
-        for subcell in cell.riverPath:
-            center = subcellToWorld(cell, subcell.row, subcell.col)
+        for cell in region.riverPath:
+            center = cellToWorld(region, cell.row, cell.col)
 
             if not isInChunk(chunk, center.x, center.z): continue
 
@@ -247,12 +247,12 @@ RiverWaterFeature extends Feature:
 
         placedAny = false
 
-        for cell in cells:
-            if not cell.isParticipating: continue
-            if cell.riverPath is null or empty: continue
+        for region in regions:
+            if not region.isParticipating: continue
+            if region.riverPath is null or empty: continue
 
-            for subcell in cell.riverPath:
-                center = subcellToWorld(cell, subcell.row, subcell.col)
+            for cell in region.riverPath:
+                center = cellToWorld(region, cell.row, cell.col)
                 if not isInChunk(chunk, center.x, center.z): continue
 
                 placedAny |= fillWaterColumn(chunk, center.x, center.z,
@@ -417,8 +417,8 @@ EmbankmentBuilder.build(chunk, region, centerX, centerZ, waterY, width, embankme
 - `src/main/java/org/sosly/rivertale/worldgen/river/terrain/RiverFeatureCategory.java`
 - `src/main/java/org/sosly/rivertale/worldgen/river/terrain/RiverFeature.java`
 - `src/main/java/org/sosly/rivertale/worldgen/river/terrain/BasinFeature.java`
-- `src/main/java/org/sosly/rivertale/worldgen/river/terrain/SubcellContext.java`
-- `src/main/java/org/sosly/rivertale/worldgen/river/terrain/CellContext.java`
+- `src/main/java/org/sosly/rivertale/worldgen/river/terrain/RegionContext.java`
+- `src/main/java/org/sosly/rivertale/worldgen/river/terrain/RegionContext.java`
 - `src/main/java/org/sosly/rivertale/worldgen/river/terrain/RiverFeatureRegistry.java`
 - `src/main/java/org/sosly/rivertale/worldgen/river/terrain/features/RiverPathFeature.java`
 
@@ -426,19 +426,19 @@ EmbankmentBuilder.build(chunk, region, centerX, centerZ, waterY, width, embankme
 
 ```
 enum RiverFeatureCategory:
-    SOURCE        // First subcell, no inlets
+    SOURCE        // First cell, no inlets
     PATH          // Standard river segments
     CONFLUENCE    // 2+ inlets merging
-    TERMINUS      // Last subcell before ending
-    BASIN         // Cell-level pool
+    TERMINUS      // Last cell before ending
+    BASIN         // Region-level pool
 ```
 
-**SubcellContext:**
+**RegionContext:**
 
 ```
-SubcellContext:
-    subcellOrigin: BlockPos
-    subcellSize: int
+RegionContext:
+    cellOrigin: BlockPos
+    cellSize: int
     entryPoint: BlockPos
     exitPoint: BlockPos
     pathPoints: List<BlockPos>
@@ -456,7 +456,7 @@ SubcellContext:
 ```
 interface RiverFeature:
     getCategory() -> RiverFeatureCategory
-    modifyTerrain(context: SubcellContext, chunk: ChunkAccess, region: WorldGenRegion)
+    modifyTerrain(context: RegionContext, chunk: ChunkAccess, region: WorldGenRegion)
 ```
 
 **RiverPathFeature:** Move current carving logic into this feature for PATH category.
@@ -481,8 +481,8 @@ interface RiverFeature:
 **Implementation:** Copy of RiverPathFeature, but registered for SOURCE category. Future: add spring pools, narrower channels.
 
 **Validation:**
-1. Find a source cell (`/rivertale locate source`)
-2. Channel begins correctly at first subcell
+1. Find a source region (`/rivertale locate source`)
+2. Channel begins correctly at first cell
 3. No visual artifacts
 
 ---
@@ -605,7 +605,7 @@ TerrainConfig:
 
 | After Phase | Testable Behavior |
 |-------------|-------------------|
-| 1 | Logs show "Found river cell..." during chunk gen |
+| 1 | Logs show "Found river region..." during chunk gen |
 | 2 | **Visible trenches carved at y=64** |
 | 3 | **Rivers filled with water** |
 | 4 | Rivers widen downstream, elevation varies |
@@ -626,10 +626,9 @@ TerrainConfig:
 
 | Field | Usage |
 |-------|-------|
-| `riverPath` | Subcell sequence for iteration and path interpolation |
+| `riverPath` | Cell sequence for iteration and path interpolation |
 | `distanceToTerminus` | Calculate target elevation |
 | `upstreamCount` | Calculate river width |
-| `classification` | Detect COASTAL/LAKESHORE for TERMINUS |
-| `isBasin` | Trigger BASIN feature at cell level |
+| `regionType` | Detect Shore for TERMINUS, Basin for BASIN feature |
 | `primaryOutput` | Determine exit direction for path endpoints |
 

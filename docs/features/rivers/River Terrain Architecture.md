@@ -65,9 +65,8 @@ This system consumes region data from the Cell-based Network. See `Cell-based Ne
 |-------|------|---------------|
 | `riverPath` | List of cell coordinates | Determines which cells contain river segments and in what order |
 | `distanceToTerminus` | int | Calculates target elevation: `sea_level + (distance × elevationPerRegion)` |
-| `classification` | enum (LAND/OCEAN/COASTAL) | COASTAL regions terminate rivers at the coastline cell, not an edge |
+| `regionType` | enum (Basin/Divide/Fluvial/Shore/Barren/Body) | Shore regions terminate rivers at the water's edge |
 | `primaryOutput` | FlowDirection | Determines exit edge for path interpolation |
-| `isBasin` | boolean | Basin regions are terminuses—rivers end in a pool, not at ocean |
 
 **Fields we don't directly use:**
 
@@ -75,9 +74,9 @@ This system consumes region data from the Cell-based Network. See `Cell-based Ne
 - `secondaryOutputs` — Creates additional river sources, but each source is a separate path we process independently
 - `upstreamCount` — Width calculation uses this, but that logic lives in a layer between CBN and terrain modification (not documented here)
 
-**Cache availability:**
+**Data availability:**
 
-Region data is computed and cached during chunk generation before our mixin runs. If a region isn't cached (shouldn't happen in normal flow), the query triggers computation. This adds latency to the first chunk touching that region but doesn't break correctness.
+Region data is computed on demand. Queries are fast and deterministic—same coordinates always produce the same result.
 
 ## Feature-Based Architecture
 
@@ -89,7 +88,7 @@ Features operate at two scales:
 
 Each cell along a river path selects a **cell feature** that determines how terrain is modified in that cell. Features are registered handlers that know how to carve their specific river element. The selection process uses cell conditions and seeded noise to pick deterministically from eligible features.
 
-Each region also has a **region feature** that classifies its role in the broader network. Region features don't necessarily modify terrain—some are purely classification.
+Each region also has a **region feature** that defines its role in the broader network. Region features don't necessarily modify terrain—some are purely for categorization.
 
 ### Cell Feature Types
 
@@ -106,7 +105,7 @@ A cell along a river path has exactly one type (SOURCE, COURSE, JUNCTION, or TER
 
 ### Region Feature Types
 
-Region features classify what kind of area the region represents. Some have terrain modification behavior; others are purely classification.
+Region features classify what kind of area the region represents. Some have terrain modification behavior; others are purely for categorization.
 
 | Type | Description | Features (* = default) |
 |------|-------------|------------------------|
@@ -117,7 +116,7 @@ Region features classify what kind of area the region represents. Some have terr
 | **BARREN** | No visible water system | none* |
 | **BODY** | Minecraft placed water here (ocean or lake) | none* |
 
-Every region has exactly one region type. Region types with "none*" as default have no terrain modification behavior—they're classification only.
+Every region has exactly one region type. Region types with "none*" as default have no terrain modification behavior—they're for categorization only.
 
 ### Relationship Between Scales
 
@@ -304,7 +303,7 @@ Unlike coastal or lakeshore termination, the river does not pathfind toward exis
 The endorheic feature creates a pool of standing water at the basin. Pool characteristics:
 
 - **Location**: Centered on or near the river entry point
-- **Size**: Scales with region size. Large regions (4096 blocks) produce moderately-sized pools. Small regions (256 blocks) may fill the entire region.
+- **Size**: Scales with region size. Large regions (4096 blocks) produce moderately-sized pools. Small regions (384 blocks) may fill the entire region.
 - **Depth**: Shallow relative to river channels. Basins are collection points, not deep lakes.
 - **Shape**: Organic, following terrain contours where possible
 
@@ -334,7 +333,7 @@ river_elevation = sea_level + (distance_to_ocean × elevation_per_region)
 
 Where:
 - `sea_level` is Minecraft's water level (Y=63)
-- `distance_to_ocean` comes from CBN's cached region data
+- `distance_to_ocean` comes from CBN's region data
 - `elevation_per_region` is configurable (typically 3-5 blocks)
 
 A river 20 regions from the ocean targets Y = 63 + (20 × 4) = 143. One 5 regions away targets Y = 83. Network position determines elevation, not local terrain.
@@ -447,7 +446,7 @@ There is no inter-chunk communication during terrain modification. Determinism g
 
 **River chunks do moderate work.** A river crossing a chunk might modify 500-3000 blocks depending on width and embankment needs. This is small compared to vanilla terrain generation's per-chunk work.
 
-**CBN queries are cached.** Region data computes once and caches permanently. Queries during chunk generation are instant lookups.
+**CBN queries are fast.** Region data is computed deterministically on demand. Same coordinates always produce the same result.
 
 **Heightmap recalculation is bounded.** Recalculating heightmaps scans columns top-to-bottom—limited by chunk size (256 columns), not river complexity.
 
@@ -465,7 +464,7 @@ Width indicates accumulation—narrow upstream, wide downstream. Elevation indic
 
 ### Rivers Are Coherent
 
-Terrain modification uses cached CBN data and seeded noise for feature selection and meandering. The same world seed produces identical rivers with identical features. Chunk generation order doesn't matter—each chunk modifies based on deterministic path data.
+Terrain modification uses CBN data and seeded noise for feature selection and meandering. The same world seed produces identical rivers with identical features. Chunk generation order doesn't matter—each chunk modifies based on deterministic path data.
 
 ## Scope Boundaries
 

@@ -26,7 +26,7 @@ public class D8PathRefiner {
             double lakeThreshold) {
 
         int cellSize = RiverRegionKey.getRegionSize();
-        int subcellSpacing = cellSize / GRID_SIZE;
+        int cellSpacing = cellSize / GRID_SIZE;
         int cellOriginX = cellKey.worldX();
         int cellOriginZ = cellKey.worldZ();
 
@@ -34,7 +34,7 @@ public class D8PathRefiner {
         double[] crossingStrengths = new double[4];
 
         if (classification != RegionClassification.BODY) {
-            computeEdgeCrossings(cellOriginX, cellOriginZ, subcellSpacing, densitySampler,
+            computeEdgeCrossings(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
                 flowDirection, neighborFlowDirections, neighborClassifications,
                 crossings, crossingStrengths);
         }
@@ -45,52 +45,52 @@ public class D8PathRefiner {
 
         List<int[]> terminusList = new ArrayList<>();
         Map<PathDirection, List<int[]>> riverPaths = new HashMap<>();
-        List<int[]> confluenceSubcells = new ArrayList<>();
+        List<int[]> confluenceCells = new ArrayList<>();
 
         if (classification == RegionClassification.LAND && primaryOutputDirection != PathDirection.NONE) {
             tracePaths(flowDirection, crossings, primaryOutputDirection,
-                riverPaths, confluenceSubcells);
+                riverPaths, confluenceCells);
         } else if (isBasin) {
             traceBasinPaths(crossings, riverPaths);
             collectPathEndpoints(riverPaths, terminusList);
         } else if (classification == RegionClassification.SHORE) {
-            traceShorePaths(flowDirection, crossings, cellOriginX, cellOriginZ, subcellSpacing,
+            traceShorePaths(flowDirection, crossings, cellOriginX, cellOriginZ, cellSpacing,
                 continentsSampler, depthSampler, oceanThreshold, lakeThreshold,
-                riverPaths, confluenceSubcells);
+                riverPaths, confluenceCells);
             collectPathEndpoints(riverPaths, terminusList);
         }
 
-        int[][] terminusSubcells = terminusList.toArray(new int[0][]);
+        int[][] terminusCells = terminusList.toArray(new int[0][]);
 
         return new D8FlowResult(flowDirection, crossings,
-            crossingStrengths, primaryOutputDirection, isBasin, terminusSubcells,
-            riverPaths, confluenceSubcells);
+            crossingStrengths, primaryOutputDirection, isBasin, terminusCells,
+            riverPaths, confluenceCells);
     }
 
     private static void computeEdgeCrossings(
-            int cellOriginX, int cellOriginZ, int subcellSpacing,
+            int cellOriginX, int cellOriginZ, int cellSpacing,
             BiFunction<Integer, Integer, Double> densitySampler,
             FlowDirection[][] flowDirection,
             FlowDirection[][][] neighborFlowDirections,
             RegionClassification[] neighborClassifications,
             EdgeCrossing[] crossings, double[] crossingStrengths) {
 
-        computeCrossing(cellOriginX, cellOriginZ, subcellSpacing, densitySampler,
+        computeCrossing(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
             flowDirection, neighborFlowDirections, neighborClassifications,
             crossings, crossingStrengths, PathDirection.NORTH, -1);
-        computeCrossing(cellOriginX, cellOriginZ, subcellSpacing, densitySampler,
+        computeCrossing(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
             flowDirection, neighborFlowDirections, neighborClassifications,
             crossings, crossingStrengths, PathDirection.SOUTH, -1);
-        computeCrossing(cellOriginX, cellOriginZ, subcellSpacing, densitySampler,
+        computeCrossing(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
             flowDirection, neighborFlowDirections, neighborClassifications,
             crossings, crossingStrengths, PathDirection.EAST, -1);
-        computeCrossing(cellOriginX, cellOriginZ, subcellSpacing, densitySampler,
+        computeCrossing(cellOriginX, cellOriginZ, cellSpacing, densitySampler,
             flowDirection, neighborFlowDirections, neighborClassifications,
             crossings, crossingStrengths, PathDirection.WEST, -1);
     }
 
     private static void computeCrossing(
-            int cellOriginX, int cellOriginZ, int subcellSpacing,
+            int cellOriginX, int cellOriginZ, int cellSpacing,
             BiFunction<Integer, Integer, Double> densitySampler,
             FlowDirection[][] flowDirection,
             FlowDirection[][][] neighborFlowDirections,
@@ -131,7 +131,7 @@ public class D8PathRefiner {
                 continue;
             }
 
-            double[] densities = sampleEdgeDensities(cellOriginX, cellOriginZ, subcellSpacing,
+            double[] densities = sampleEdgeDensities(cellOriginX, cellOriginZ, cellSpacing,
                 densitySampler, dir, i);
             double avg = (densities[0] + densities[1]) / 2.0;
 
@@ -155,7 +155,7 @@ public class D8PathRefiner {
             return;
         }
 
-        double[] densities = sampleEdgeDensities(cellOriginX, cellOriginZ, subcellSpacing,
+        double[] densities = sampleEdgeDensities(cellOriginX, cellOriginZ, cellSpacing,
             densitySampler, dir, bestPos);
         double diff = Math.abs(densities[0] - densities[1]);
 
@@ -178,7 +178,7 @@ public class D8PathRefiner {
     }
 
     private static double[] sampleEdgeDensities(
-            int cellOriginX, int cellOriginZ, int subcellSpacing,
+            int cellOriginX, int cellOriginZ, int cellSpacing,
             BiFunction<Integer, Integer, Double> densitySampler,
             PathDirection dir, int pos) {
 
@@ -188,24 +188,24 @@ public class D8PathRefiner {
         int neighborZ;
 
         if (dir == PathDirection.NORTH) {
-            ourX = cellOriginX + pos * subcellSpacing + subcellSpacing / 2;
-            ourZ = cellOriginZ + subcellSpacing / 2;
+            ourX = cellOriginX + pos * cellSpacing + cellSpacing / 2;
+            ourZ = cellOriginZ + cellSpacing / 2;
             neighborX = ourX;
-            neighborZ = ourZ - subcellSpacing;
+            neighborZ = ourZ - cellSpacing;
         } else if (dir == PathDirection.SOUTH) {
-            ourX = cellOriginX + pos * subcellSpacing + subcellSpacing / 2;
-            ourZ = cellOriginZ + (GRID_SIZE - 1) * subcellSpacing + subcellSpacing / 2;
+            ourX = cellOriginX + pos * cellSpacing + cellSpacing / 2;
+            ourZ = cellOriginZ + (GRID_SIZE - 1) * cellSpacing + cellSpacing / 2;
             neighborX = ourX;
-            neighborZ = ourZ + subcellSpacing;
+            neighborZ = ourZ + cellSpacing;
         } else if (dir == PathDirection.EAST) {
-            ourX = cellOriginX + (GRID_SIZE - 1) * subcellSpacing + subcellSpacing / 2;
-            ourZ = cellOriginZ + pos * subcellSpacing + subcellSpacing / 2;
-            neighborX = ourX + subcellSpacing;
+            ourX = cellOriginX + (GRID_SIZE - 1) * cellSpacing + cellSpacing / 2;
+            ourZ = cellOriginZ + pos * cellSpacing + cellSpacing / 2;
+            neighborX = ourX + cellSpacing;
             neighborZ = ourZ;
         } else {
-            ourX = cellOriginX + subcellSpacing / 2;
-            ourZ = cellOriginZ + pos * subcellSpacing + subcellSpacing / 2;
-            neighborX = ourX - subcellSpacing;
+            ourX = cellOriginX + cellSpacing / 2;
+            ourZ = cellOriginZ + pos * cellSpacing + cellSpacing / 2;
+            neighborX = ourX - cellSpacing;
             neighborZ = ourZ;
         }
 
@@ -273,13 +273,13 @@ public class D8PathRefiner {
     }
 
     private static int[] findThresholdTerminus(
-            int cellOriginX, int cellOriginZ, int subcellSpacing,
+            int cellOriginX, int cellOriginZ, int cellSpacing,
             BiFunction<Integer, Integer, Double> sampler, double threshold) {
 
         for (int row = 0; row < GRID_SIZE; row++) {
             for (int col = 0; col < GRID_SIZE; col++) {
-                int worldX = cellOriginX + col * subcellSpacing + subcellSpacing / 2;
-                int worldZ = cellOriginZ + row * subcellSpacing + subcellSpacing / 2;
+                int worldX = cellOriginX + col * cellSpacing + cellSpacing / 2;
+                int worldZ = cellOriginZ + row * cellSpacing + cellSpacing / 2;
                 double value = sampler.apply(worldX, worldZ);
                 if (value < threshold) {
                     return new int[]{row, col};
@@ -295,15 +295,15 @@ public class D8PathRefiner {
             EdgeCrossing[] crossings,
             PathDirection primaryOutputDirection,
             Map<PathDirection, List<int[]>> riverPaths,
-            List<int[]> confluenceSubcells) {
+            List<int[]> confluenceCells) {
 
         EdgeCrossing outputCrossing = crossings[primaryOutputDirection.ordinal()];
         if (outputCrossing == null) {
             return;
         }
-        int[] outputSubcell = new int[]{outputCrossing.row(), outputCrossing.col()};
+        int[] outputCell = new int[]{outputCrossing.row(), outputCrossing.col()};
 
-        List<int[]> inputSubcells = new ArrayList<>();
+        List<int[]> inputCells = new ArrayList<>();
         List<PathDirection> inputDirections = new ArrayList<>();
         boolean[][] forbidden = new boolean[GRID_SIZE][GRID_SIZE];
 
@@ -313,29 +313,29 @@ public class D8PathRefiner {
                 continue;
             }
             if (crossing.direction() == EdgeCrossing.Direction.IN) {
-                inputSubcells.add(new int[]{crossing.row(), crossing.col()});
+                inputCells.add(new int[]{crossing.row(), crossing.col()});
                 inputDirections.add(PathDirection.values()[dir]);
             } else if (dir != primaryOutputDirection.ordinal()) {
                 forbidden[crossing.row()][crossing.col()] = true;
             }
         }
 
-        if (inputSubcells.isEmpty()) {
+        if (inputCells.isEmpty()) {
             return;
         }
 
         boolean[][] pathCovered = new boolean[GRID_SIZE][GRID_SIZE];
 
-        for (int i = 0; i < inputSubcells.size(); i++) {
-            int[] inputSubcell = inputSubcells.get(i);
+        for (int i = 0; i < inputCells.size(); i++) {
+            int[] inputCell = inputCells.get(i);
             PathDirection inputDir = inputDirections.get(i);
 
             List<int[]> path = tracePathToOutput(
-                flowDirection, inputSubcell, outputSubcell,
-                pathCovered, forbidden, confluenceSubcells);
+                flowDirection, inputCell, outputCell,
+                pathCovered, forbidden, confluenceCells);
 
-            for (int[] subcell : path) {
-                pathCovered[subcell[0]][subcell[1]] = true;
+            for (int[] cell : path) {
+                pathCovered[cell[0]][cell[1]] = true;
             }
 
             riverPaths.put(inputDir, path);
@@ -366,13 +366,13 @@ public class D8PathRefiner {
             EdgeCrossing[] crossings,
             int cellOriginX,
             int cellOriginZ,
-            int subcellSpacing,
+            int cellSpacing,
             BiFunction<Integer, Integer, Double> continentsSampler,
             BiFunction<Integer, Integer, Double> depthSampler,
             double oceanThreshold,
             double lakeThreshold,
             Map<PathDirection, List<int[]>> riverPaths,
-            List<int[]> confluenceSubcells) {
+            List<int[]> confluenceCells) {
 
         boolean[][] pathCovered = new boolean[GRID_SIZE][GRID_SIZE];
 
@@ -385,16 +385,16 @@ public class D8PathRefiner {
                 continue;
             }
 
-            int[] inputSubcell = new int[]{crossing.row(), crossing.col()};
+            int[] inputCell = new int[]{crossing.row(), crossing.col()};
             PathDirection pathDir = PathDirection.values()[dir];
 
             List<int[]> path = tracePathUntilWater(
-                flowDirection, inputSubcell, cellOriginX, cellOriginZ, subcellSpacing,
+                flowDirection, inputCell, cellOriginX, cellOriginZ, cellSpacing,
                 continentsSampler, depthSampler, oceanThreshold, lakeThreshold,
-                pathCovered, confluenceSubcells);
+                pathCovered, confluenceCells);
 
-            for (int[] subcell : path) {
-                pathCovered[subcell[0]][subcell[1]] = true;
+            for (int[] cell : path) {
+                pathCovered[cell[0]][cell[1]] = true;
             }
 
             riverPaths.put(pathDir, path);
@@ -419,13 +419,13 @@ public class D8PathRefiner {
             int[] start,
             int cellOriginX,
             int cellOriginZ,
-            int subcellSpacing,
+            int cellSpacing,
             BiFunction<Integer, Integer, Double> continentsSampler,
             BiFunction<Integer, Integer, Double> depthSampler,
             double oceanThreshold,
             double lakeThreshold,
             boolean[][] pathCovered,
-            List<int[]> confluenceSubcells) {
+            List<int[]> confluenceCells) {
 
         List<int[]> path = new ArrayList<>();
         boolean[][] visited = new boolean[GRID_SIZE][GRID_SIZE];
@@ -435,14 +435,14 @@ public class D8PathRefiner {
         int col = start[1];
 
         while (true) {
-            int worldX = cellOriginX + col * subcellSpacing + subcellSpacing / 2;
-            int worldZ = cellOriginZ + row * subcellSpacing + subcellSpacing / 2;
+            int worldX = cellOriginX + col * cellSpacing + cellSpacing / 2;
+            int worldZ = cellOriginZ + row * cellSpacing + cellSpacing / 2;
 
             path.add(new int[]{row, col});
             visited[row][col] = true;
 
             if (pathCovered[row][col] && !confluenceMarked) {
-                confluenceSubcells.add(new int[]{row, col});
+                confluenceCells.add(new int[]{row, col});
                 confluenceMarked = true;
             }
 
@@ -464,7 +464,7 @@ public class D8PathRefiner {
                 continue;
             }
 
-            int[] fallback = findNeighborTowardWater(row, col, cellOriginX, cellOriginZ, subcellSpacing,
+            int[] fallback = findNeighborTowardWater(row, col, cellOriginX, cellOriginZ, cellSpacing,
                 continentsSampler, depthSampler, oceanThreshold, lakeThreshold, visited);
             if (fallback == null) {
                 break;
@@ -478,7 +478,7 @@ public class D8PathRefiner {
 
     private static int[] findNeighborTowardWater(
             int row, int col,
-            int cellOriginX, int cellOriginZ, int subcellSpacing,
+            int cellOriginX, int cellOriginZ, int cellSpacing,
             BiFunction<Integer, Integer, Double> continentsSampler,
             BiFunction<Integer, Integer, Double> depthSampler,
             double oceanThreshold, double lakeThreshold,
@@ -506,8 +506,8 @@ public class D8PathRefiner {
                 continue;
             }
 
-            int worldX = cellOriginX + c * subcellSpacing + subcellSpacing / 2;
-            int worldZ = cellOriginZ + r * subcellSpacing + subcellSpacing / 2;
+            int worldX = cellOriginX + c * cellSpacing + cellSpacing / 2;
+            int worldZ = cellOriginZ + r * cellSpacing + cellSpacing / 2;
 
             if (isWater(worldX, worldZ, continentsSampler, depthSampler, oceanThreshold, lakeThreshold)) {
                 waterNeighbor = neighbor;
@@ -530,7 +530,7 @@ public class D8PathRefiner {
             int[] target,
             boolean[][] pathCovered,
             boolean[][] forbidden,
-            List<int[]> confluenceSubcells) {
+            List<int[]> confluenceCells) {
 
         List<int[]> path = new ArrayList<>();
         boolean[][] visited = new boolean[GRID_SIZE][GRID_SIZE];
@@ -544,7 +544,7 @@ public class D8PathRefiner {
             visited[row][col] = true;
 
             if (pathCovered[row][col] && !confluenceMarked) {
-                confluenceSubcells.add(new int[]{row, col});
+                confluenceCells.add(new int[]{row, col});
                 confluenceMarked = true;
             }
 

@@ -11,7 +11,7 @@ Rivers flow from continental interiors to ocean edges. But what *is* a continent
 - Track highest `depth` value found during flood-fill as the "center"
 - Fine-search phase refines using actual heightmap within 512 blocks of coarse result
 - 16-block sample step, up to 100k samples, 16km max radius
-- Continent ID computed from minimum visited region (for caching)
+- Continent ID computed from minimum visited region
 
 **Observed problems:**
 - Inconsistent results: different starting positions or exploration patterns produce different centers
@@ -56,11 +56,11 @@ Generate actual line segments radiating from continental centers toward oceans.
 **Known elements:**
 - Guarantees flow direction (lines drawn from high to low)
 - Tributaries can branch recursively from main rivers
-- Region-based caching (512x512 blocks) for performance
+- Region-based computation (384x384 blocks minimum)
 - Continental centers found via flood-fill detection
 
 **Unresolved:**
-- Requires pre-generation or caching - not purely chunk-local
+- Computed on demand - deterministic from world seed
 - How to handle rivers crossing region boundaries?
 - Continental detection has ~250m variance - acceptable?
 - Performance cost of flood-fill detection on first chunk load
@@ -86,7 +86,7 @@ Small streams feeding into larger rivers, creating dendritic patterns.
 - How to ensure tributaries don't cross other rivers?
 - What visual cues distinguish tributaries from main rivers?
 
-> **CBN Resolution:** Tributaries emerge naturally from the cell grid structure. When multiple cells flow into the same downstream cell, their rivers merge—that's a tributary junction. Multi-pass generation creates hierarchical drainage: major rivers in early passes, tributaries in later passes. Tributaries can't cross other rivers because all flow follows the density gradient toward the same terminus. Chunk boundaries are handled by fixed edge centers where rivers cross cell boundaries. See `docs/features/rivers/Cell-based Networks.md`.
+> **CBN Resolution:** Tributaries emerge naturally from the region grid structure. When multiple regions flow into the same downstream region, their rivers merge—that's a tributary junction. Tributaries can't cross other rivers because all flow follows the density gradient toward the same terminus. Chunk boundaries are handled by fixed edge centers where rivers cross region boundaries. See `docs/features/rivers/Cell-based Networks.md`.
 
 ## Width Variation
 
@@ -153,7 +153,7 @@ Rivers should exist at varying elevations based on position.
 - How to handle elevation changes without waterfalls (future scope)?
 - What happens when river elevation conflicts with terrain?
 
-> **CBN Resolution:** Elevation derives from distance-to-ocean measured in cells. Ocean cells have distance 0. Each upstream cell has distance = downstream neighbor's distance + 1. This count propagates via lazy recursion and is cached. Child cells in multi-pass generation inherit elevation context from their parent, with finer variation within the parent's baseline. See `docs/features/rivers/Cell-based Networks.md`.
+> **CBN Resolution:** Elevation derives from distance-to-terminus measured in regions. Terminus regions (Body, Shore, Basin) have distance 0. Each upstream region has distance = downstream neighbor's distance + 1. This is computed deterministically on demand. See `docs/features/rivers/Cell-based Networks.md`.
 
 ## Meandering
 
@@ -170,7 +170,7 @@ Rivers should curve naturally, not run in straight lines.
 - How do meanders interact with tributary junctions?
 - Can meandering be computed chunk-locally?
 
-> **CBN Note:** Multi-pass subdivision provides natural meandering opportunity. Within a parent cell, the main river path follows density gradients through subcells—it doesn't have to be straight. Subcell density variation creates S-curves without explicit meander logic. The specific path rivers take within cells is left to the river feature generation system. See `docs/features/rivers/Cell-based Networks.md`.
+> **CBN Note:** Within a region, the river path follows density gradients through cells—it doesn't have to be straight. Cell density variation creates S-curves without explicit meander logic. The specific path rivers take within regions is left to the river feature generation system. See `docs/features/rivers/Cell-based Networks.md`.
 
 ## Waterfalls
 

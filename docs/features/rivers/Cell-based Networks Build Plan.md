@@ -6,7 +6,7 @@ status: implemented
 
 # Cell-based Network Implementation Plan
 
-This document outlines the build order for the cell-based networking system described in `Cell-based Networks Architecture.md`. The goal is to implement in testable increments, with debug visualization available early.
+This document outlines the build order for the region-based networking system described in `Cell-based Networks Architecture.md`. The goal is to implement in testable increments, with debug visualization available early.
 
 ## Key Decisions
 
@@ -14,14 +14,13 @@ These decisions were made during planning and supersede any conflicting details 
 
 | Decision | Value | Rationale |
 |----------|-------|-----------|
-| Cell size | 256 blocks | Fine enough for detailed rivers, performance is not a concern (5-20ms even at 128 blocks) |
+| Region size | 384 blocks | Minimum size ensures 40-block river mouths fit wholly within a cell (384 / 8 = 48 blocks per cell) |
 | Density source | Abstracted | Design provider interface, implement Lithosphere adapter first |
 | Density formula | continents + (depth × 1.0) | Continents for ocean direction, depth weighted 1.0 for aggressive terrain-following |
-| Cache persistence | SavedData | Consistent with existing ContinentCacheSavedData pattern |
 | Debug visualization | Early | Add in Phase 2 for visual debugging throughout development |
 | Density equality threshold | 0.01 | Prevents floating-point noise from causing unexpected flow |
 | Participation rate | 0.7 | Default 70% of cells participate, configurable |
-| Lake threshold | depth < 0 | Terrain at or below sea level (y=63) is lake; creates LAKE/LAKESHORE classifications |
+| Lake threshold | depth < 0 | Terrain at or below sea level (y=63) is water body; creates Body/Shore region types |
 
 ## Architecture Overview
 
@@ -35,23 +34,23 @@ These decisions were made during planning and supersede any conflicting details 
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                        RiverCell                                │
-│  - Coordinates (cellX, cellZ)                                   │
-│  - Cached density, participation, outputs, distance             │
+│                        RiverRegion                                │
+│  - Coordinates (regionX, regionZ)                                   │
+│  - Computed density, participation, outputs, distance            │
 │  - Computes flow by comparing density to neighbors              │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     RiverCellManager                            │
-│  - Owns the cell cache (per-level)                              │
-│  - Handles cell lookup and lazy computation                     │
+│                     RiverRegionManager                            │
+│  - Computes regions on demand (per-level)                         │
+│  - Handles region lookup and lazy computation                     │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   RiverCellSavedData                            │
-│  - Persists computed cells to world save                        │
+│                   RiverRegionSavedData                            │
+│  - Persists computed regions to world save                        │
 │  - Extends SavedData like ContinentCacheSavedData               │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -63,28 +62,28 @@ These decisions were made during planning and supersede any conflicting details 
 **Goal:** Define core types without computation logic.
 
 **Files:**
-- `src/main/java/org/sosly/rivertale/worldgen/river/RiverCell.java`
-- `src/main/java/org/sosly/rivertale/worldgen/river/RiverCellKey.java`
+- `src/main/java/org/sosly/rivertale/worldgen/river/RiverRegion.java`
+- `src/main/java/org/sosly/rivertale/worldgen/river/RiverRegionKey.java`
 - `src/main/java/org/sosly/rivertale/worldgen/river/FlowDirection.java`
 - `src/main/java/org/sosly/rivertale/worldgen/river/DensityProvider.java`
 
-**RiverCellKey:**
+**RiverRegionKey:**
 
-A record containing `cellX` and `cellZ`.
+A record containing `regionX` and `regionZ`.
 
 ```
-CELL_SIZE = 256  // constant
+REGION_SIZE = 384  // constant (minimum size to fit 40-block river mouths in a cell)
 
 fromBlockPos(blockX, blockZ):
-    return RiverCellKey(
-        floorDiv(blockX, CELL_SIZE),
-        floorDiv(blockZ, CELL_SIZE)
+    return RiverRegionKey(
+        floorDiv(blockX, REGION_SIZE),
+        floorDiv(blockZ, REGION_SIZE)
     )
 
-worldX = cellX * CELL_SIZE
-worldZ = cellZ * CELL_SIZE
-centerX = worldX + CELL_SIZE / 2
-centerZ = worldZ + CELL_SIZE / 2
+worldX = regionX * REGION_SIZE
+worldZ = regionZ * REGION_SIZE
+centerX = worldX + REGION_SIZE / 2
+centerZ = worldZ + REGION_SIZE / 2
 ```
 
 **FlowDirection:**
@@ -101,49 +100,42 @@ NONE:  dx=0, dz=0
 neighbor(from):
     if this == NONE:
         return null
-    return RiverCellKey(from.cellX + dx, from.cellZ + dz)
+    return RiverRegionKey(from.regionX + dx, from.regionZ + dz)
 ```
 
-**RiverCell:**
+**RiverRegion:**
 
 A class containing:
-- `key`: RiverCellKey
-- `density`: double (averaged from subcellDensities, immutable)
-- `subcellDensities`: double[7][7] (cached for path refinement, immutable)
-- `classification`: CellClassification enum (LAND, OCEAN, or COASTAL)
+- `key`: RiverRegionKey
+- `density`: double (averaged from cellDensities, immutable)
+- `cellDensities`: double[8][8] (sampled for path refinement)
+- `regionType`: RegionType enum (Basin, Divide, Fluvial, Shore, Barren, Body)
 - `participating`: boolean (immutable)
 - `primaryOutput`: FlowDirection
 - `secondaryOutputs`: Set of FlowDirection
 - `distanceToTerminus`: int (defaults to -1, meaning uncalculated)
-- `isBasin`: boolean
-- `riverPath`: List of subcell coordinates (set by Phase 8)
+- `riverPath`: List of cell coordinates (set by Phase 8)
 
-Plus getters and NBT serialization. The `subcellDensities` array is sampled once during cell creation and reused for both averaging and path refinement.
+Plus getters and NBT serialization. The `cellDensities` array is sampled once during region creation and reused for both averaging and path refinement.
 
-**CellClassification:**
+**RegionType:**
 
-An enum with five values representing two parallel terminus hierarchies:
+An enum with six values:
 
-**Ocean terminuses (continents threshold):**
-- `OCEAN` — all subcells below ocean threshold (continents < -0.13); terminus with no outputs
-- `COASTAL` — mixed ocean/land subcells; participates but terminus (river ends at coastline)
+- `Body` — Minecraft placed water here (ocean or lake); terminus with no outputs
+- `Shore` — adjacent to Body regions; participates but terminus (river ends at water's edge)
+- `Fluvial` — river passes through this region; normal flow rules apply
+- `Divide` — flow originates here (local maximum in drainage network); river source
+- `Basin` — flow-based local minimum where rivers collect; terminus with no outputs
+- `Barren` — no visible water system; not participating in river network
 
-**Lake terminuses (depth threshold):**
-- `LAKE` — all subcells have depth < 0 (terrain at/below y=63), not ocean; terminus with no outputs
-- `LAKESHORE` — mixed positive/negative depth subcells; participates but terminus (river drains into lake)
-
-**Normal flow:**
-- `LAND` — all subcells have depth ≥ 0 and not ocean; normal flow rules apply
-
-Additionally, LAND cells can become **basins** if no participating neighbor has lower density. Basins are flow-based local minima where new lakes form, distinct from terrain-based LAKE cells.
-
-Classification is determined during cell creation by checking each subcell against both thresholds. Ocean threshold is checked first (takes precedence), then lake threshold.
+Region type is determined during region creation by checking each cell against both thresholds. Ocean threshold is checked first (takes precedence), then lake threshold.
 
 **DensityProvider:**
 
 An interface with three methods:
 - `getDensity(worldX, worldZ)` → double
-- `getAveragedDensity(worldX, worldZ, cellSize)` → double (always uses 7×7 grid)
+- `getAveragedDensity(worldX, worldZ, regionSize)` → double (always uses 8×8 grid)
 - `isOcean(density)` → boolean
 
 **Validation:** Code compiles, records serialize to NBT correctly.
@@ -152,63 +144,62 @@ An interface with three methods:
 
 ### Phase 2: Debug Command
 
-**Goal:** Provide cell data for debugging before implementing flow logic.
+**Goal:** Provide region data for debugging before implementing flow logic.
 
 **Files:**
-- `src/main/java/org/sosly/rivertale/command/CellCommand.java`
+- `src/main/java/org/sosly/rivertale/command/RegionCommand.java`
 
 **Command:**
 
 ```
-/rivertale cell
+/rivertale region
 ```
 
-Prints information about the cell at the player's current position:
+Prints information about the region at the player's current position:
 
 ```
-Cell (3, -7):
+Region (3, -7):
   Center: (1792, -3328)
   Density: 0.342
-  Classification: LAND
+  Type: Fluvial
   Participating: true
   Output: SOUTH
   Inputs: NORTH, WEST
   Distance to terminus: 12
 ```
 
-If a cell is not participating, the output is simplified:
+If a region is not participating, the output is simplified:
 
 ```
-Cell (24, -56):
+Region (24, -56):
   Participating: false
 ```
 
-Ocean, coastal, and basin cells show their status:
+Ocean, coastal, and basin regions show their status:
 
 ```
-Cell (0, 12):
+Region (0, 12):
   Center: (256, 6400)
   Density: -0.21
-  Classification: OCEAN
+  Type: Body
 ```
 
 ```
-Cell (2, 8):
+Region (2, 8):
   Center: (1280, 4352)
   Density: 0.08
-  Classification: COASTAL
+  Type: Shore
   Participating: true
   Inputs: WEST
   Distance to terminus: 0
-  River mouth at subcell: (3, 4)
+  River mouth at cell: (3, 4)
 ```
 
 ```
-Cell (5, 3):
+Region (5, 3):
   Center: (2816, 1792)
   Density: 0.67
-  Classification: LAND
-  Basin: true
+  Type: Basin
   Inputs: SOUTH, EAST, WEST
 ```
 
@@ -221,7 +212,7 @@ Cell (5, 3):
 **Goal:** Provide a way to find nearby river network features, similar to vanilla's `/locate`.
 
 **Files:**
-- Modify `src/main/java/org/sosly/rivertale/command/CellCommand.java` (or create separate `LocateCommand.java`)
+- Modify `src/main/java/org/sosly/rivertale/command/RegionCommand.java` (or create separate `LocateCommand.java`)
 
 **Command:**
 
@@ -233,13 +224,13 @@ Cell (5, 3):
 
 | Feature | Available After | Description |
 |---------|-----------------|-------------|
-| `basin` | Phase 5 | Nearest cell that is a basin terminus |
-| `ocean` | Phase 5 | Nearest cell classified as OCEAN |
-| `coastal` | Phase 5 | Nearest cell classified as COASTAL (river mouth to ocean) |
-| `lake` | Phase 5 | Nearest cell classified as LAKE (terrain-based freshwater) |
-| `lakeshore` | Phase 5 | Nearest cell classified as LAKESHORE (river drains into lake) |
-| `source` | Phase 5 | Nearest cell with no inputs (river source) |
-| `confluence` | Phase 5 | Nearest cell with multiple inputs |
+| `basin` | Phase 5 | Nearest region that is a basin terminus |
+| `body` | Phase 5 | Nearest region of type Body (ocean or lake) |
+| `shore` | Phase 5 | Nearest region of type Shore (river mouth to water) |
+| `fluvial` | Phase 5 | Nearest region of type Fluvial (river passes through) |
+| `divide` | Phase 5 | Nearest region of type Divide (river source) |
+| `source` | Phase 5 | Nearest region with no inputs (river source) |
+| `confluence` | Phase 5 | Nearest region with multiple inputs |
 
 **Future features (outside CBN scope):**
 
@@ -275,7 +266,7 @@ Could not find a basin within 10000 blocks.
 - Search outward from player position in a spiral or expanding grid
 - Stop at first match (or configurable: find N nearest)
 - Search radius should be configurable, default ~10000 blocks
-- For performance, can limit to cells already cached, or compute on-demand up to a limit
+- For performance, can limit search radius or compute on-demand up to a limit
 
 **Validation:** Command exists with stub responses. Real functionality added as each feature becomes detectable.
 
@@ -340,13 +331,13 @@ getDensity(worldX, worldZ):
     depth = sampleDepth(worldX, SAMPLE_Y, worldZ)
     return continents + (depth * DEPTH_WEIGHT)
 
-getAveragedDensity(worldX, worldZ, cellSize):
+getAveragedDensity(worldX, worldZ, regionSize):
     sum = 0
-    step = cellSize / 7.0
-    for row from 0 to 6:
-        for col from 0 to 6:
+    step = regionSize / 8.0
+    for row from 0 to 7:
+        for col from 0 to 7:
             sum += getDensity(worldX + col * step, worldZ + row * step)
-    return sum / 49
+    return sum / 64
 
 isOcean(density):
     // Use raw continents for ocean detection, not combined density
@@ -371,17 +362,17 @@ DensityFunction depthFunction = router.depth()
 
 **Sample grid resolution:**
 
-All cells use a 7×7 subgrid (49 samples) regardless of cell size. This keeps the algorithm simple and ensures the same grid is available for both density averaging and path refinement.
+All cells use a 8×8 subgrid (64 samples) regardless of cell size. This keeps the algorithm simple and ensures the same grid is available for both density averaging and path refinement.
 
-With 256-block cells, each subcell step is ~37 blocks. The non-integer step size is fine—we're sampling continuous density functions, not aligning to block boundaries.
+With 384-block regions, each cell is 48 blocks (384 / 8 = 48). This ensures a 40-block wide river mouth fits wholly within a single cell.
 
 **Integration with Phase 2 command:**
 
-Once the density provider is implemented, update `/rivertale cell` to display real density values instead of placeholder data. The command should now call `DensityProviderRegistry.getProvider(level)` and sample the cell's averaged density.
+Once the density provider is implemented, update `/rivertale region` to display real density values instead of placeholder data. The command should now call `DensityProviderRegistry.getProvider(level)` and sample the region's averaged density.
 
 **Validation:**
 1. Place player in world
-2. Run `/rivertale cell` at various locations
+2. Run `/rivertale region` at various locations
 3. Verify density value is reasonable (not NaN, within expected range)
 4. Verify ocean detection works near coastlines
 5. Verify inland locations have higher density than coastal locations
@@ -394,51 +385,51 @@ Once the density provider is implemented, update `/rivertale cell` to display re
 **Goal:** Implement the core flow algorithm.
 
 **Files:**
-- `src/main/java/org/sosly/rivertale/worldgen/river/RiverCellManager.java`
+- `src/main/java/org/sosly/rivertale/worldgen/river/RiverRegionManager.java`
 
 **Flow Algorithm:**
 
 ```
-computeFlow(cell):
-    // Classification was set during cell creation based on subcell densities
+computeFlow(region):
+    // Region type was set during region creation based on cell densities
     // All terminus types have no output
-    if cell.classification in [OCEAN, LAKE]:
-        cell.primaryOutput = NONE
+    if region.regionType == Body:
+        region.primaryOutput = NONE
         return
 
-    if cell.classification in [COASTAL, LAKESHORE]:
-        // Coastal/lakeshore cells are terminuses—river ends within this cell
-        cell.primaryOutput = NONE
+    if region.regionType == Shore:
+        // Shore regions are terminuses—river ends at water's edge
+        region.primaryOutput = NONE
         // But they still receive inputs from higher-density neighbors
         return
 
-    // LAND cells: normal flow rules
-    neighbors = getParticipatingNeighbors(cell)
-    lowerNeighbors = neighbors where neighbor.density < cell.density - EPSILON
+    // Fluvial/Divide regions: normal flow rules
+    neighbors = getParticipatingNeighbors(region)
+    lowerNeighbors = neighbors where neighbor.density < region.density - EPSILON
 
     if lowerNeighbors is empty:
-        cell.isBasin = true
-        cell.primaryOutput = NONE
+        region.regionType = Basin
+        region.primaryOutput = NONE
         return
 
     // Sort by density ascending
     sorted = lowerNeighbors.sortBy(density)
 
-    cell.primaryOutput = directionTo(sorted[0])
-    cell.secondaryOutputs = sorted[1..].map(directionTo)
+    region.primaryOutput = directionTo(sorted[0])
+    region.secondaryOutputs = sorted[1..].map(directionTo)
 ```
 
-**Coastal cell handling:**
+**Coastal region handling:**
 
-Coastal cells participate in the river network (they contain land) but are terminuses. They have no primaryOutput because the river ends at the coastline within the cell, not at an edge center. They can still receive inputs from higher-density land neighbors—water flows into them and terminates at the ocean subcells.
+Coastal regions participate in the river network (they contain land) but are terminuses. They have no primaryOutput because the river ends at the coastline within the region, not at an edge center. They can still receive inputs from higher-density land neighbors—water flows into them and terminates at the ocean regions.
 
-During path refinement (Phase 8), the path in a coastal cell terminates when it reaches an ocean subcell rather than continuing to an edge center.
+During path refinement (Phase 8), the path in a coastal region terminates when it reaches an ocean region rather than continuing to an edge center.
 
 **Understanding secondary outputs:**
 
 Secondary outputs are NOT water splitting. They are NEW RIVER SOURCES.
 
-If a cell has density 0.5 and two neighbors are lower (North at 0.3, South at 0.4), the cell outputs primarily to North (main flow) and secondarily to South (new source). Water from upstream flows through this cell to North. But this cell is ALSO a local high point relative to South, so it's the SOURCE of a separate river flowing South. The cell sits on a drainage divide.
+If a region has density 0.5 and two neighbors are lower (North at 0.3, South at 0.4), the region outputs primarily to North (main flow) and secondarily to South (new source). Water from upstream flows through this region to North. But this region is ALSO a local high point relative to South, so it's the SOURCE of a separate river flowing South. The region sits on a drainage divide.
 
 See `Cell-based Networks.md` for a detailed diagram and explanation.
 
@@ -447,8 +438,8 @@ See `Cell-based Networks.md` for a detailed diagram and explanation.
 When two neighbors have equal density (within EPSILON = 0.01):
 
 ```
-breakTie(cell, tied):
-    seed = cell.cellX * 31 + cell.cellZ * 17
+breakTie(region, tied):
+    seed = region.regionX * 31 + region.regionZ * 17
     rng = seededRandom(seed XOR worldSeed)
     return tied[rng.nextInt(tied.length)]
 ```
@@ -461,21 +452,21 @@ The tiebreaker is deterministic from coordinates and world seed.
 isParticipating(key):
     rate = config.participationRate  // default 0.7
 
-    seed = key.cellX * 31 + key.cellZ * 17
+    seed = key.regionX * 31 + key.regionZ * 17
     rng = seededRandom(seed XOR worldSeed)
     return rng.nextDouble() < rate
 ```
 
 **Integration with Phase 2 command:**
 
-Update `/rivertale cell` to show classification, output direction, and inputs. These are now computed on-the-fly by calling the flow algorithm—no caching yet.
+Update `/rivertale region` to show region type, output direction, and inputs. These are computed on-the-fly by calling the flow algorithm.
 
 **Validation:**
 1. Generate cells in a test area
-2. Run `/rivertale cell` at various locations
+2. Run `/rivertale region` at various locations
 3. Verify output direction points toward lower density
 4. Verify cells near coastlines output toward ocean
-5. Verify no cell outputs toward a higher-density neighbor
+5. Verify no region outputs toward a higher-density neighbor
 6. Verify basins appear in local minima (no lower neighbor)
 
 ---
@@ -485,28 +476,28 @@ Update `/rivertale cell` to show classification, output direction, and inputs. T
 **Goal:** Implement lazy recursive distance calculation.
 
 **Files:**
-- Modify `RiverCellManager.java`
-- Modify `RiverCell.java`
+- Modify `RiverRegionManager.java`
+- Modify `RiverRegion.java`
 
 **Algorithm:**
 
 ```
-getDistanceToTerminus(cell):
-    if cell.distanceToTerminus >= 0:
-        return cell.distanceToTerminus  // cached
+getDistanceToTerminus(region):
+    if region.distanceToTerminus >= 0:
+        return region.distanceToTerminus  // already computed
 
     // All terminuses have distance 0
-    if cell.classification in [OCEAN, COASTAL, LAKE, LAKESHORE]:
-        cell.distanceToTerminus = 0
+    if region.regionType in [Body, Shore]:
+        region.distanceToTerminus = 0
         return 0
 
-    if cell.isBasin:
-        cell.distanceToTerminus = 0
+    if region.regionType == Basin:
+        region.distanceToTerminus = 0
         return 0
 
-    downstream = getCell(cell.primaryOutput.neighbor(cell.key))
-    cell.distanceToTerminus = 1 + getDistanceToTerminus(downstream)
-    return cell.distanceToTerminus
+    downstream = getRegion(region.primaryOutput.neighbor(region.key))
+    region.distanceToTerminus = 1 + getDistanceToTerminus(downstream)
+    return region.distanceToTerminus
 ```
 
 **Recursion Safety:**
@@ -516,9 +507,9 @@ The acyclic guarantee from the design doc ensures recursion terminates. Flow alw
 ```
 MAX_RECURSION_DEPTH = 1000
 
-getDistanceToTerminus(cell, depth):
+getDistanceToTerminus(region, depth):
     if depth > MAX_RECURSION_DEPTH:
-        log warning "Distance calculation exceeded max depth at {cell.key}"
+        log warning "Distance calculation exceeded max depth at {region.key}"
         return depth
     // ... rest of algorithm
 ```
@@ -527,120 +518,46 @@ This catches bugs during development without infinite loops.
 
 **Integration with Phase 2 command:**
 
-Update `/rivertale cell` to include "Distance to terminus" in the output. This value comes from `getDistanceToTerminus()` and represents how many cells away from a terminus (ocean or basin) this cell is.
+Update `/rivertale region` to include "Distance to terminus" in the output. This value comes from `getDistanceToTerminus()` and represents how many regions away from a terminus (ocean or basin) this region is.
 
 **Validation:**
-1. Run `/rivertale cell` on a coastal cell
-2. Verify distance is 0 (coastal cells are terminuses)
-3. Run on a land cell adjacent to coastal
+1. Run `/rivertale region` on a coastal region
+2. Verify distance is 0 (coastal regions are terminuses)
+3. Run on a land region adjacent to coastal
 4. Verify distance is 1
-5. Run on an inland cell further from coast
+5. Run on an inland region further from coast
 6. Verify distance increases with distance from coast
-7. Verify basin cells have distance 0
+7. Verify basin regions have distance 0
 
 ---
 
-### Phase 7: Cache Persistence
+### Phase 7: River Path Refinement
 
-**Goal:** Save computed cells to world data.
-
-**Files:**
-- `src/main/java/org/sosly/rivertale/worldgen/river/RiverCellSavedData.java`
-- Modify `RiverCellManager.java`
-
-**RiverCellSavedData:**
-
-Follows the pattern established by `ContinentCacheSavedData`. Extends SavedData with:
-- DATA_NAME = "rivertale_cells"
-- Thread-safe map of RiverCellKey → RiverCell
-
-```
-get(level):
-    return level.dataStorage.computeIfAbsent(load, new, DATA_NAME)
-
-save(tag):
-    cellList = new list
-    for each cell in cells:
-        cellList.add(cell.save())
-    tag.put("cells", cellList)
-    return tag
-
-load(tag):
-    data = new RiverCellSavedData()
-    cellList = tag.getList("cells")
-    for each entry in cellList:
-        cell = RiverCell.load(entry)
-        data.cells.put(cell.key, cell)
-    return data
-```
-
-**Cache Integration with Thread Safety:**
-
-Multiple chunk generation threads may query cells simultaneously. Use `ConcurrentHashMap.computeIfAbsent` for thread-safe deduplication:
-
-```
-RiverCellSavedData:
-    cells = ConcurrentHashMap<RiverCellKey, RiverCell>
-
-    getOrCompute(key, computeFunction):
-        return cells.computeIfAbsent(key, k => {
-            cell = computeFunction.apply(k)
-            setDirty()
-            return cell
-        })
-```
-
-When two threads query the same uncached cell:
-1. First thread enters computeIfAbsent and starts computation
-2. Second thread blocks on the same key's segment lock
-3. When computation completes, both threads receive the result
-4. Only one computation happens per cell
-
-**Why not Futures?** Empirical testing showed cell computation averages ~40-45ms. At this speed, `ConcurrentHashMap`'s segment locking is acceptable and the code is much simpler than managing Futures, executors, and cleanup. `setDirty()` is safe since SavedData's dirty flag is a simple boolean.
-
-**Integration with Phase 2 command:**
-
-Update `/rivertale cell` to check the cache first before computing on-the-fly. If the cell is cached, display the cached values. If not, compute on-the-fly as before. This lets the command work both during development (before worldgen integration) and in production (reading cached data).
-
-Optionally add a `[cached]` or `[computed]` indicator to show where the data came from during debugging.
-
-**Validation:**
-1. Generate some cells, note their values
-2. Save and quit
-3. Reload world
-4. Verify cells have same values without recomputation (check logs for computation messages)
-5. Generate chunks in a large area rapidly (teleport around)
-6. Verify no duplicate computation messages for the same cell
-
----
-
-### Phase 8: River Path Refinement
-
-**Goal:** Determine the actual path each river takes within its cell.
+**Goal:** Determine the actual path each river takes within its region.
 
 **Files:**
 - `src/main/java/org/sosly/rivertale/worldgen/river/RiverPathRefiner.java`
-- Modify `RiverCell.java` to store path data
+- Modify `RiverRegion.java` to store path data
 
 **Why this is needed:**
 
-A cell's flow direction (e.g., "outputs EAST") tells you WHERE water exits, but not the PATH it takes to get there. A cell with west input and east output could have a straight river, an S-curve, or a meandering path. Without knowing the path, the carving system doesn't know where to place blocks.
+A region's flow direction (e.g., "outputs EAST") tells you WHERE water exits, but not the PATH it takes to get there. A region with west input and east output could have a straight river, an S-curve, or a meandering path. Without knowing the path, the carving system doesn't know where to place blocks.
 
 **Algorithm:**
 
-The refinement algorithm uses a 7×7 subcell grid. Why 7×7? An odd subdivision guarantees a true center subcell on each edge—entry and exit points land in subcell 3 (indices 0-6), not on a boundary between cells.
+The refinement algorithm uses an 8×8 cell grid (64 cells per region).
 
-For each participating cell with inputs and outputs:
+For each participating region with inputs and outputs:
 
-1. Identify entry subcell(s) — which subcell(s) contain the input edge center(s)
-2. Identify exit subcell — which subcell contains the output edge center
-3. Sample density at each subcell
+1. Identify entry cell(s) — which cell(s) contain the input edge center(s)
+2. Identify exit cell — which cell contains the output edge center
+3. Sample density at each cell
 4. Apply exit-direction weighting to create a virtual gradient toward the exit
 5. Pathfind using weighted costs
 
 **Why weighting is necessary:**
 
-Raw terrain density doesn't conveniently slope toward the cell's exit. A cell might have its lowest density in the southwest corner while the exit is to the east. Without weighting, the river would flow southwest and never reach the exit.
+Raw terrain density doesn't conveniently slope toward the region's exit. A region might have its lowest density in the southwest corner while the exit is to the east. Without weighting, the river would flow southwest and never reach the exit.
 
 The weighting adds a penalty based on distance from the exit:
 
@@ -651,27 +568,27 @@ weighted_cost = raw_density + (manhattan_distance_to_exit * weight_factor)
 A weight factor of ~0.05 is enough to ensure eastward progress while still allowing density-driven meandering. See `Cell-based Networks.md` for a worked example with actual numbers.
 
 ```
-refineRiverPath(cell):
-    if not cell.participating or cell.classification == OCEAN or cell.isBasin:
+refineRiverPath(region):
+    if not region.participating or region.regionType == Body or region.regionType == Basin:
         return  // No path needed
 
-    entry = getSubcellAtEdge(cell, cell.inputDirections[0])  // e.g., (3,0) for west
+    entry = getCellAtEdge(region, region.inputDirections[0])  // e.g., (3,0) for west
 
-    // Get the 7x7 density grid (already sampled during cell density averaging)
-    rawDensities = cell.subcellDensities  // cached from getAveragedDensity()
+    // Get the 8x8 density grid (already sampled during region density averaging)
+    rawDensities = region.cellDensities  // sampled during region creation
 
-    if cell.classification == COASTAL:
-        // Coastal cells: path terminates at first ocean subcell
-        cell.riverPath = findPathToOcean(entry, rawDensities)
+    if region.regionType == Shore:
+        // Coastal regions: path terminates at first ocean cell
+        region.riverPath = findPathToOcean(entry, rawDensities)
     else:
-        // Land cells: path goes to exit edge center
-        exit = getSubcellAtEdge(cell, cell.primaryOutput)  // e.g., (3,6) for east
+        // Land regions: path goes to exit edge center
+        exit = getCellAtEdge(region, region.primaryOutput)  // e.g., (3,6) for east
         costs = applyExitWeighting(rawDensities, exit)
-        cell.riverPath = findPath(entry, exit, costs, rawDensities)
+        region.riverPath = findPath(entry, exit, costs, rawDensities)
 
 applyExitWeighting(rawDensities, exit):
-    costs = empty 7x7 grid
-    for each subcell (row, col):
+    costs = empty 8x8 grid
+    for each cell (row, col):
         distance = manhattanDistance((row, col), exit)
         costs[row][col] = rawDensities[row][col] + (distance * 0.05)
     return costs
@@ -715,20 +632,20 @@ findPath(entry, exit, costs, rawDensities):
     return path
 
 findPathToOcean(entry, rawDensities):
-    // For coastal cells: follow density gradient until reaching ocean subcell
+    // For coastal regions: follow density gradient until reaching ocean region
     path = [entry]
     visited = {entry}
     current = entry
 
     while true:
-        // Check if current subcell is ocean
+        // Check if current cell is ocean
         if rawDensities[current] < OCEAN_THRESHOLD:
             return path  // River has reached the sea
 
         neighbors = getAdjacentUnvisited(current, visited)
 
         if neighbors is empty:
-            // Shouldn't happen in a coastal cell, but handle gracefully
+            // Shouldn't happen in a coastal region, but handle gracefully
             return path
 
         // Move toward lowest density (toward ocean)
@@ -742,39 +659,39 @@ findPathToOcean(entry, rawDensities):
 
 **Coastal path refinement:**
 
-Coastal cells don't have an exit edge center—the river ends at the coastline within the cell. The `findPathToOcean` algorithm follows the raw density gradient (no exit weighting needed) until it reaches a subcell below the ocean threshold. That subcell is where the river meets the sea.
+Coastal regions don't have an exit edge center—the river ends at the coastline within the region. The `findPathToOcean` algorithm follows the raw density gradient (no exit weighting needed) until it reaches a cell below the ocean threshold. That cell is where the river meets the sea.
 
 **Path representation:**
 
-The path is stored as a list of subcell coordinates. The carving system interpolates between these to place actual river blocks.
+The path is stored as a list of cell coordinates. The carving system interpolates between these to place actual river blocks.
 
 **Multiple inputs (confluence):**
 
-If a cell has multiple inputs, run pathfinding from each input independently. Track visited cells across all paths. When a path enters a subcell already visited by another path, the paths merge at that point—the later path joins the earlier path's route from there to the exit.
+If a region has multiple inputs, run pathfinding from each input independently. Track visited cells across all paths. When a path enters a cell already visited by another path, the paths merge at that point—the later path joins the earlier path's route from there to the exit.
 
 If paths don't intersect until the exit itself, that's fine. Two streams entering from opposite sides and both reaching the exit edge is a valid confluence—they merge at the output.
 
 **Output:**
 
-Each participating cell now has:
-- `riverPath` — ordered list of subcells the river passes through
-- Entry point(s) and exit point in subcell coordinates
+Each participating region now has:
+- `riverPath` — ordered list of cells the river passes through
+- Entry point(s) and exit point in cell coordinates
 
 **Validation:**
-1. Run `/rivertale cell` on a participating cell
+1. Run `/rivertale region` on a participating region
 2. Verify path data is present
 3. Verify path connects input edge to output edge
-4. Verify path prefers lower-density subcells (visual inspection of debug output)
+4. Verify path prefers lower-density cells (visual inspection of debug output)
 
 ---
 
-### Phase 9: Upstream Accumulation
+### Phase 8: Upstream Accumulation
 
 **Goal:** Implement limited-depth upstream counting for width calculation.
 
 **Files:**
-- Modify `RiverCell.java`
-- Modify `RiverCellManager.java`
+- Modify `RiverRegion.java`
+- Modify `RiverRegionManager.java`
 
 **Algorithm:**
 
@@ -804,7 +721,7 @@ countUpstream(key, depth, visited):
     return count
 ```
 
-**Note:** Upstream count is computed on demand, not cached. The depth limit (`upstreamDepthLimit` in config, default 3) keeps computation cheap. The count only needs to distinguish "few" from "many" for width calculation—higher limits provide more granularity at the cost of more cell queries.
+**Note:** The depth limit (`upstreamDepthLimit` in config, default 3) keeps computation cheap. The count only needs to distinguish "few" from "many" for width calculation—higher limits provide more granularity at the cost of more region queries.
 
 **Width Derivation:**
 
@@ -817,42 +734,41 @@ The river feature generator will use upstream count to determine width:
 | 3-5 | Regional river |
 | 6+ | Major river |
 
-Actual block widths are the feature generator's concern, not the cell system's.
+Actual block widths are the feature generator's concern, not the region system's.
 
 **Validation:**
-1. Find a cell with multiple upstream feeders
-2. Run `/rivertale cell` and verify upstream count
+1. Find a region with multiple upstream feeders
+2. Run `/rivertale region` and verify upstream count
 3. Verify count is limited by depth (doesn't propagate infinitely)
-4. Verify a source cell (no inputs) has upstream count 0
+4. Verify a source region (no inputs) has upstream count 0
 
 ---
 
-### Phase 10: Worldgen Integration
+### Phase 9: Worldgen Integration
 
-**Goal:** Trigger cell computation automatically during chunk generation.
+**Goal:** Trigger region computation automatically during chunk generation.
 
 **Files:**
 - `src/main/java/org/sosly/rivertale/mixin/ServerChunkCacheMixin.java` (or event handler)
 
 **Hook point:**
 
-During chunk generation, compute cells for any cell that overlaps the chunk being generated. This ensures cell data exists in the cache before the river carving system (a separate system outside this document) needs it.
+During chunk generation, compute regions for any region that overlaps the chunk being generated. This ensures region data is available when the river carving system (a separate system outside this document) needs it.
 
 ```
 onChunkGenerate(chunk):
     chunkWorldX = chunk.getPos().getMinBlockX()
     chunkWorldZ = chunk.getPos().getMinBlockZ()
 
-    cellX = floor(chunkWorldX / CELL_SIZE)
-    cellZ = floor(chunkWorldZ / CELL_SIZE)
+    regionX = floor(chunkWorldX / REGION_SIZE)
+    regionZ = floor(chunkWorldZ / REGION_SIZE)
 
-    // getCell triggers computation if not cached
-    cell = riverCellManager.getCell(new RiverCellKey(cellX, cellZ))
+    region = riverRegionManager.getRegion(new RiverRegionKey(regionX, regionZ))
 ```
 
 **When to trigger:**
 
-Hook into chunk generation after biome placement but before feature generation. The cell data needs to exist before any river carving features run.
+Hook into chunk generation after biome placement but before feature generation. The region data needs to exist before any river carving features run.
 
 For Forge 1.20.1, this could be:
 - A mixin to `ServerChunkCache` or `ChunkGenerator`
@@ -867,18 +783,18 @@ The exact hook point depends on when river carving will run, which is outside th
 - Modify biomes
 - Generate any visible features
 
-This phase only ensures cell network data is computed and cached. A separate river carving system consumes this data to actually shape the terrain.
+This phase only ensures region network data is computed during worldgen. A separate river carving system consumes this data to actually shape the terrain.
 
 **Validation:**
 1. Create a new world
 2. Walk around to generate chunks
-3. Run `/rivertale cell` — verify data shows `[cached]` not `[computed]`
-4. Check logs for cell computation messages during chunk generation
-5. Verify no duplicate computations for the same cell
+3. Run `/rivertale region` — verify computed data is consistent
+4. Check logs for region computation messages during chunk generation
+5. Verify no duplicate computations for the same region
 
 ---
 
-### Phase 11: Configuration
+### Phase 10: Configuration
 
 **Goal:** Expose tuning parameters for users.
 
@@ -888,7 +804,7 @@ This phase only ensures cell network data is computed and cached. A separate riv
 **Configurable Values:**
 
 ```
-cellSize = 256                     // range: 128 to 4096
+regionSize = 384                     // range: 384 to 4096 (minimum ensures 40-block mouths fit in cells)
 participationRate = 0.7            // range: 0.0 to 1.0
 densityEqualityThreshold = 0.01
 oceanThreshold = -0.13
@@ -897,7 +813,7 @@ depthWeight = 1.0                  // how much terrain elevation influences flow
 upstreamDepthLimit = 3             // how many cells upstream to count for width
 ```
 
-**Note:** Configuration changes only affect newly generated cells. Existing cached cells retain their original values. This is intentional to maintain coherence within a world.
+**Note:** Since regions are computed deterministically from world seed and coordinates, configuration changes will affect all regions consistently.
 
 **Validation:**
 1. Modify config values
@@ -911,229 +827,48 @@ upstreamDepthLimit = 3             // how many cells upstream to count for width
 
 | After Phase | Testable Behavior |
 |-------------|-------------------|
-| 2 | `/rivertale cell` command exists, outputs placeholder data |
+| 2 | `/rivertale region` command exists, outputs placeholder data |
 | 3 | `/rivertale locate` command exists with stub responses |
-| 4 | Density values appear correctly in cell info |
+| 4 | Density values appear correctly in region info |
 | 5 | Output direction points toward lower density neighbor; locate commands work |
 | 6 | Distance to terminus increases inland |
-| 7 | Cells persist across save/load; no race conditions during parallel generation |
+| 7 | Regions computed deterministically; same inputs produce same outputs |
 | 8 | River paths determined within cells; paths connect input to output edges |
 | 9 | Upstream count reflects feeder topology |
-| 10 | Cells computed automatically during chunk generation; `/rivertale cell` shows `[cached]` |
+| 9 | Regions computed automatically during chunk generation |
 | 11 | Config changes affect new worlds |
 
 ---
 
 ## Consumer Interface
 
-Once the cell-based network is complete, it provides the following data to downstream systems (river carving, decoration):
+Once the region-based network is complete, it provides the following data to downstream systems (river carving, decoration):
 
-**Per-Cell Data:**
-- `RiverCellKey` - coordinates (cellX, cellZ)
+**Per-Region Data:**
+- `RiverRegionKey` - coordinates (regionX, regionZ)
 - `density` - averaged terrain density
-- `classification` - LAND, OCEAN, COASTAL, LAKE, or LAKESHORE
+- `regionType` - Basin, Divide, Fluvial, Shore, Barren, or Body
 - `primaryOutput` - direction water exits (N/S/E/W or NONE)
 - `secondaryOutputs` - additional exit directions for new river sources
-- `distanceToTerminus` - cell count to nearest terminus (0 for all terminus types and basins)
+- `distanceToTerminus` - region count to nearest terminus (0 for all terminus types and basins)
 - `upstreamCount` - feeders within limited depth
-- `isBasin` - true if this cell is a basin terminus (endorheic, no outlet)
-- `riverPath` - list of subcell coordinates the river passes through (for LAND, COASTAL, and LAKESHORE cells)
+- `riverPath` - list of cell coordinates the river passes through (for Fluvial, Divide, and Shore regions)
 
 **Edge Centers:**
 
-Rivers cross cell boundaries at edge centers only. World coordinates for edge centers:
+Rivers cross region boundaries at edge centers only. World coordinates for edge centers:
 
 ```
 getEdgeCenter(key, edge):
     baseX = key.worldX
     baseZ = key.worldZ
 
-    NORTH: (baseX + CELL_SIZE/2, 0, baseZ)
-    SOUTH: (baseX + CELL_SIZE/2, 0, baseZ + CELL_SIZE)
-    EAST:  (baseX + CELL_SIZE, 0, baseZ + CELL_SIZE/2)
-    WEST:  (baseX, 0, baseZ + CELL_SIZE/2)
+    NORTH: (baseX + REGION_SIZE/2, 0, baseZ)
+    SOUTH: (baseX + REGION_SIZE/2, 0, baseZ + REGION_SIZE)
+    EAST:  (baseX + REGION_SIZE, 0, baseZ + REGION_SIZE/2)
+    WEST:  (baseX, 0, baseZ + REGION_SIZE/2)
     NONE:  null
 ```
 
-Adjacent cells always agree on connection points because edge centers are defined by world coordinates, not cell-relative positions.
+Adjacent regions always agree on connection points because edge centers are defined by world coordinates, not region-relative positions.
 
----
-
-## Phase 12 (Optional): Multi-Pass Extension
-
-This phase adds hierarchical river generation with multiple cell scales. It's not required for functional rivers but provides additional control over river hierarchy.
-
-**When to consider this extension:**
-
-- You want guaranteed major rivers at large scale with sparser tributaries at smaller scale
-- You want forced tributary bounding (tributaries must drain to their parent cell's river)
-- Single-pass rivers don't provide enough visual hierarchy
-
-**What this phase adds:**
-
-Multi-pass creates rivers at two (or more) scales:
-- Pass 1: Large cells (e.g., 4096 blocks) for major rivers
-- Pass 2: Smaller cells (e.g., ~585 blocks) for tributaries
-
-Pass 2 tributaries are bounded by their parent Pass 1 cell—they cannot cross Pass 1 boundaries. This ensures all water within a Pass 1 cell either drains to that cell's river or collects in a local pond.
-
-### Changes Required
-
-**RiverCellKey:**
-
-Add `pass` field to the record:
-
-```
-record RiverCellKey(int cellX, int cellZ, int pass)
-
-getCellSize(pass):
-    size = config.baseCellSize  // e.g., 4096
-    for i from 1 to pass-1:
-        size = size / config.subdivisionFactor  // e.g., 7
-    return max(size, config.minimumCellSize)  // e.g., 128
-
-fromBlockPos(blockX, blockZ, pass):
-    cellSize = getCellSize(pass)
-    return RiverCellKey(
-        floorDiv(blockX, cellSize),
-        floorDiv(blockZ, cellSize),
-        pass
-    )
-```
-
-**Participation Decay:**
-
-Higher passes have lower participation rates:
-
-```
-isParticipating(key):
-    baseRate = config.participationRate  // e.g., 0.7
-    decayPerPass = config.participationDecay  // e.g., 0.25
-    rate = baseRate * (1 - decayPerPass)^(key.pass - 1)
-
-    seed = key.cellX * 31 + key.cellZ * 17 + key.pass * 7
-    rng = seededRandom(seed XOR worldSeed)
-    return rng.nextDouble() < rate
-```
-
-Example with 0.7 base rate and 0.25 decay:
-- Pass 1: 70% participation
-- Pass 2: 52.5% participation
-- Pass 3: 39.4% participation
-
-**Pass 2 Flow Calculation:**
-
-Pass 2 cells only consider neighbors within the same Pass 1 cell:
-
-```
-computePass2Flow(cell):
-    parentKey = getParentPass1Cell(cell.key)
-
-    // Only consider neighbors within the same Pass 1 cell
-    neighbors = getParticipatingNeighbors(cell)
-        .filter(n => getParentPass1Cell(n.key) == parentKey)
-
-    lowerNeighbors = neighbors where neighbor.density < cell.density - EPSILON
-
-    if lowerNeighbors is empty:
-        cell.isBasin = true  // Local pond within this Pass 1 cell
-        cell.primaryOutput = NONE
-        return
-
-    sorted = lowerNeighbors.sortBy(density)
-    cell.primaryOutput = directionTo(sorted[0])
-    cell.secondaryOutputs = sorted[1..].map(directionTo)
-
-getParentPass1Cell(pass2Key):
-    pass1Size = getCellSize(1)
-    pass2Size = getCellSize(2)
-    worldX = pass2Key.cellX * pass2Size
-    worldZ = pass2Key.cellZ * pass2Size
-    return RiverCellKey(
-        floorDiv(worldX, pass1Size),
-        floorDiv(worldZ, pass1Size),
-        1
-    )
-```
-
-**Tributary Connection:**
-
-Pass 2 tributaries flow toward lower density until they either:
-1. Reach a subcell that contains the Pass 1 river path (merge point)
-2. Reach a local minimum within the parent cell (becoming a small pond)
-
-The Pass 1 river path (from Phase 8) runs through specific subcells. When a Pass 2 tributary's flow direction leads it into one of those subcells, it has reached the main river.
-
-**Debug Command Updates:**
-
-`/rivertale cell` shows both passes:
-
-```
-Pass 1 - Cell (3, -7):
-  Center: (14336, -26624)
-  Density: 0.342
-  Classification: LAND
-  Participating: true
-  Output: SOUTH
-  Inputs: NORTH, WEST
-  Distance to terminus: 12
-
-Pass 2 - Cell (24, -56):
-  Center: (12544, -28416)
-  Density: 0.298
-  Classification: LAND
-  Participating: true
-  Output: EAST
-  Inputs: NORTH
-  Distance to terminus: 9
-```
-
-**Worldgen Integration Updates:**
-
-Compute cells for all passes:
-
-```
-onChunkGenerate(chunk):
-    chunkWorldX = chunk.getPos().getMinBlockX()
-    chunkWorldZ = chunk.getPos().getMinBlockZ()
-
-    for pass from 1 to config.maxPasses:
-        cellSize = getCellSize(pass)
-        cellX = floor(chunkWorldX / cellSize)
-        cellZ = floor(chunkWorldZ / cellSize)
-
-        cell = riverCellManager.getCell(new RiverCellKey(cellX, cellZ, pass))
-```
-
-**Configuration Additions:**
-
-```
-baseCellSize = 4096
-subdivisionFactor = 7              // odd number ensures edge centers land in single subcell
-minimumCellSize = 128
-maxPasses = 2
-participationDecay = 0.25          // range: 0.0 to 1.0
-```
-
-### Validation
-
-1. Generate Pass 1 cells for an area
-2. Generate Pass 2 cells within a Pass 1 cell
-3. Verify Pass 2 cells flow toward lower density
-4. Verify Pass 2 cells respect parent cell boundaries (no flow crossing Pass 1 edges)
-5. Verify Pass 2 cells that reach local minima become basins (ponds)
-6. Verify `/rivertale cell` shows both passes with independent flow directions
-
-### Trade-offs
-
-**Advantages:**
-- Guaranteed major rivers at large scale
-- Sparser tributaries (via participation decay)
-- Forced tributary bounding ensures visual hierarchy
-
-**Disadvantages:**
-- More complex code
-- Artificial constraint (tributaries can't naturally drain to closer rivers)
-- Two passes to compute and cache per location
-
-The single-pass architecture handles most cases well. Multi-pass is worth adding if testing reveals that upstream accumulation alone doesn't provide sufficient width/visual hierarchy, or if you want explicit control over which rivers are "major" vs "minor."
