@@ -428,10 +428,8 @@ public class D8PathRefiner {
             int[] inputCell = new int[]{crossing.row(), crossing.col()};
             PathDirection pathDir = PathDirection.values()[dir];
 
-            int[] target = findNearestWaterCell(inputCell, targetCells);
-
             List<int[]> path = tracePathToWater(
-                flowDirection, inputCell, target,
+                flowDirection, inputCell,
                 pathCovered, forbidden, confluenceCells, targetCells);
 
             for (int[] cell : path) {
@@ -473,7 +471,6 @@ public class D8PathRefiner {
     private static List<int[]> tracePathToWater(
             FlowDirection[][] flowDirection,
             int[] start,
-            int[] target,
             boolean[][] pathCovered,
             boolean[][] forbidden,
             List<int[]> confluenceCells,
@@ -496,6 +493,11 @@ public class D8PathRefiner {
             }
 
             if (isInList(row, col, waterCells)) {
+                break;
+            }
+
+            int[] target = findNearestWaterCell(new int[]{row, col}, waterCells);
+            if (target == null) {
                 break;
             }
 

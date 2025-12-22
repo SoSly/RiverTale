@@ -29,7 +29,7 @@ public class RiverConfig {
 
         LAKE_THRESHOLD = builder
             .comment("Depth density value below which terrain is considered a lake (if not ocean).")
-            .defineInRange("lakeThreshold", -0.05, -1.0, 1.0);
+            .defineInRange("lakeThreshold", -0.06, -1.0, 1.0);
 
         DEPTH_WEIGHT = builder
             .comment("Weight applied to depth density when calculating combined density for flow direction.")
