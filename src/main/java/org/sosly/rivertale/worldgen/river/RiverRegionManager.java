@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import org.sosly.rivertale.config.RiverConfig;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
 
@@ -120,15 +122,11 @@ public class RiverRegionManager {
         region.setSecondaryOutputs(secondaries);
     }
 
-    public static RiverRegion getOrCreate(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
-        return RiverRegionCache.getOrCompute(key, k -> createRegion(k, provider, randomState));
+    public static RiverRegion createRegionFor(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
+        return createRegion(key, provider, randomState);
     }
 
-    public static void ensurePaths(RiverRegion region, DensityProvider provider, RandomState randomState) {
-        if (!region.getRiverPaths().isEmpty()) {
-            return;
-        }
-
+    public static Map<PathDirection, List<int[]>> computePaths(RiverRegion region, DensityProvider provider, RandomState randomState) {
         RiverRegionKey key = region.getKey();
         RegionDensityProvider cdp = (RegionDensityProvider) provider;
 
@@ -144,7 +142,7 @@ public class RiverRegionManager {
         RegionFeatureType featureType = terrain != null ? terrain : RegionFeatureType.DIVIDE;
 
         FlowDirection[][][] neighborFlowDirections = new FlowDirection[4][][];
-        RegionFeatureType[] neighborFeatureTypes = ensureNeighborsLoaded(key, provider, randomState);
+        RegionFeatureType[] neighborFeatureTypes = loadNeighborFeatures(key, provider);
         PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
 
         for (int i = 0; i < 4; i++) {
@@ -158,16 +156,15 @@ public class RiverRegionManager {
             densitySampler, continentsSampler, depthSampler,
             oceanThreshold, lakeThreshold);
 
-        region.setRiverPaths(result.riverPaths());
+        return result.riverPaths();
     }
 
-    public static RegionFeatureType[] ensureNeighborsLoaded(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
+    public static RegionFeatureType[] loadNeighborFeatures(RiverRegionKey key, DensityProvider provider) {
         RegionFeatureType[] neighborFeatureTypes = new RegionFeatureType[4];
         PathDirection[] cardinals = {PathDirection.NORTH, PathDirection.SOUTH, PathDirection.EAST, PathDirection.WEST};
 
         for (int i = 0; i < cardinals.length; i++) {
             RiverRegionKey neighborKey = cardinals[i].neighbor(key);
-            getOrCreate(neighborKey, provider, randomState);
             RegionFeatureType terrain = classifyTerrain(neighborKey, provider);
             neighborFeatureTypes[i] = terrain != null ? terrain : RegionFeatureType.DIVIDE;
         }
@@ -180,15 +177,10 @@ public class RiverRegionManager {
     }
 
     private static int getDistanceToTerminusRecursive(RiverRegion region, DensityProvider provider, RandomState randomState, int depth) {
-        if (region.getDistanceToTerminus() >= 0) {
-            return region.getDistanceToTerminus();
-        }
-
         RegionFeatureType featureType = getRegionFeatureType(region, provider, randomState);
         if (featureType == RegionFeatureType.BODY
                 || featureType == RegionFeatureType.SHORE
                 || featureType == RegionFeatureType.BASIN) {
-            region.setDistanceToTerminus(0);
             return 0;
         }
 
@@ -198,19 +190,15 @@ public class RiverRegionManager {
         }
 
         if (!region.isParticipating() || region.getPrimaryOutput() == PathDirection.NONE) {
-            region.setDistanceToTerminus(0);
             return 0;
         }
 
         PathDirection primaryOutput = region.getPrimaryOutput();
         RiverRegionKey downstreamKey = primaryOutput.neighbor(region.getKey());
-        RiverRegion downstream = RiverRegionCache.getOrCompute(downstreamKey, k -> createRegion(k, provider, randomState));
+        RiverRegion downstream = createRegion(downstreamKey, provider, randomState);
 
         int downstreamDistance = getDistanceToTerminusRecursive(downstream, provider, randomState, depth + 1);
-        int distance = 1 + downstreamDistance;
-
-        region.setDistanceToTerminus(distance);
-        return distance;
+        return 1 + downstreamDistance;
     }
 
     public static int getUpstreamCount(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
@@ -256,18 +244,17 @@ public class RiverRegionManager {
         return upstreamCount == 0 ? RegionFeatureType.DIVIDE : RegionFeatureType.FLUVIAL;
     }
 
-    public static CellFeatureType getCellFeatureType(RiverRegion region, int row, int col, DensityProvider provider) {
-        boolean isOnPath = isCellOnRiverPath(region, row, col);
-        if (!isOnPath) {
+    public static CellFeatureType getCellFeatureType(RiverRegion region, int row, int col, Map<PathDirection, List<int[]>> paths, DensityProvider provider) {
+        if (!isCellOnRiverPath(paths, row, col)) {
             return null;
         }
 
-        int inletCount = countInlets(region, row, col);
+        int inletCount = countInlets(paths, row, col);
 
-        if (isTerminusCell(region, row, col, provider)) {
+        if (isTerminusCell(region, paths, row, col, provider)) {
             return CellFeatureType.TERMINUS;
         }
-        if (isSourceCell(region, row, col, inletCount)) {
+        if (isSourceCell(paths, row, col, inletCount)) {
             return CellFeatureType.SOURCE;
         }
         if (inletCount >= 2) {
@@ -276,9 +263,9 @@ public class RiverRegionManager {
         return CellFeatureType.COURSE;
     }
 
-    private static int countInlets(RiverRegion region, int row, int col) {
-        java.util.Set<Long> uniqueInlets = new java.util.HashSet<>();
-        for (java.util.List<int[]> path : region.getRiverPaths().values()) {
+    private static int countInlets(Map<PathDirection, List<int[]>> paths, int row, int col) {
+        Set<Long> uniqueInlets = new HashSet<>();
+        for (List<int[]> path : paths.values()) {
             for (int i = 1; i < path.size(); i++) {
                 int[] current = path.get(i);
                 if (current[0] == row && current[1] == col) {
@@ -291,8 +278,8 @@ public class RiverRegionManager {
         return uniqueInlets.size();
     }
 
-    private static boolean isCellOnRiverPath(RiverRegion region, int row, int col) {
-        for (java.util.List<int[]> path : region.getRiverPaths().values()) {
+    private static boolean isCellOnRiverPath(Map<PathDirection, List<int[]>> paths, int row, int col) {
+        for (List<int[]> path : paths.values()) {
             for (int[] point : path) {
                 if (point[0] == row && point[1] == col) {
                     return true;
@@ -302,7 +289,7 @@ public class RiverRegionManager {
         return false;
     }
 
-    private static boolean isTerminusCell(RiverRegion region, int row, int col, DensityProvider provider) {
+    private static boolean isTerminusCell(RiverRegion region, Map<PathDirection, List<int[]>> paths, int row, int col, DensityProvider provider) {
         RegionFeatureType terrain = classifyTerrain(region.getKey(), provider);
         boolean isShore = terrain == RegionFeatureType.SHORE;
         boolean isBasin = region.getPrimaryOutput() == PathDirection.NONE
@@ -312,7 +299,7 @@ public class RiverRegionManager {
             return false;
         }
 
-        for (java.util.List<int[]> path : region.getRiverPaths().values()) {
+        for (List<int[]> path : paths.values()) {
             if (path.isEmpty()) {
                 continue;
             }
@@ -324,13 +311,13 @@ public class RiverRegionManager {
         return false;
     }
 
-    private static boolean isSourceCell(RiverRegion region, int row, int col, int inletCount) {
+    private static boolean isSourceCell(Map<PathDirection, List<int[]>> paths, int row, int col, int inletCount) {
         if (inletCount > 0) {
             return false;
         }
 
-        for (java.util.Map.Entry<PathDirection, java.util.List<int[]>> entry : region.getRiverPaths().entrySet()) {
-            java.util.List<int[]> path = entry.getValue();
+        for (Map.Entry<PathDirection, List<int[]>> entry : paths.entrySet()) {
+            List<int[]> path = entry.getValue();
             if (path.isEmpty()) {
                 continue;
             }
@@ -356,7 +343,7 @@ public class RiverRegionManager {
 
         for (PathDirection dir : cardinals) {
             RiverRegionKey neighborKey = dir.neighbor(key);
-            RiverRegion neighbor = getOrCreate(neighborKey, provider, randomState);
+            RiverRegion neighbor = createRegion(neighborKey, provider, randomState);
 
             if (!neighbor.isParticipating()) {
                 continue;

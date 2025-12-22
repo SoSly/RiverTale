@@ -13,7 +13,6 @@ import org.sosly.rivertale.worldgen.river.PathDirection;
 import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
 import org.sosly.rivertale.worldgen.river.RegionFeatureType;
 import org.sosly.rivertale.worldgen.river.RiverRegion;
-import org.sosly.rivertale.worldgen.river.RiverRegionCache;
 import org.sosly.rivertale.worldgen.river.RiverRegionKey;
 import org.sosly.rivertale.worldgen.river.RiverRegionManager;
 
@@ -37,12 +36,10 @@ public class RegionCommand {
                 RegionDensityProvider provider = new RegionDensityProvider(randomState);
 
                 RiverRegionKey key = RiverRegionKey.fromBlockPos(pos.getX(), pos.getZ());
-                boolean wasCached = RiverRegionCache.getIfPresent(key) != null;
-                RiverRegion region = RiverRegionManager.getOrCreate(key, provider, randomState);
+                RiverRegion region = RiverRegionManager.createRegionFor(key, provider, randomState);
 
-                String cacheStatus = wasCached ? "[cached]" : "[computed]";
                 source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
-                source.sendSuccess(() -> Component.literal(String.format("Region (%d, %d): %s", key.regionX(), key.regionZ(), cacheStatus))
+                source.sendSuccess(() -> Component.literal(String.format("Region (%d, %d)", key.regionX(), key.regionZ()))
                     .withStyle(ChatFormatting.YELLOW), false);
 
                 RegionFeatureType featureType = RiverRegionManager.getRegionFeatureType(region, provider, randomState);
@@ -77,8 +74,7 @@ public class RegionCommand {
                         reportWaterSamples(source, key, provider);
                     }
 
-                    RiverRegionManager.ensurePaths(region, provider, randomState);
-                    Map<PathDirection, List<int[]>> terminusPaths = region.getRiverPaths();
+                    Map<PathDirection, List<int[]>> terminusPaths = RiverRegionManager.computePaths(region, provider, randomState);
                     if (!terminusPaths.isEmpty()) {
                         for (Map.Entry<PathDirection, List<int[]>> entry : terminusPaths.entrySet()) {
                             PathDirection inputDirection = entry.getKey();
@@ -124,8 +120,7 @@ public class RegionCommand {
                 source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
                     .withStyle(ChatFormatting.WHITE), false);
 
-                RiverRegionManager.ensurePaths(region, provider, randomState);
-                Map<PathDirection, List<int[]>> paths = region.getRiverPaths();
+                Map<PathDirection, List<int[]>> paths = RiverRegionManager.computePaths(region, provider, randomState);
                 if (!paths.isEmpty()) {
                     for (Map.Entry<PathDirection, List<int[]>> entry : paths.entrySet()) {
                         PathDirection inputDirection = entry.getKey();
@@ -133,7 +128,7 @@ public class RegionCommand {
                         String pathStr = path.stream()
                             .map(coords -> String.format("(%d,%d)", coords[0], coords[1]))
                             .collect(Collectors.joining(" -> "));
-                        String label = formatPathLabel(inputDirection, primaryOutput, region);
+                        String label = formatPathLabel(inputDirection, primaryOutput, region, paths);
                         source.sendSuccess(() -> Component.literal(String.format("  %s: %s", label, pathStr))
                             .withStyle(ChatFormatting.WHITE), false);
                     }
@@ -143,8 +138,8 @@ public class RegionCommand {
             });
     }
 
-    private static String formatPathLabel(PathDirection key, PathDirection primaryOutput, RiverRegion region) {
-        if (key == primaryOutput && !isEdgeDirection(key, region)) {
+    private static String formatPathLabel(PathDirection key, PathDirection primaryOutput, RiverRegion region, Map<PathDirection, List<int[]>> paths) {
+        if (key == primaryOutput && !isEdgeDirection(key, paths)) {
             return String.format("Source to %s", primaryOutput);
         }
 
@@ -155,8 +150,8 @@ public class RegionCommand {
         return String.format("Path from %s to %s", key, primaryOutput);
     }
 
-    private static boolean isEdgeDirection(PathDirection key, RiverRegion region) {
-        List<int[]> path = region.getRiverPaths().get(key);
+    private static boolean isEdgeDirection(PathDirection key, Map<PathDirection, List<int[]>> paths) {
+        List<int[]> path = paths.get(key);
         if (path == null || path.isEmpty()) {
             return false;
         }

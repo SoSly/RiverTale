@@ -1,9 +1,6 @@
 package org.sosly.rivertale.worldgen.river;
 
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public class RiverRegion {
@@ -15,8 +12,6 @@ public class RiverRegion {
 
     private PathDirection primaryOutput;
     private Set<PathDirection> secondaryOutputs;
-    private int distanceToTerminus;
-    private Map<PathDirection, List<int[]>> riverPaths;
 
     public RiverRegion(RiverRegionKey key, double density, double[][] cellDensities, boolean participating) {
         this.key = key;
@@ -25,8 +20,6 @@ public class RiverRegion {
         this.participating = participating;
         this.primaryOutput = PathDirection.NONE;
         this.secondaryOutputs = new HashSet<>();
-        this.distanceToTerminus = -1;
-        this.riverPaths = new HashMap<>();
     }
 
     public RiverRegionKey getKey() {
@@ -59,21 +52,5 @@ public class RiverRegion {
 
     public void setSecondaryOutputs(Set<PathDirection> secondaryOutputs) {
         this.secondaryOutputs = secondaryOutputs;
-    }
-
-    public int getDistanceToTerminus() {
-        return distanceToTerminus;
-    }
-
-    public void setDistanceToTerminus(int distanceToTerminus) {
-        this.distanceToTerminus = distanceToTerminus;
-    }
-
-    public Map<PathDirection, List<int[]>> getRiverPaths() {
-        return riverPaths;
-    }
-
-    public void setRiverPaths(Map<PathDirection, List<int[]>> riverPaths) {
-        this.riverPaths = riverPaths;
     }
 }

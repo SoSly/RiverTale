@@ -189,7 +189,7 @@ public class LocateCommand {
 
     private static BlockPos checkRegionType(int regionX, int regionZ, int playerY, RegionDensityProvider provider, RandomState randomState, RegionFeatureType target) {
         RiverRegionKey key = new RiverRegionKey(regionX, regionZ);
-        RiverRegion region = RiverRegionManager.getOrCreate(key, provider, randomState);
+        RiverRegion region = RiverRegionManager.createRegionFor(key, provider, randomState);
         RegionFeatureType type = RiverRegionManager.getRegionFeatureType(region, provider, randomState);
 
         if (type == target) {
@@ -201,20 +201,20 @@ public class LocateCommand {
 
     private static BlockPos checkCellType(int regionX, int regionZ, int playerY, RegionDensityProvider provider, RandomState randomState, CellFeatureType target) {
         RiverRegionKey key = new RiverRegionKey(regionX, regionZ);
-        RiverRegion region = RiverRegionManager.getOrCreate(key, provider, randomState);
+        RiverRegion region = RiverRegionManager.createRegionFor(key, provider, randomState);
 
         if (!region.isParticipating()) {
             return null;
         }
 
-        RiverRegionManager.ensurePaths(region, provider, randomState);
+        java.util.Map<org.sosly.rivertale.worldgen.river.PathDirection, java.util.List<int[]>> paths = RiverRegionManager.computePaths(region, provider, randomState);
 
         int regionSize = RiverRegionKey.getRegionSize();
         int cellSpacing = regionSize / 8;
 
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
-                CellFeatureType cellType = RiverRegionManager.getCellFeatureType(region, row, col, provider);
+                CellFeatureType cellType = RiverRegionManager.getCellFeatureType(region, row, col, paths, provider);
                 if (cellType != null && cellType == target) {
                     int cellX = key.worldX() + (col * cellSpacing) + (cellSpacing / 2);
                     int cellZ = key.worldZ() + (row * cellSpacing) + (cellSpacing / 2);

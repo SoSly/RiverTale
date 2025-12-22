@@ -34,8 +34,8 @@ public class CellCommand {
                 int playerZ = pos.getZ();
 
                 RiverRegionKey regionKey = RiverRegionKey.fromBlockPos(playerX, playerZ);
-                RiverRegion region = RiverRegionManager.getOrCreate(regionKey, provider, randomState);
-                RiverRegionManager.ensurePaths(region, provider, randomState);
+                RiverRegion region = RiverRegionManager.createRegionFor(regionKey, provider, randomState);
+                java.util.Map<org.sosly.rivertale.worldgen.river.PathDirection, java.util.List<int[]>> paths = RiverRegionManager.computePaths(region, provider, randomState);
 
                 int regionSize = RiverRegionKey.getRegionSize();
                 int cellSpacing = regionSize / 8;
@@ -52,7 +52,7 @@ public class CellCommand {
                 FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(regionKey, densitySampler);
                 FlowDirection flowDirection = flowDirections[row][col];
 
-                CellFeatureType featureType = RiverRegionManager.getCellFeatureType(region, row, col, provider);
+                CellFeatureType featureType = RiverRegionManager.getCellFeatureType(region, row, col, paths, provider);
 
                 source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
                 source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d) in Region (%d, %d)", row, col, regionKey.regionX(), regionKey.regionZ()))

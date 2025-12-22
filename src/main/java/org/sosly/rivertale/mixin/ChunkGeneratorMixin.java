@@ -40,7 +40,7 @@ public abstract class ChunkGeneratorMixin {
         for (int regionX = minKey.regionX(); regionX <= maxKey.regionX(); regionX++) {
             for (int regionZ = minKey.regionZ(); regionZ <= maxKey.regionZ(); regionZ++) {
                 RiverRegionKey regionKey = new RiverRegionKey(regionX, regionZ);
-                RiverRegionManager.getOrCreate(regionKey, provider, randomState);
+                RiverRegionManager.createRegionFor(regionKey, provider, randomState);
             }
         }
     }
