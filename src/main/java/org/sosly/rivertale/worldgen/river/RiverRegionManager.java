@@ -43,8 +43,8 @@ public class RiverRegionManager {
 
         for (int i = 0; i < 8 && (!hasWater || !hasLand); i++) {
             for (int j = 0; j < 8 && (!hasWater || !hasLand); j++) {
-                int sampleX = key.worldX() + (int) (i * step);
-                int sampleZ = key.worldZ() + (int) (j * step);
+                int sampleX = key.worldX() + (int) ((i + 0.5) * step);
+                int sampleZ = key.worldZ() + (int) ((j + 0.5) * step);
 
                 if (provider.isOcean(sampleX, sampleZ) || provider.isLake(sampleX, sampleZ)) {
                     hasWater = true;
@@ -72,6 +72,7 @@ public class RiverRegionManager {
 
         if (terrain == RegionFeatureType.SHORE) {
             region.setPrimaryOutput(PathDirection.NONE);
+            return;
         }
 
         RiverRegionKey key = region.getKey();
@@ -226,8 +227,8 @@ public class RiverRegionManager {
 
         for (int i = 0; i < 8 && (!hasWater || !hasLand); i++) {
             for (int j = 0; j < 8 && (!hasWater || !hasLand); j++) {
-                int sampleX = key.worldX() + (int) (i * step);
-                int sampleZ = key.worldZ() + (int) (j * step);
+                int sampleX = key.worldX() + (int) ((i + 0.5) * step);
+                int sampleZ = key.worldZ() + (int) ((j + 0.5) * step);
                 if (provider.isOcean(sampleX, sampleZ) || provider.isLake(sampleX, sampleZ)) {
                     hasWater = true;
                 } else {

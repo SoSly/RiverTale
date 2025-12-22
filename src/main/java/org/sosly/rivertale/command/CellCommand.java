@@ -64,6 +64,17 @@ public class CellCommand {
                 source.sendSuccess(() -> Component.literal(String.format("  Cell Type: %s", featureType))
                     .withStyle(ChatFormatting.WHITE), false);
 
+                double continents = provider.getContinents(cellCenterX, cellCenterZ);
+                double depth = provider.getDepth(cellCenterX, cellCenterZ);
+                double combined = provider.getDensity(cellCenterX, cellCenterZ);
+
+                source.sendSuccess(() -> Component.literal(String.format("  Continents: %.4f", continents))
+                    .withStyle(ChatFormatting.WHITE), false);
+                source.sendSuccess(() -> Component.literal(String.format("  Depth: %.4f", depth))
+                    .withStyle(ChatFormatting.WHITE), false);
+                source.sendSuccess(() -> Component.literal(String.format("  Combined: %.4f", combined))
+                    .withStyle(ChatFormatting.WHITE), false);
+
                 return 1;
             });
     }

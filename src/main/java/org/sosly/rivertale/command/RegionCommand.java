@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
+import org.sosly.rivertale.config.RiverConfig;
 import org.sosly.rivertale.worldgen.river.PathDirection;
 import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
 import org.sosly.rivertale.worldgen.river.RegionFeatureType;
@@ -15,6 +16,8 @@ import org.sosly.rivertale.worldgen.river.RiverRegion;
 import org.sosly.rivertale.worldgen.river.RiverRegionCache;
 import org.sosly.rivertale.worldgen.river.RiverRegionKey;
 import org.sosly.rivertale.worldgen.river.RiverRegionManager;
+
+import java.util.ArrayList;
 
 import java.util.List;
 import java.util.Map;
@@ -70,6 +73,8 @@ public class RegionCommand {
                         int upstreamCount = RiverRegionManager.getUpstreamCount(key, provider, randomState);
                         source.sendSuccess(() -> Component.literal(String.format("  Upstream count: %d", upstreamCount))
                             .withStyle(ChatFormatting.WHITE), false);
+
+                        reportWaterSamples(source, key, provider);
                     }
 
                     RiverRegionManager.ensurePaths(region, provider, randomState);
@@ -159,5 +164,48 @@ public class RegionCommand {
         int row = start[0];
         int col = start[1];
         return row == 0 || row == 7 || col == 0 || col == 7;
+    }
+
+    private static void reportWaterSamples(CommandSourceStack source, RiverRegionKey key, RegionDensityProvider provider) {
+        int regionSize = RiverRegionKey.getRegionSize();
+        double step = regionSize / 8.0;
+        double oceanThreshold = RiverConfig.OCEAN_THRESHOLD.get();
+        double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
+
+        source.sendSuccess(() -> Component.literal(String.format("  Thresholds: ocean=%.3f, lake=%.3f", oceanThreshold, lakeThreshold))
+            .withStyle(ChatFormatting.GRAY), false);
+
+        List<String> waterCells = new ArrayList<>();
+
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                int sampleX = key.worldX() + (int) ((i + 0.5) * step);
+                int sampleZ = key.worldZ() + (int) ((j + 0.5) * step);
+
+                double continents = provider.getContinents(sampleX, sampleZ);
+                double depth = provider.getDepth(sampleX, sampleZ);
+
+                boolean isOcean = continents < oceanThreshold;
+                boolean isLake = !isOcean && depth < lakeThreshold;
+
+                if (isOcean || isLake) {
+                    String type = isOcean ? "OCEAN" : "LAKE";
+                    waterCells.add(String.format("(%d, %d) %s c=%.3f d=%.3f", sampleX, sampleZ, type, continents, depth));
+                }
+            }
+        }
+
+        if (waterCells.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("  Water samples: NONE (bug: no water found but classified as SHORE)")
+                .withStyle(ChatFormatting.RED), false);
+        } else {
+            source.sendSuccess(() -> Component.literal(String.format("  Water samples: %d cells", waterCells.size()))
+                .withStyle(ChatFormatting.AQUA), false);
+            for (String cell : waterCells) {
+                String cellCopy = cell;
+                source.sendSuccess(() -> Component.literal("    " + cellCopy)
+                    .withStyle(ChatFormatting.AQUA), false);
+            }
+        }
     }
 }

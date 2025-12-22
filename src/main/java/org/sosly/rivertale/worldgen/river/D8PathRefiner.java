@@ -42,7 +42,9 @@ public class D8PathRefiner {
                 crossings, crossingStrengths);
         }
 
-        PathDirection primaryOutputDirection = computePrimaryOutput(flowDirection, crossings);
+        PathDirection primaryOutputDirection = isShore
+            ? PathDirection.NONE
+            : computePrimaryOutput(flowDirection, crossings);
 
         List<int[]> terminusList = new ArrayList<>();
         Map<PathDirection, List<int[]>> riverPaths = new HashMap<>();
@@ -62,6 +64,15 @@ public class D8PathRefiner {
         }
 
         int[][] terminusCells = terminusList.toArray(new int[0][]);
+
+        if (isShore) {
+            for (int i = 0; i < 4; i++) {
+                if (crossings[i] != null && crossings[i].direction() == EdgeCrossing.Direction.OUT) {
+                    crossings[i] = null;
+                    crossingStrengths[i] = 0;
+                }
+            }
+        }
 
         return new D8FlowResult(flowDirection, crossings,
             crossingStrengths, primaryOutputDirection, terminusCells,
@@ -379,7 +390,31 @@ public class D8PathRefiner {
             Map<PathDirection, List<int[]>> riverPaths,
             List<int[]> confluenceCells) {
 
+        List<int[]> oceanCells = new ArrayList<>();
+        List<int[]> lakeCells = new ArrayList<>();
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                int worldX = cellOriginX + col * cellSpacing + cellSpacing / 2;
+                int worldZ = cellOriginZ + row * cellSpacing + cellSpacing / 2;
+                double continents = continentsSampler.apply(worldX, worldZ);
+                if (continents < oceanThreshold) {
+                    oceanCells.add(new int[]{row, col});
+                } else {
+                    double depth = depthSampler.apply(worldX, worldZ);
+                    if (depth < lakeThreshold) {
+                        lakeCells.add(new int[]{row, col});
+                    }
+                }
+            }
+        }
+
+        List<int[]> targetCells = oceanCells.isEmpty() ? lakeCells : oceanCells;
+        if (targetCells.isEmpty()) {
+            return;
+        }
+
         boolean[][] pathCovered = new boolean[GRID_SIZE][GRID_SIZE];
+        boolean[][] forbidden = new boolean[GRID_SIZE][GRID_SIZE];
 
         for (int dir = 0; dir < 4; dir++) {
             EdgeCrossing crossing = crossings[dir];
@@ -393,10 +428,11 @@ public class D8PathRefiner {
             int[] inputCell = new int[]{crossing.row(), crossing.col()};
             PathDirection pathDir = PathDirection.values()[dir];
 
-            List<int[]> path = tracePathUntilWater(
-                flowDirection, inputCell, cellOriginX, cellOriginZ, cellSpacing,
-                continentsSampler, depthSampler, oceanThreshold, lakeThreshold,
-                pathCovered, confluenceCells);
+            int[] target = findNearestWaterCell(inputCell, targetCells);
+
+            List<int[]> path = tracePathToWater(
+                flowDirection, inputCell, target,
+                pathCovered, forbidden, confluenceCells, targetCells);
 
             for (int[] cell : path) {
                 pathCovered[cell[0]][cell[1]] = true;
@@ -404,6 +440,21 @@ public class D8PathRefiner {
 
             riverPaths.put(pathDir, path);
         }
+    }
+
+    private static int[] findNearestWaterCell(int[] from, List<int[]> waterCells) {
+        int[] nearest = null;
+        int minDist = Integer.MAX_VALUE;
+
+        for (int[] water : waterCells) {
+            int dist = distanceSquared(from[0], from[1], water[0], water[1]);
+            if (dist < minDist) {
+                minDist = dist;
+                nearest = water;
+            }
+        }
+
+        return nearest;
     }
 
     private static boolean isWater(int worldX, int worldZ,
@@ -419,18 +470,14 @@ public class D8PathRefiner {
         return depth < lakeThreshold;
     }
 
-    private static List<int[]> tracePathUntilWater(
+    private static List<int[]> tracePathToWater(
             FlowDirection[][] flowDirection,
             int[] start,
-            int cellOriginX,
-            int cellOriginZ,
-            int cellSpacing,
-            BiFunction<Integer, Integer, Double> continentsSampler,
-            BiFunction<Integer, Integer, Double> depthSampler,
-            double oceanThreshold,
-            double lakeThreshold,
+            int[] target,
             boolean[][] pathCovered,
-            List<int[]> confluenceCells) {
+            boolean[][] forbidden,
+            List<int[]> confluenceCells,
+            List<int[]> waterCells) {
 
         List<int[]> path = new ArrayList<>();
         boolean[][] visited = new boolean[GRID_SIZE][GRID_SIZE];
@@ -440,9 +487,6 @@ public class D8PathRefiner {
         int col = start[1];
 
         while (true) {
-            int worldX = cellOriginX + col * cellSpacing + cellSpacing / 2;
-            int worldZ = cellOriginZ + row * cellSpacing + cellSpacing / 2;
-
             path.add(new int[]{row, col});
             visited[row][col] = true;
 
@@ -451,82 +495,41 @@ public class D8PathRefiner {
                 confluenceMarked = true;
             }
 
-            if (isWater(worldX, worldZ, continentsSampler, depthSampler, oceanThreshold, lakeThreshold)) {
+            if (isInList(row, col, waterCells)) {
                 break;
             }
 
             FlowDirection d8Dir = flowDirection[row][col];
             int[] d8Next = getNeighborInDirection(row, col, d8Dir);
+            int currentDist = distanceSquared(row, col, target[0], target[1]);
 
-            boolean d8Valid = d8Dir != FlowDirection.SINK
-                && d8Next[0] >= 0 && d8Next[0] < GRID_SIZE
-                && d8Next[1] >= 0 && d8Next[1] < GRID_SIZE
-                && !visited[d8Next[0]][d8Next[1]];
-
-            if (d8Valid) {
-                row = d8Next[0];
-                col = d8Next[1];
-                continue;
+            if (d8Dir != FlowDirection.SINK && isValidMove(d8Next, visited, forbidden)) {
+                int d8Dist = distanceSquared(d8Next[0], d8Next[1], target[0], target[1]);
+                if (d8Dist < currentDist) {
+                    row = d8Next[0];
+                    col = d8Next[1];
+                    continue;
+                }
             }
 
-            int[] fallback = findNeighborTowardWater(row, col, cellOriginX, cellOriginZ, cellSpacing,
-                continentsSampler, depthSampler, oceanThreshold, lakeThreshold, visited);
-            if (fallback == null) {
+            int[] closest = findClosestNeighbor(row, col, target, flowDirection, visited, forbidden);
+            if (closest == null) {
                 break;
             }
-            row = fallback[0];
-            col = fallback[1];
+            row = closest[0];
+            col = closest[1];
         }
 
         return path;
     }
 
-    private static int[] findNeighborTowardWater(
-            int row, int col,
-            int cellOriginX, int cellOriginZ, int cellSpacing,
-            BiFunction<Integer, Integer, Double> continentsSampler,
-            BiFunction<Integer, Integer, Double> depthSampler,
-            double oceanThreshold, double lakeThreshold,
-            boolean[][] visited) {
-
-        int[][] neighbors = {
-            {row - 1, col},
-            {row + 1, col},
-            {row, col + 1},
-            {row, col - 1}
-        };
-
-        int[] waterNeighbor = null;
-        int[] best = null;
-        double lowestContinents = Double.MAX_VALUE;
-
-        for (int[] neighbor : neighbors) {
-            int r = neighbor[0];
-            int c = neighbor[1];
-
-            if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) {
-                continue;
-            }
-            if (visited[r][c]) {
-                continue;
-            }
-
-            int worldX = cellOriginX + c * cellSpacing + cellSpacing / 2;
-            int worldZ = cellOriginZ + r * cellSpacing + cellSpacing / 2;
-
-            if (isWater(worldX, worldZ, continentsSampler, depthSampler, oceanThreshold, lakeThreshold)) {
-                waterNeighbor = neighbor;
-                continue;
-            }
-
-            double continents = continentsSampler.apply(worldX, worldZ);
-            if (continents < lowestContinents) {
-                lowestContinents = continents;
-                best = neighbor;
+    private static boolean isInList(int row, int col, List<int[]> cells) {
+        for (int[] cell : cells) {
+            if (cell[0] == row && cell[1] == col) {
+                return true;
             }
         }
-
-        return waterNeighbor != null ? waterNeighbor : best;
+        return false;
     }
 
     private static List<int[]> tracePathToOutput(
@@ -559,10 +562,10 @@ public class D8PathRefiner {
 
             FlowDirection d8Dir = flowDirection[row][col];
             int[] d8Next = getNeighborInDirection(row, col, d8Dir);
-            int currentDist = manhattanDistance(row, col, target[0], target[1]);
+            int currentDist = distanceSquared(row, col, target[0], target[1]);
 
             if (d8Dir != FlowDirection.SINK && isValidMove(d8Next, visited, forbidden)) {
-                int d8Dist = manhattanDistance(d8Next[0], d8Next[1], target[0], target[1]);
+                int d8Dist = distanceSquared(d8Next[0], d8Next[1], target[0], target[1]);
                 if (d8Dist < currentDist) {
                     row = d8Next[0];
                     col = d8Next[1];
@@ -607,7 +610,8 @@ public class D8PathRefiner {
             {row, col - 1}
         };
 
-        int currentDist = manhattanDistance(row, col, target[0], target[1]);
+        int currentDist = distanceSquared(row, col, target[0], target[1]);
+        FlowDirection currentD8 = flowDirection[row][col];
 
         int[] best = null;
         int bestScore = Integer.MIN_VALUE;
@@ -618,13 +622,14 @@ public class D8PathRefiner {
                 continue;
             }
 
-            int dist = manhattanDistance(neighbor[0], neighbor[1], target[0], target[1]);
+            int dist = distanceSquared(neighbor[0], neighbor[1], target[0], target[1]);
             if (dist >= currentDist) {
                 continue;
             }
 
-            FlowDirection d8Dir = flowDirection[neighbor[0]][neighbor[1]];
-            int score = computeD8Alignment(neighbor, target, d8Dir);
+            int moveRow = neighbor[0] - row;
+            int moveCol = neighbor[1] - col;
+            int score = computeMoveAlignment(moveRow, moveCol, currentD8);
 
             if (score > bestScore || (score == bestScore && dist < bestDist)) {
                 bestScore = score;
@@ -636,37 +641,21 @@ public class D8PathRefiner {
         return best;
     }
 
-    private static int computeD8Alignment(int[] from, int[] target, FlowDirection d8Dir) {
-        int targetDRow = Integer.signum(target[0] - from[0]);
-        int targetDCol = Integer.signum(target[1] - from[1]);
-
-        int d8DRow = 0;
-        int d8DCol = 0;
+    private static int computeMoveAlignment(int moveRow, int moveCol, FlowDirection d8Dir) {
+        int d8Row = 0;
+        int d8Col = 0;
         switch (d8Dir) {
-            case NORTH -> d8DRow = -1;
-            case SOUTH -> d8DRow = 1;
-            case EAST -> d8DCol = 1;
-            case WEST -> d8DCol = -1;
-            case NORTHEAST -> {
-                d8DRow = -1;
-                d8DCol = 1;
-            }
-            case NORTHWEST -> {
-                d8DRow = -1;
-                d8DCol = -1;
-            }
-            case SOUTHEAST -> {
-                d8DRow = 1;
-                d8DCol = 1;
-            }
-            case SOUTHWEST -> {
-                d8DRow = 1;
-                d8DCol = -1;
-            }
+            case NORTH -> d8Row = -1;
+            case SOUTH -> d8Row = 1;
+            case EAST -> d8Col = 1;
+            case WEST -> d8Col = -1;
+            case NORTHEAST -> { d8Row = -1; d8Col = 1; }
+            case NORTHWEST -> { d8Row = -1; d8Col = -1; }
+            case SOUTHEAST -> { d8Row = 1; d8Col = 1; }
+            case SOUTHWEST -> { d8Row = 1; d8Col = -1; }
             default -> { }
         }
-
-        return targetDRow * d8DRow + targetDCol * d8DCol;
+        return moveRow * d8Row + moveCol * d8Col;
     }
 
     private static boolean isValidMove(int[] pos, boolean[][] visited, boolean[][] forbidden) {
@@ -685,7 +674,9 @@ public class D8PathRefiner {
         return true;
     }
 
-    private static int manhattanDistance(int r1, int c1, int r2, int c2) {
-        return Math.abs(r1 - r2) + Math.abs(c1 - c2);
+    private static int distanceSquared(int r1, int c1, int r2, int c2) {
+        int dr = r1 - r2;
+        int dc = c1 - c2;
+        return dr * dr + dc * dc;
     }
 }
