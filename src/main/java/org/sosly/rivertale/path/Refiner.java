@@ -175,22 +175,25 @@ public class Refiner {
             densitySampler, dir, bestPos);
         double diff = Math.abs(densities[0] - densities[1]);
 
-        int[] rowCol = posToRowCol(dir, bestPos);
+        int edgeIndex = RiverConfig.CELLS_PER_REGION.get() - 1;
+        int row = switch (dir) {
+            case NORTH -> 0;
+            case SOUTH -> edgeIndex;
+            case EAST, WEST -> bestPos;
+            default -> -1;
+        };
+        int col = switch (dir) {
+            case NORTH, SOUTH -> bestPos;
+            case EAST -> edgeIndex;
+            case WEST -> 0;
+            default -> -1;
+        };
+
         Crossing.Direction crossingDir = bestIsOutput
             ? Crossing.Direction.OUT
             : Crossing.Direction.IN;
-        crossings[dir.ordinal()] = new Crossing(rowCol[0], rowCol[1], crossingDir);
+        crossings[dir.ordinal()] = new Crossing(row, col, crossingDir);
         crossingStrengths[dir.ordinal()] = diff;
-    }
-
-    private static int[] posToRowCol(Direction dir, int pos) {
-        return switch (dir) {
-            case NORTH -> new int[]{0, pos};
-            case SOUTH -> new int[]{RiverConfig.CELLS_PER_REGION.get() - 1, pos};
-            case EAST -> new int[]{pos, RiverConfig.CELLS_PER_REGION.get() - 1};
-            case WEST -> new int[]{pos, 0};
-            default -> new int[]{-1, -1};
-        };
     }
 
     private static double[] sampleEdgeDensities(
@@ -288,24 +291,6 @@ public class Refiner {
         }
     }
 
-    private static int[] findThresholdTerminus(
-            int regionOriginX, int regionOriginZ, int cellSize,
-            BiFunction<Integer, Integer, Double> sampler, double threshold) {
-
-        for (int row = 0; row < RiverConfig.CELLS_PER_REGION.get(); row++) {
-            for (int col = 0; col < RiverConfig.CELLS_PER_REGION.get(); col++) {
-                int worldX = regionOriginX + col * cellSize + cellSize / 2;
-                int worldZ = regionOriginZ + row * cellSize + cellSize / 2;
-                double value = sampler.apply(worldX, worldZ);
-                if (value < threshold) {
-                    return new int[]{row, col};
-                }
-            }
-        }
-
-        return new int[]{-1, -1};
-    }
-
     public static void tracePaths(
             RegionPos regionPos,
             Direction[][] flowDirection,
@@ -318,9 +303,9 @@ public class Refiner {
         if (outputCrossing == null) {
             return;
         }
-        int[] outputCell = new int[]{outputCrossing.row(), outputCrossing.col()};
+        CellPos outputCell = CellPos.fromLocal(regionPos, outputCrossing.row(), outputCrossing.col());
 
-        List<int[]> inputCells = new ArrayList<>();
+        List<CellPos> inputCells = new ArrayList<>();
         List<Direction> inputDirections = new ArrayList<>();
         int cellsPerRegion = RiverConfig.CELLS_PER_REGION.get();
         boolean[][] forbidden = new boolean[cellsPerRegion][cellsPerRegion];
@@ -331,7 +316,7 @@ public class Refiner {
                 continue;
             }
             if (crossing.direction() == Crossing.Direction.IN) {
-                inputCells.add(new int[]{crossing.row(), crossing.col()});
+                inputCells.add(CellPos.fromLocal(regionPos, crossing.row(), crossing.col()));
                 inputDirections.add(Direction.values()[dir]);
             } else if (dir != primaryOutputDirection.ordinal()) {
                 forbidden[crossing.row()][crossing.col()] = true;
@@ -345,7 +330,7 @@ public class Refiner {
         boolean[][] pathCovered = new boolean[cellsPerRegion][cellsPerRegion];
 
         for (int i = 0; i < inputCells.size(); i++) {
-            int[] inputCell = inputCells.get(i);
+            CellPos inputCell = inputCells.get(i);
             Direction inputDir = inputDirections.get(i);
 
             List<CellPos> path = tracePathToOutput(
@@ -396,25 +381,25 @@ public class Refiner {
             List<CellPos> confluenceCells) {
 
         int cellsPerRegion = RiverConfig.CELLS_PER_REGION.get();
-        List<int[]> oceanCells = new ArrayList<>();
-        List<int[]> lakeCells = new ArrayList<>();
+        List<CellPos> oceanCells = new ArrayList<>();
+        List<CellPos> lakeCells = new ArrayList<>();
         for (int row = 0; row < cellsPerRegion; row++) {
             for (int col = 0; col < cellsPerRegion; col++) {
                 int worldX = regionOriginX + col * cellSize + cellSize / 2;
                 int worldZ = regionOriginZ + row * cellSize + cellSize / 2;
                 double continents = continentsSampler.apply(worldX, worldZ);
                 if (continents < oceanThreshold) {
-                    oceanCells.add(new int[]{row, col});
+                    oceanCells.add(CellPos.fromLocal(regionPos, row, col));
                 } else {
                     double depth = depthSampler.apply(worldX, worldZ);
                     if (depth < lakeThreshold) {
-                        lakeCells.add(new int[]{row, col});
+                        lakeCells.add(CellPos.fromLocal(regionPos, row, col));
                     }
                 }
             }
         }
 
-        List<int[]> targetCells = oceanCells.isEmpty() ? lakeCells : oceanCells;
+        List<CellPos> targetCells = oceanCells.isEmpty() ? lakeCells : oceanCells;
         if (targetCells.isEmpty()) {
             return;
         }
@@ -431,7 +416,7 @@ public class Refiner {
                 continue;
             }
 
-            int[] inputCell = new int[]{crossing.row(), crossing.col()};
+            CellPos inputCell = CellPos.fromLocal(regionPos, crossing.row(), crossing.col());
             Direction pathDir = Direction.values()[dir];
 
             List<CellPos> path = tracePathToWater(
@@ -446,12 +431,12 @@ public class Refiner {
         }
     }
 
-    private static int[] findNearestWaterCell(int[] from, List<int[]> waterCells) {
-        int[] nearest = null;
+    private static CellPos findNearestWaterCell(CellPos from, List<CellPos> waterCells) {
+        CellPos nearest = null;
         int minDist = Integer.MAX_VALUE;
 
-        for (int[] water : waterCells) {
-            int dist = distanceSquared(from[0], from[1], water[0], water[1]);
+        for (CellPos water : waterCells) {
+            int dist = distanceSquared(from.row(), from.col(), water.row(), water.col());
             if (dist < minDist) {
                 minDist = dist;
                 nearest = water;
@@ -477,76 +462,67 @@ public class Refiner {
     private static List<CellPos> tracePathToWater(
             RegionPos regionPos,
             Direction[][] flowDirection,
-            int[] start,
+            CellPos start,
             boolean[][] pathCovered,
             boolean[][] forbidden,
             List<CellPos> confluenceCells,
-            List<int[]> waterCells) {
+            List<CellPos> waterCells) {
 
         List<CellPos> path = new ArrayList<>();
         int cellsPerRegion = RiverConfig.CELLS_PER_REGION.get();
         boolean[][] visited = new boolean[cellsPerRegion][cellsPerRegion];
         boolean confluenceMarked = false;
 
-        int row = start[0];
-        int col = start[1];
+        CellPos current = start;
 
         while (true) {
-            path.add(CellPos.fromLocal(regionPos, row, col));
+            int row = current.row();
+            int col = current.col();
+
+            path.add(current);
             visited[row][col] = true;
 
             if (pathCovered[row][col] && !confluenceMarked) {
-                confluenceCells.add(CellPos.fromLocal(regionPos, row, col));
+                confluenceCells.add(current);
                 confluenceMarked = true;
             }
 
-            if (isInList(row, col, waterCells)) {
+            if (waterCells.contains(current)) {
                 break;
             }
 
-            int[] target = findNearestWaterCell(new int[]{row, col}, waterCells);
+            CellPos target = findNearestWaterCell(current, waterCells);
             if (target == null) {
                 break;
             }
 
             Direction d8Dir = flowDirection[row][col];
-            int[] d8Next = getNeighborInDirection(row, col, d8Dir);
-            int currentDist = distanceSquared(row, col, target[0], target[1]);
+            CellPos d8Next = getNeighborInDirection(regionPos, current, d8Dir);
+            int currentDist = distanceSquared(row, col, target.row(), target.col());
 
             if (d8Dir != Direction.NONE && isValidMove(d8Next, visited, forbidden)) {
-                int d8Dist = distanceSquared(d8Next[0], d8Next[1], target[0], target[1]);
+                int d8Dist = distanceSquared(d8Next.row(), d8Next.col(), target.row(), target.col());
                 if (d8Dist < currentDist) {
-                    row = d8Next[0];
-                    col = d8Next[1];
+                    current = d8Next;
                     continue;
                 }
             }
 
-            int[] closest = findClosestNeighbor(row, col, target, flowDirection, visited, forbidden);
+            CellPos closest = findClosestNeighbor(regionPos, current, target, flowDirection, visited, forbidden);
             if (closest == null) {
                 break;
             }
-            row = closest[0];
-            col = closest[1];
+            current = closest;
         }
 
         return path;
     }
 
-    private static boolean isInList(int row, int col, List<int[]> cells) {
-        for (int[] cell : cells) {
-            if (cell[0] == row && cell[1] == col) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static List<CellPos> tracePathToOutput(
             RegionPos regionPos,
             Direction[][] flowDirection,
-            int[] start,
-            int[] target,
+            CellPos start,
+            CellPos target,
             boolean[][] pathCovered,
             boolean[][] forbidden,
             List<CellPos> confluenceCells) {
@@ -556,91 +532,100 @@ public class Refiner {
         boolean[][] visited = new boolean[cellsPerRegion][cellsPerRegion];
         boolean confluenceMarked = false;
 
-        int row = start[0];
-        int col = start[1];
+        CellPos current = start;
 
         while (true) {
-            path.add(CellPos.fromLocal(regionPos, row, col));
+            int row = current.row();
+            int col = current.col();
+
+            path.add(current);
             visited[row][col] = true;
 
             if (pathCovered[row][col] && !confluenceMarked) {
-                confluenceCells.add(CellPos.fromLocal(regionPos, row, col));
+                confluenceCells.add(current);
                 confluenceMarked = true;
             }
 
-            if (row == target[0] && col == target[1]) {
+            if (current.equals(target)) {
                 break;
             }
 
             Direction d8Dir = flowDirection[row][col];
-            int[] d8Next = getNeighborInDirection(row, col, d8Dir);
-            int currentDist = distanceSquared(row, col, target[0], target[1]);
+            CellPos d8Next = getNeighborInDirection(regionPos, current, d8Dir);
+            int currentDist = distanceSquared(row, col, target.row(), target.col());
 
             if (d8Dir != Direction.NONE && isValidMove(d8Next, visited, forbidden)) {
-                int d8Dist = distanceSquared(d8Next[0], d8Next[1], target[0], target[1]);
+                int d8Dist = distanceSquared(d8Next.row(), d8Next.col(), target.row(), target.col());
                 if (d8Dist < currentDist) {
-                    row = d8Next[0];
-                    col = d8Next[1];
+                    current = d8Next;
                     continue;
                 }
             }
 
-            int[] closest = findClosestNeighbor(row, col, target, flowDirection, visited, forbidden);
+            CellPos closest = findClosestNeighbor(regionPos, current, target, flowDirection, visited, forbidden);
             if (closest == null) {
                 break;
             }
-            row = closest[0];
-            col = closest[1];
+            current = closest;
         }
 
         return path;
     }
 
-    private static int[] getNeighborInDirection(int row, int col, Direction dir) {
-        return switch (dir) {
-            case NORTH -> new int[]{row - 1, col};
-            case SOUTH -> new int[]{row + 1, col};
-            case EAST -> new int[]{row, col + 1};
-            case WEST -> new int[]{row, col - 1};
-            case NORTHEAST -> new int[]{row - 1, col + 1};
-            case NORTHWEST -> new int[]{row - 1, col - 1};
-            case SOUTHEAST -> new int[]{row + 1, col + 1};
-            case SOUTHWEST -> new int[]{row + 1, col - 1};
-            default -> new int[]{-1, -1};
-        };
+    private static CellPos getNeighborInDirection(RegionPos regionPos, CellPos pos, Direction dir) {
+        int row = pos.row();
+        int col = pos.col();
+        int newRow = row;
+        int newCol = col;
+
+        switch (dir) {
+            case NORTH -> newRow = row - 1;
+            case SOUTH -> newRow = row + 1;
+            case EAST -> newCol = col + 1;
+            case WEST -> newCol = col - 1;
+            case NORTHEAST -> { newRow = row - 1; newCol = col + 1; }
+            case NORTHWEST -> { newRow = row - 1; newCol = col - 1; }
+            case SOUTHEAST -> { newRow = row + 1; newCol = col + 1; }
+            case SOUTHWEST -> { newRow = row + 1; newCol = col - 1; }
+            default -> { newRow = -1; newCol = -1; }
+        }
+
+        return CellPos.fromLocal(regionPos, newRow, newCol);
     }
 
-    private static int[] findClosestNeighbor(
-            int row, int col, int[] target,
+    private static CellPos findClosestNeighbor(
+            RegionPos regionPos, CellPos current, CellPos target,
             Direction[][] flowDirection,
             boolean[][] visited, boolean[][] forbidden) {
 
-        int[][] neighbors = {
-            {row - 1, col},
-            {row + 1, col},
-            {row, col + 1},
-            {row, col - 1}
+        int row = current.row();
+        int col = current.col();
+        CellPos[] neighbors = {
+            CellPos.fromLocal(regionPos, row - 1, col),
+            CellPos.fromLocal(regionPos, row + 1, col),
+            CellPos.fromLocal(regionPos, row, col + 1),
+            CellPos.fromLocal(regionPos, row, col - 1)
         };
 
-        int currentDist = distanceSquared(row, col, target[0], target[1]);
+        int currentDist = distanceSquared(row, col, target.row(), target.col());
         Direction currentD8 = flowDirection[row][col];
 
-        int[] best = null;
+        CellPos best = null;
         int bestScore = Integer.MIN_VALUE;
         int bestDist = Integer.MAX_VALUE;
 
-        for (int[] neighbor : neighbors) {
+        for (CellPos neighbor : neighbors) {
             if (!isValidMove(neighbor, visited, forbidden)) {
                 continue;
             }
 
-            int dist = distanceSquared(neighbor[0], neighbor[1], target[0], target[1]);
+            int dist = distanceSquared(neighbor.row(), neighbor.col(), target.row(), target.col());
             if (dist >= currentDist) {
                 continue;
             }
 
-            int moveRow = neighbor[0] - row;
-            int moveCol = neighbor[1] - col;
+            int moveRow = neighbor.row() - row;
+            int moveCol = neighbor.col() - col;
             int score = computeMoveAlignment(moveRow, moveCol, currentD8);
 
             if (score > bestScore || (score == bestScore && dist < bestDist)) {
@@ -670,11 +655,12 @@ public class Refiner {
         return moveRow * d8Row + moveCol * d8Col;
     }
 
-    private static boolean isValidMove(int[] pos, boolean[][] visited, boolean[][] forbidden) {
-        int row = pos[0];
-        int col = pos[1];
+    private static boolean isValidMove(CellPos pos, boolean[][] visited, boolean[][] forbidden) {
+        int row = pos.row();
+        int col = pos.col();
+        int cellsPerRegion = RiverConfig.CELLS_PER_REGION.get();
 
-        if (row < 0 || row >= RiverConfig.CELLS_PER_REGION.get() || col < 0 || col >= RiverConfig.CELLS_PER_REGION.get()) {
+        if (row < 0 || row >= cellsPerRegion || col < 0 || col >= cellsPerRegion) {
             return false;
         }
         if (visited[row][col]) {
