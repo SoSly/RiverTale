@@ -161,4 +161,8 @@ public class VisualizeCommand {
     public static void clearEnabledPlayers() {
         ENABLED_PLAYERS.clear();
     }
+
+    public static void removePlayer(UUID playerId) {
+        ENABLED_PLAYERS.remove(playerId);
+    }
 }

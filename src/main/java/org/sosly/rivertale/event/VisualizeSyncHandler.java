@@ -2,6 +2,7 @@ package org.sosly.rivertale.event;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -57,5 +58,12 @@ public class VisualizeSyncHandler {
     public static void onServerStopping(ServerStoppingEvent event) {
         LAST_KNOWN_REGION.clear();
         VisualizeCommand.clearEnabledPlayers();
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        UUID playerId = event.getEntity().getUUID();
+        LAST_KNOWN_REGION.remove(playerId);
+        VisualizeCommand.removePlayer(playerId);
     }
 }
