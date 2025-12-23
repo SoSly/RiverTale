@@ -90,7 +90,7 @@ public class VisualizeCommand {
                     regionPos.x(), regionPos.z(),
                         featureRegionType,
                     d8Flow.crossings(),
-                    d8Flow.primaryOutputDirection(), d8Flow.flowDirection(),
+                    d8Flow.primaryOutputDirection(), d8Flow.flowGrid(),
                     d8Flow.terminusCells(), d8Flow.riverPaths(),
                     d8Flow.confluenceCells()
                 ));

@@ -3,21 +3,19 @@ package org.sosly.rivertale.path;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.sosly.rivertale.cell.CellType;
+import org.sosly.rivertale.cell.Grid;
 import org.sosly.rivertale.config.RiverConfig;
 
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiFunction;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
-import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.terrain.DensityProvider;
-import org.sosly.rivertale.terrain.RegionDensityProvider;
 
 public class Manager {
 
@@ -27,11 +25,11 @@ public class Manager {
     static Region createRegion(RegionPos regionPos, DensityProvider provider, RandomState randomState) {
         long startTime = System.nanoTime();
 
-        double[][] cellDensities = provider.sampleCellDensities(regionPos.worldX(), regionPos.worldZ(), RegionPos.getRegionSize());
+        Grid cells = Grid.create(regionPos);
         double density = provider.getAveragedDensity(regionPos.worldX(), regionPos.worldZ(), RegionPos.getRegionSize());
         boolean participating = ParticipationCalculator.isParticipating(regionPos, randomState);
 
-        Region region = new Region(regionPos, density, cellDensities, participating);
+        Region region = new Region(regionPos, density, cells, participating);
 
         RegionType terrain = classifyTerrain(regionPos, provider);
         if (participating && terrain != RegionType.BODY) {
@@ -86,34 +84,26 @@ public class Manager {
         }
 
         RegionPos key = region.pos();
-        RegionDensityProvider cdp = (RegionDensityProvider) provider;
 
-        BiFunction<Integer, Integer, Double> densitySampler = cdp::getDensity;
-        BiFunction<Integer, Integer, Double> continentsSampler = cdp::getContinents;
-        BiFunction<Integer, Integer, Double> depthSampler = cdp::getDepth;
+        Grid flowGrid = FlowCalculator.compute(key, provider::getDensity);
+        region.cells().copyFlowsFrom(flowGrid);
 
-        double oceanThreshold = RiverConfig.OCEAN_THRESHOLD.get();
-        double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
-
-        Direction[][] flowDirections = FlowCalculator.compute(key, densitySampler);
-
-        Direction[][][] neighborFlowDirections = new Direction[4][][];
+        Grid[] neighborFlowGrids = new Grid[4];
         RegionType[] neighborFeatureRegionTypes = new RegionType[4];
         Direction[] cardinals = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
 
         for (int i = 0; i < 4; i++) {
             RegionPos neighbor = key.relative(cardinals[i]);
-            neighborFlowDirections[i] = FlowCalculator.compute(neighbor, densitySampler);
+            neighborFlowGrids[i] = FlowCalculator.compute(neighbor, provider::getDensity);
             RegionType neighborTerrain = classifyTerrain(neighbor, provider);
             neighborFeatureRegionTypes[i] = neighborTerrain != null ? neighborTerrain : RegionType.DIVIDE;
         }
 
         RegionType featureRegionType = terrain != null ? terrain : RegionType.DIVIDE;
         Flow flow = Refiner.refine(
-            key, flowDirections, featureRegionType,
-            neighborFlowDirections, neighborFeatureRegionTypes,
-            densitySampler, continentsSampler, depthSampler,
-            oceanThreshold, lakeThreshold);
+            key, flowGrid, featureRegionType,
+            neighborFlowGrids, neighborFeatureRegionTypes,
+            provider);
 
         region.setPrimaryOutput(flow.primaryOutputDirection());
 
@@ -139,33 +129,23 @@ public class Manager {
     }
 
     public static Flow computeFlowResult(RegionPos regionPos, DensityProvider provider, RandomState randomState) {
-        RegionDensityProvider cdp = (RegionDensityProvider) provider;
-
-        BiFunction<Integer, Integer, Double> densitySampler = cdp::getDensity;
-        BiFunction<Integer, Integer, Double> continentsSampler = cdp::getContinents;
-        BiFunction<Integer, Integer, Double> depthSampler = cdp::getDepth;
-
-        double oceanThreshold = RiverConfig.OCEAN_THRESHOLD.get();
-        double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
-
-        Direction[][] flowDirections = FlowCalculator.compute(regionPos, densitySampler);
+        Grid flowGrid = FlowCalculator.compute(regionPos, provider::getDensity);
         RegionType terrain = classifyTerrain(regionPos, provider);
         RegionType featureRegionType = terrain != null ? terrain : RegionType.DIVIDE;
 
-        Direction[][][] neighborFlowDirections = new Direction[4][][];
+        Grid[] neighborFlowGrids = new Grid[4];
         RegionType[] neighborFeatureRegionTypes = loadNeighborFeatures(regionPos, provider);
         Direction[] cardinals = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
 
         for (int i = 0; i < 4; i++) {
             RegionPos neighbor = regionPos.relative(cardinals[i]);
-            neighborFlowDirections[i] = FlowCalculator.compute(neighbor, densitySampler);
+            neighborFlowGrids[i] = FlowCalculator.compute(neighbor, provider::getDensity);
         }
 
         Flow flow = Refiner.refine(
-            regionPos, flowDirections, featureRegionType,
-            neighborFlowDirections, neighborFeatureRegionTypes,
-            densitySampler, continentsSampler, depthSampler,
-            oceanThreshold, lakeThreshold);
+            regionPos, flowGrid, featureRegionType,
+            neighborFlowGrids, neighborFeatureRegionTypes,
+            provider);
 
         return Validator.validate(flow, regionPos, featureRegionType, provider, randomState);
     }
@@ -233,90 +213,6 @@ public class Manager {
 
         int upstreamCount = getUpstreamCount(region.pos(), provider, randomState);
         return upstreamCount == 0 ? RegionType.DIVIDE : RegionType.FLUVIAL;
-    }
-
-    public static CellType getCellFeatureType(Region region, int row, int col, Map<Direction, List<CellPos>> paths, DensityProvider provider) {
-        if (!isCellOnRiverPath(paths, row, col)) {
-            return null;
-        }
-
-        int inletCount = countInlets(paths, row, col);
-
-        if (isTerminusCell(region, paths, row, col, provider)) {
-            return CellType.TERMINUS;
-        }
-        if (isSourceCell(paths, row, col, inletCount)) {
-            return CellType.SOURCE;
-        }
-        if (inletCount >= 2) {
-            return CellType.JUNCTION;
-        }
-        return CellType.COURSE;
-    }
-
-    private static int countInlets(Map<Direction, List<CellPos>> paths, int row, int col) {
-        Set<CellPos> uniqueInlets = new HashSet<>();
-        for (List<CellPos> path : paths.values()) {
-            for (int i = 1; i < path.size(); i++) {
-                CellPos current = path.get(i);
-                if (current.row() == row && current.col() == col) {
-                    CellPos previous = path.get(i - 1);
-                    uniqueInlets.add(previous);
-                }
-            }
-        }
-        return uniqueInlets.size();
-    }
-
-    private static boolean isCellOnRiverPath(Map<Direction, List<CellPos>> paths, int row, int col) {
-        for (List<CellPos> path : paths.values()) {
-            for (CellPos point : path) {
-                if (point.row() == row && point.col() == col) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static boolean isTerminusCell(Region region, Map<Direction, List<CellPos>> paths, int row, int col, DensityProvider provider) {
-        RegionType terrain = classifyTerrain(region.pos(), provider);
-        boolean isShore = terrain == RegionType.SHORE;
-        boolean isBasin = region.getPrimaryOutput() == Direction.NONE
-            && region.getSecondaryOutputs().isEmpty();
-
-        if (!isShore && !isBasin) {
-            return false;
-        }
-
-        for (List<CellPos> path : paths.values()) {
-            if (path.isEmpty()) {
-                continue;
-            }
-            CellPos lastPoint = path.get(path.size() - 1);
-            if (lastPoint.row() == row && lastPoint.col() == col) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isSourceCell(Map<Direction, List<CellPos>> paths, int row, int col, int inletCount) {
-        if (inletCount > 0) {
-            return false;
-        }
-
-        for (Map.Entry<Direction, List<CellPos>> entry : paths.entrySet()) {
-            List<CellPos> path = entry.getValue();
-            if (path.isEmpty()) {
-                continue;
-            }
-            CellPos firstPoint = path.get(0);
-            if (firstPoint.row() == row && firstPoint.col() == col) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static int countUpstream(RegionPos regionPos, int depth, Set<RegionPos> visited, DensityProvider provider, RandomState randomState) {

@@ -1,6 +1,9 @@
 package org.sosly.rivertale.path;
 
 import java.util.function.BiFunction;
+import org.sosly.rivertale.cell.Grid;
+import org.sosly.rivertale.config.RiverConfig;
+import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
 
@@ -8,52 +11,30 @@ public class FlowCalculator {
 
     private static final double SQRT2 = Math.sqrt(2.0);
 
-    public static final int GRID_SIZE = 8;
-
     private FlowCalculator() {
     }
 
-    public static Direction[][] compute(
+    public static Grid compute(
             RegionPos regionPos,
             BiFunction<Integer, Integer, Double> densitySampler) {
 
-        int regionSize = RegionPos.getRegionSize();
-        int cellSize = regionSize / GRID_SIZE;
+        int gridSize = RiverConfig.CELLS_PER_REGION.get();
+        int cellSize = CellPos.getCellSize();
         int regionOriginX = regionPos.worldX();
         int regionOriginZ = regionPos.worldZ();
 
-        Direction[][] flowDirection = new Direction[GRID_SIZE][GRID_SIZE];
+        Grid grid = Grid.create(regionPos);
 
-        for (int row = 0; row < GRID_SIZE; row++) {
-            for (int col = 0; col < GRID_SIZE; col++) {
+        for (int row = 0; row < gridSize; row++) {
+            for (int col = 0; col < gridSize; col++) {
                 int worldX = regionOriginX + col * cellSize + cellSize / 2;
                 int worldZ = regionOriginZ + row * cellSize + cellSize / 2;
-                flowDirection[row][col] = findSteepestNeighbor(
-                    worldX, worldZ, cellSize, densitySampler);
+                Direction dir = findSteepestNeighbor(worldX, worldZ, cellSize, densitySampler);
+                grid.get(row, col).setFlowDirection(dir);
             }
         }
 
-        return flowDirection;
-    }
-
-    public static Direction getNeighborEdge(Direction[][] neighborFlowDirections, Direction dirFromUs, int pos) {
-        return switch (dirFromUs) {
-            case NORTH -> neighborFlowDirections[GRID_SIZE - 1][pos];
-            case SOUTH -> neighborFlowDirections[0][pos];
-            case EAST -> neighborFlowDirections[pos][0];
-            case WEST -> neighborFlowDirections[pos][GRID_SIZE - 1];
-            default -> Direction.NONE;
-        };
-    }
-
-    public static Direction getOuterEdge(Direction[][] flowDirection, Direction dir, int pos) {
-        return switch (dir) {
-            case NORTH -> flowDirection[0][pos];
-            case SOUTH -> flowDirection[GRID_SIZE - 1][pos];
-            case EAST -> flowDirection[pos][GRID_SIZE - 1];
-            case WEST -> flowDirection[pos][0];
-            default -> Direction.NONE;
-        };
+        return grid;
     }
 
     private static Direction findSteepestNeighbor(

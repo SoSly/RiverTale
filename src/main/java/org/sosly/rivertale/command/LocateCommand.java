@@ -12,9 +12,12 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
+import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.CellClassifier;
+import org.sosly.rivertale.cell.CellType;
+import org.sosly.rivertale.cell.Grid;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
-import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.terrain.RegionDensityProvider;
 import org.sosly.rivertale.region.Region;
@@ -210,13 +213,17 @@ public class LocateCommand {
         }
 
         java.util.Map<Direction, java.util.List<CellPos>> paths = Manager.computePaths(region, provider, randomState);
+        RegionType terrain = Manager.classifyTerrain(regionPos, provider);
 
+        Grid cells = region.cells();
+        int gridSize = cells.size();
         int regionSize = RegionPos.getRegionSize();
-        int cellSpacing = regionSize / 8;
+        int cellSpacing = regionSize / gridSize;
 
-        for (int row = 0; row < 8; row++) {
-            for (int col = 0; col < 8; col++) {
-                CellType cellType = Manager.getCellFeatureType(region, row, col, paths, provider);
+        for (int row = 0; row < gridSize; row++) {
+            for (int col = 0; col < gridSize; col++) {
+                Cell cell = cells.get(row, col);
+                CellType cellType = CellClassifier.classify(cell, region, paths, terrain);
                 if (cellType != null && cellType == target) {
                     int cellX = regionPos.worldX() + (col * cellSpacing) + (cellSpacing / 2);
                     int cellZ = regionPos.worldZ() + (row * cellSpacing) + (cellSpacing / 2);

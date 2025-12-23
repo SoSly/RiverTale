@@ -52,22 +52,6 @@ public class RegionDensityProvider implements DensityProvider {
         return sum / count;
     }
 
-    @Override
-    public double[][] sampleCellDensities(int worldX, int worldZ, int regionSize) {
-        double step = regionSize / (double) CELL_SAMPLES;
-        double[][] densities = new double[CELL_SAMPLES][CELL_SAMPLES];
-
-        for (int i = 0; i < CELL_SAMPLES; i++) {
-            for (int j = 0; j < CELL_SAMPLES; j++) {
-                int sampleX = worldX + (int) (i * step);
-                int sampleZ = worldZ + (int) (j * step);
-                densities[i][j] = getDensity(sampleX, sampleZ);
-            }
-        }
-
-        return densities;
-    }
-
     public double getContinents(int worldX, int worldZ) {
         return CONTINENTS_CACHE.getOrCompute(worldX, worldZ, (x, z) -> {
             DensityFunction.SinglePointContext context =

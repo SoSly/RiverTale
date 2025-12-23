@@ -1,4 +1,4 @@
-package org.sosly.rivertale.worldgen.river;
+package org.sosly.rivertale.path;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -6,13 +6,11 @@ import org.junit.jupiter.api.DisplayName;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.sosly.rivertale.cell.Grid;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.path.Flow;
-import org.sosly.rivertale.path.Validator;
-import org.sosly.rivertale.path.Crossing;
 import org.sosly.rivertale.core.Direction;
-import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.region.RegionType;
 
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,6 +24,10 @@ class ValidatorTest {
 
     private static CellPos cell(int row, int col) {
         return CellPos.fromLocal(TEST_REGION, row, col, CELLS_PER_REGION);
+    }
+
+    private static Grid emptyGrid() {
+        return Grid.create(TEST_REGION, CELLS_PER_REGION);
     }
 
     @Test
@@ -59,7 +61,7 @@ class ValidatorTest {
         crossings[Direction.SOUTH.ordinal()] = new Crossing(7, 3, Crossing.Direction.OUT);
 
         Flow input = new Flow(
-            new Direction[8][8],
+            emptyGrid(),
             crossings,
             new double[]{1.0, 1.0, 0, 0},
             Direction.SOUTH,
@@ -89,7 +91,7 @@ class ValidatorTest {
         crossings[Direction.NORTH.ordinal()] = new Crossing(0, 3, Crossing.Direction.IN);
 
         Flow input = new Flow(
-            new Direction[8][8],
+            emptyGrid(),
             crossings,
             new double[]{1.0, 0, 0, 0},
             Direction.SOUTH,
@@ -123,7 +125,7 @@ class ValidatorTest {
         crossings[Direction.NORTH.ordinal()] = new Crossing(0, 3, Crossing.Direction.IN);
 
         Flow input = new Flow(
-            new Direction[8][8],
+            emptyGrid(),
             crossings,
             new double[]{1.0, 0, 0, 0},
             Direction.NONE,
@@ -166,7 +168,7 @@ class ValidatorTest {
         List<CellPos> confluences = List.of(cell(3, 3));
 
         Flow input = new Flow(
-            new Direction[8][8],
+            emptyGrid(),
             crossings,
             new double[]{1.0, 1.0, 0, 1.0},
             Direction.SOUTH,
@@ -213,7 +215,7 @@ class ValidatorTest {
         List<CellPos> confluences = List.of(cell(3, 3));
 
         Flow input = new Flow(
-            new Direction[8][8],
+            emptyGrid(),
             crossings,
             new double[]{1.0, 1.0, 0, 1.0},
             Direction.SOUTH,
@@ -250,7 +252,7 @@ class ValidatorTest {
         crossings[Direction.SOUTH.ordinal()] = new Crossing(7, 3, Crossing.Direction.OUT);
 
         Flow input = new Flow(
-            new Direction[8][8],
+            emptyGrid(),
             crossings,
             new double[]{1.0, 1.0, 0, 0},
             Direction.SOUTH,
@@ -291,7 +293,7 @@ class ValidatorTest {
         List<CellPos> confluences = List.of(cell(1, 3));
 
         Flow input = new Flow(
-            new Direction[8][8],
+            emptyGrid(),
             crossings,
             new double[]{1.0, 1.0, 0, 1.0},
             Direction.SOUTH,
@@ -313,7 +315,7 @@ class ValidatorTest {
 
     private Flow createEmptyResult() {
         return new Flow(
-            new Direction[8][8],
+            emptyGrid(),
             new Crossing[4],
             new double[4],
             Direction.NONE,

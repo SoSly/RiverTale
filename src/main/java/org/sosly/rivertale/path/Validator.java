@@ -7,15 +7,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.BiFunction;
 import net.minecraft.world.level.levelgen.RandomState;
+import org.sosly.rivertale.cell.Grid;
 import org.sosly.rivertale.config.RiverConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.terrain.DensityProvider;
-import org.sosly.rivertale.terrain.RegionDensityProvider;
 
 public class Validator {
 
@@ -50,7 +49,7 @@ public class Validator {
 
             if (!hasValidOutput) {
                 return new Flow(
-                    flow.flowDirection(),
+                    flow.flowGrid(),
                     crossings,
                     strengths,
                     Direction.NONE,
@@ -134,7 +133,7 @@ public class Validator {
         }
 
         return new Flow(
-            flow.flowDirection(),
+            flow.flowGrid(),
             crossings,
             strengths,
             validatedPrimaryOutput,
@@ -321,32 +320,23 @@ public class Validator {
             return Optional.empty();
         }
 
-        RegionDensityProvider cdp = (RegionDensityProvider) provider;
-        BiFunction<Integer, Integer, Double> densitySampler = cdp::getDensity;
-        BiFunction<Integer, Integer, Double> continentsSampler = cdp::getContinents;
-        BiFunction<Integer, Integer, Double> depthSampler = cdp::getDepth;
+        Grid flowGrid = FlowCalculator.compute(pos, provider::getDensity);
 
-        double oceanThreshold = RiverConfig.OCEAN_THRESHOLD.get();
-        double lakeThreshold = RiverConfig.LAKE_THRESHOLD.get();
-
-        Direction[][] flowDirections = FlowCalculator.compute(pos, densitySampler);
-
-        Direction[][][] neighborFlowDirections = new Direction[4][][];
+        Grid[] neighborFlowGrids = new Grid[4];
         RegionType[] neighborFeatureRegionTypes = Manager.loadNeighborFeatures(pos, provider);
         Direction[] cardinals = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
 
         for (int i = 0; i < 4; i++) {
             RegionPos nnKey = cardinals[i].neighbor(pos);
-            neighborFlowDirections[i] = FlowCalculator.compute(nnKey, densitySampler);
+            neighborFlowGrids[i] = FlowCalculator.compute(nnKey, provider::getDensity);
         }
 
         RegionType featureRegionType = terrain != null ? terrain : RegionType.DIVIDE;
 
         return Optional.of(Refiner.refine(
-            pos, flowDirections, featureRegionType,
-            neighborFlowDirections, neighborFeatureRegionTypes,
-            densitySampler, continentsSampler, depthSampler,
-            oceanThreshold, lakeThreshold));
+            pos, flowGrid, featureRegionType,
+            neighborFlowGrids, neighborFeatureRegionTypes,
+            provider));
     }
 
     private static int computeNeighborPathLength(Flow flow) {

@@ -2,6 +2,8 @@ package org.sosly.rivertale.region;
 
 import java.util.HashSet;
 import java.util.Set;
+
+import org.sosly.rivertale.cell.Grid;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
 
@@ -9,16 +11,16 @@ public class Region {
 
     private final RegionPos pos;
     private final double density;
-    private final double[][] cellDensities;
+    private final Grid cells;
     private final boolean participating;
 
     private Direction primaryOutput;
     private Set<Direction> secondaryOutputs;
 
-    public Region(RegionPos pos, double density, double[][] cellDensities, boolean participating) {
+    public Region(RegionPos pos, double density, Grid cells, boolean participating) {
         this.pos = pos;
         this.density = density;
-        this.cellDensities = cellDensities;
+        this.cells = cells;
         this.participating = participating;
         this.primaryOutput = Direction.NONE;
         this.secondaryOutputs = new HashSet<>();
@@ -32,8 +34,8 @@ public class Region {
         return density;
     }
 
-    public double[][] getCellDensities() {
-        return cellDensities;
+    public Grid cells() {
+        return cells;
     }
 
     public boolean isParticipating() {

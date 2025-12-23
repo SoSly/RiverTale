@@ -8,16 +8,16 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
+import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.CellClassifier;
+import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
-import org.sosly.rivertale.cell.CellType;
-import org.sosly.rivertale.path.FlowCalculator;
-import org.sosly.rivertale.terrain.RegionDensityProvider;
-import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.path.Manager;
-
-import java.util.function.BiFunction;
+import org.sosly.rivertale.region.Region;
+import org.sosly.rivertale.region.RegionType;
+import org.sosly.rivertale.terrain.RegionDensityProvider;
 
 public class CellCommand {
 
@@ -49,11 +49,11 @@ public class CellCommand {
                 int cellCenterX = regionKey.worldX() + col * cellSpacing + cellSpacing / 2;
                 int cellCenterZ = regionKey.worldZ() + row * cellSpacing + cellSpacing / 2;
 
-                BiFunction<Integer, Integer, Double> densitySampler = provider::getDensity;
-                Direction[][] flowDirections = FlowCalculator.compute(regionKey, densitySampler);
-                Direction flowDirection = flowDirections[row][col];
+                Cell cell = region.cells().get(row, col);
+                Direction flowDirection = cell.flowDirection();
+                RegionType terrain = Manager.classifyTerrain(regionKey, provider);
 
-                CellType featureCellType = Manager.getCellFeatureType(region, row, col, paths, provider);
+                CellType featureCellType = CellClassifier.classify(cell, region, paths, terrain);
 
                 source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
                 source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d) in Region (%d, %d)", row, col, regionKey.x(), regionKey.z()))

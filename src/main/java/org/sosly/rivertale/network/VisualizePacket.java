@@ -4,7 +4,9 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
+import org.sosly.rivertale.cell.Grid;
 import org.sosly.rivertale.client.Cache;
+import org.sosly.rivertale.config.RiverConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.path.Crossing;
@@ -47,9 +49,11 @@ public class VisualizePacket {
             }
             buf.writeEnum(region.primaryOutputDirection);
 
-            for (int row = 0; row < 8; row++) {
-                for (int col = 0; col < 8; col++) {
-                    buf.writeEnum(region.flowDirections[row][col]);
+            int gridSize = region.flowGrid.size();
+            buf.writeInt(gridSize);
+            for (int row = 0; row < gridSize; row++) {
+                for (int col = 0; col < gridSize; col++) {
+                    buf.writeEnum(region.flowGrid.getFlowAt(row, col));
                 }
             }
 
@@ -103,10 +107,11 @@ public class VisualizePacket {
             }
             Direction primaryOutputDirection = buf.readEnum(Direction.class);
 
-            Direction[][] flowDirections = new Direction[8][8];
-            for (int row = 0; row < 8; row++) {
-                for (int col = 0; col < 8; col++) {
-                    flowDirections[row][col] = buf.readEnum(Direction.class);
+            int gridSize = buf.readInt();
+            Grid flowGrid = Grid.create(regionPos);
+            for (int row = 0; row < gridSize; row++) {
+                for (int col = 0; col < gridSize; col++) {
+                    flowGrid.get(row, col).setFlowDirection(buf.readEnum(Direction.class));
                 }
             }
 
@@ -141,7 +146,7 @@ public class VisualizePacket {
             }
 
             regions.add(new D8RegionData(regionX, regionZ, featureRegionType,
-                crossings, primaryOutputDirection, flowDirections,
+                crossings, primaryOutputDirection, flowGrid,
                 terminusCells, riverPaths, confluenceCells));
         }
 
@@ -170,14 +175,14 @@ public class VisualizePacket {
         public final RegionType featureRegionType;
         public final Crossing[] crossings;
         public final Direction primaryOutputDirection;
-        public final Direction[][] flowDirections;
+        public final Grid flowGrid;
         public final List<CellPos> terminusCells;
         public final Map<Direction, List<CellPos>> riverPaths;
         public final List<CellPos> confluenceCells;
 
         public D8RegionData(int regionX, int regionZ, RegionType featureRegionType,
                             Crossing[] crossings,
-                            Direction primaryOutputDirection, Direction[][] flowDirections,
+                            Direction primaryOutputDirection, Grid flowGrid,
                             List<CellPos> terminusCells, Map<Direction, List<CellPos>> riverPaths,
                             List<CellPos> confluenceCells) {
             this.regionX = regionX;
@@ -185,7 +190,7 @@ public class VisualizePacket {
             this.featureRegionType = featureRegionType;
             this.crossings = crossings;
             this.primaryOutputDirection = primaryOutputDirection;
-            this.flowDirections = flowDirections;
+            this.flowGrid = flowGrid;
             this.terminusCells = terminusCells != null ? terminusCells : new ArrayList<>();
             this.riverPaths = riverPaths != null ? riverPaths : new HashMap<>();
             this.confluenceCells = confluenceCells != null ? confluenceCells : new ArrayList<>();

@@ -34,8 +34,12 @@ public class FlowRenderer {
         return RegionPos.getRegionSize();
     }
 
-    private static double getCellStep() {
-        return getRegionSize() / 8.0;
+    private static int getGridSize(D8RegionData region) {
+        return region.flowGrid.size();
+    }
+
+    private static double getCellStep(D8RegionData region) {
+        return getRegionSize() / (double) getGridSize(region);
     }
 
     private static final float[] COLOR_BORDER = {1.0f, 1.0f, 1.0f, 0.5f};
@@ -149,8 +153,8 @@ public class FlowRenderer {
                 int neighborWorldX = neighbor.regionX * getRegionSize();
                 int neighborWorldZ = neighbor.regionZ * getRegionSize();
 
-                Vec3 outputPos = cellToWorld(crossing.row(), crossing.col(), regionWorldX, regionWorldZ);
-                Vec3 inputPos = cellToWorld(neighborInput.row(), neighborInput.col(), neighborWorldX, neighborWorldZ);
+                Vec3 outputPos = cellToWorld(region, crossing.row(), crossing.col(), regionWorldX, regionWorldZ);
+                Vec3 inputPos = cellToWorld(neighbor, neighborInput.row(), neighborInput.col(), neighborWorldX, neighborWorldZ);
 
                 drawLine(poseStack, bufferBuilder, outputPos, inputPos, camPos, COLOR_RIVER_PATH);
             }
@@ -191,7 +195,7 @@ public class FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        double cellStep = getCellStep();
+        double cellStep = getCellStep(region);
         double margin = 1.0;
 
         for (int dir = 0; dir < 4; dir++) {
@@ -272,7 +276,7 @@ public class FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        double cellStep = getCellStep();
+        double cellStep = getCellStep(region);
         double margin = 1.0;
 
         for (CellPos terminus : region.terminusCells) {
@@ -316,8 +320,8 @@ public class FlowRenderer {
 
         for (java.util.List<CellPos> path : region.riverPaths.values()) {
             for (int i = 0; i < path.size() - 1; i++) {
-                Vec3 start = cellToWorld(path.get(i), regionWorldX, regionWorldZ);
-                Vec3 end = cellToWorld(path.get(i + 1), regionWorldX, regionWorldZ);
+                Vec3 start = cellToWorld(region, path.get(i), regionWorldX, regionWorldZ);
+                Vec3 end = cellToWorld(region, path.get(i + 1), regionWorldX, regionWorldZ);
                 drawLine(poseStack, bufferBuilder, start, end, camPos, COLOR_RIVER_PATH);
             }
         }
@@ -341,7 +345,7 @@ public class FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        double cellStep = getCellStep();
+        double cellStep = getCellStep(region);
         double margin = 1.0;
 
         for (CellPos confluence : region.confluenceCells) {
@@ -379,15 +383,16 @@ public class FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        for (int row = 0; row < 8; row++) {
-            for (int col = 0; col < 8; col++) {
-                Direction flowDirection = region.flowDirections[row][col];
+        int gridSize = getGridSize(region);
+        for (int row = 0; row < gridSize; row++) {
+            for (int col = 0; col < gridSize; col++) {
+                Direction flowDirection = region.flowGrid.getFlowAt(row, col);
 
                 if (flowDirection == Direction.NONE) {
                     continue;
                 }
 
-                Vec3 center = cellToWorld(row, col, regionWorldX, regionWorldZ);
+                Vec3 center = cellToWorld(region, row, col, regionWorldX, regionWorldZ);
                 Vec3 arrowEnd = calculateArrowEnd(center, flowDirection);
 
                 drawLine(poseStack, bufferBuilder, center, arrowEnd, camPos, COLOR_ARROW);
@@ -455,15 +460,16 @@ public class FlowRenderer {
         };
     }
 
-    private static Vec3 cellToWorld(int row, int col, int regionWorldX, int regionWorldZ) {
-        double worldX = regionWorldX + (col * getCellStep()) + (getCellStep() / 2);
-        double worldZ = regionWorldZ + (row * getCellStep()) + (getCellStep() / 2);
+    private static Vec3 cellToWorld(D8RegionData region, int row, int col, int regionWorldX, int regionWorldZ) {
+        double cellStep = getCellStep(region);
+        double worldX = regionWorldX + (col * cellStep) + (cellStep / 2);
+        double worldZ = regionWorldZ + (row * cellStep) + (cellStep / 2);
 
         return new Vec3(worldX, SEA_LEVEL, worldZ);
     }
 
-    private static Vec3 cellToWorld(CellPos cell, int regionWorldX, int regionWorldZ) {
-        return cellToWorld(cell.row(), cell.col(), regionWorldX, regionWorldZ);
+    private static Vec3 cellToWorld(D8RegionData region, CellPos cell, int regionWorldX, int regionWorldZ) {
+        return cellToWorld(region, cell.row(), cell.col(), regionWorldX, regionWorldZ);
     }
 
     private static void drawLine(PoseStack poseStack, BufferBuilder bufferBuilder,
