@@ -210,29 +210,9 @@ public class RiverRegionManager {
     }
 
     public static RegionFeatureType getRegionFeatureType(RiverRegion region, DensityProvider provider, RandomState randomState) {
-        RiverRegionKey key = region.getKey();
-        int regionSize = RiverRegionKey.getRegionSize();
-        double step = regionSize / 8.0;
-        boolean hasWater = false;
-        boolean hasLand = false;
-
-        for (int i = 0; i < 8 && (!hasWater || !hasLand); i++) {
-            for (int j = 0; j < 8 && (!hasWater || !hasLand); j++) {
-                int sampleX = key.worldX() + (int) ((i + 0.5) * step);
-                int sampleZ = key.worldZ() + (int) ((j + 0.5) * step);
-                if (provider.isOcean(sampleX, sampleZ) || provider.isLake(sampleX, sampleZ)) {
-                    hasWater = true;
-                } else {
-                    hasLand = true;
-                }
-            }
-        }
-
-        if (hasWater && hasLand) {
-            return RegionFeatureType.SHORE;
-        }
-        if (hasWater) {
-            return RegionFeatureType.BODY;
+        RegionFeatureType terrain = classifyTerrain(region.getKey(), provider);
+        if (terrain != null) {
+            return terrain;
         }
 
         if (!region.isParticipating()) {
@@ -243,7 +223,7 @@ public class RiverRegionManager {
             return RegionFeatureType.BASIN;
         }
 
-        int upstreamCount = getUpstreamCount(key, provider, randomState);
+        int upstreamCount = getUpstreamCount(region.getKey(), provider, randomState);
         return upstreamCount == 0 ? RegionFeatureType.DIVIDE : RegionFeatureType.FLUVIAL;
     }
 

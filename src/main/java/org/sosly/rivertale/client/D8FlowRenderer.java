@@ -140,7 +140,7 @@ public class D8FlowRenderer {
                     continue;
                 }
 
-                PathDirection oppositeDir = getOppositeDirection(pathDir);
+                PathDirection oppositeDir = pathDir.opposite();
                 EdgeCrossing neighborInput = neighbor.crossings[oppositeDir.ordinal()];
                 if (neighborInput == null || neighborInput.direction() != EdgeCrossing.Direction.IN) {
                     continue;
@@ -179,16 +179,6 @@ public class D8FlowRenderer {
             }
         }
         return null;
-    }
-
-    private static PathDirection getOppositeDirection(PathDirection dir) {
-        return switch (dir) {
-            case NORTH -> PathDirection.SOUTH;
-            case SOUTH -> PathDirection.NORTH;
-            case EAST -> PathDirection.WEST;
-            case WEST -> PathDirection.EAST;
-            case NONE -> PathDirection.NONE;
-        };
     }
 
     private static void renderCrossings(D8RegionData region, int regionWorldX, int regionWorldZ,

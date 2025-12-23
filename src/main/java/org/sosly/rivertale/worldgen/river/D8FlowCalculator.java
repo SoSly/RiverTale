@@ -54,20 +54,6 @@ public class D8FlowCalculator {
         };
     }
 
-    public static FlowDirection getOppositeDirection(FlowDirection dir) {
-        return switch (dir) {
-            case NORTH -> FlowDirection.SOUTH;
-            case SOUTH -> FlowDirection.NORTH;
-            case EAST -> FlowDirection.WEST;
-            case WEST -> FlowDirection.EAST;
-            case NORTHEAST -> FlowDirection.SOUTHWEST;
-            case NORTHWEST -> FlowDirection.SOUTHEAST;
-            case SOUTHEAST -> FlowDirection.NORTHWEST;
-            case SOUTHWEST -> FlowDirection.NORTHEAST;
-            default -> FlowDirection.SINK;
-        };
-    }
-
     private static FlowDirection findSteepestNeighbor(
             int worldX,
             int worldZ,
