@@ -84,6 +84,44 @@ public class RiverPathValidator {
         int[][] filteredTermini = filterCells(result.terminusCells(), validCells);
         List<int[]> filteredConfluences = filterCellList(result.confluenceCells(), validCells);
 
+        if (!validatedPaths.isEmpty() && !filteredConfluences.isEmpty()) {
+            Map<Long, Set<PathDirection>> confluenceUsage =
+                buildConfluenceUsageMap(validatedPaths, filteredConfluences);
+
+            Set<Long> confluenceKeys = new HashSet<>();
+            for (int[] cell : filteredConfluences) {
+                confluenceKeys.add(cellKey(cell[0], cell[1]));
+            }
+
+            Set<PathDirection> tributariesToEvict = new HashSet<>();
+            for (Map.Entry<PathDirection, List<int[]>> entry : validatedPaths.entrySet()) {
+                PathDirection inputDir = entry.getKey();
+                List<int[]> path = entry.getValue();
+
+                int confluenceIdx = findFirstConfluence(path, confluenceKeys);
+                if (confluenceIdx < 0) {
+                    continue;
+                }
+
+                int tributaryLength = computeTributaryLength(
+                    key, inputDir, confluenceIdx + 1, provider, randomState);
+
+                if (tributaryLength < getMinimumRiverLength()) {
+                    tributariesToEvict.add(inputDir);
+                }
+            }
+
+            for (PathDirection dir : tributariesToEvict) {
+                List<int[]> path = validatedPaths.get(dir);
+                int confluenceIdx = findFirstConfluence(path, confluenceKeys);
+                evictTributary(validatedPaths, confluenceUsage, dir, confluenceIdx, crossings, strengths);
+            }
+
+            filteredConfluences = cleanupConfluences(filteredConfluences, confluenceUsage);
+            validCells = collectValidCells(validatedPaths);
+            filteredTermini = filterCells(result.terminusCells(), validCells);
+        }
+
         PathDirection validatedPrimaryOutput = result.primaryOutputDirection();
         if (validatedPaths.isEmpty()) {
             validatedPrimaryOutput = PathDirection.NONE;
@@ -201,6 +239,10 @@ public class RiverPathValidator {
             return 0;
         }
 
+        if (provider == null) {
+            return 0;
+        }
+
         RiverRegionKey neighborKey = inputDir.neighbor(key);
         if (neighborKey == null) {
             return 0;
@@ -250,6 +292,10 @@ public class RiverPathValidator {
             RandomState randomState) {
 
         if (remaining <= 0) {
+            return 0;
+        }
+
+        if (provider == null) {
             return 0;
         }
 
@@ -352,5 +398,98 @@ public class RiverPathValidator {
         }
 
         return longestDir;
+    }
+
+    private static Map<Long, Set<PathDirection>> buildConfluenceUsageMap(
+            Map<PathDirection, List<int[]>> riverPaths,
+            List<int[]> confluenceCells) {
+
+        Set<Long> confluenceKeys = new HashSet<>();
+        for (int[] cell : confluenceCells) {
+            confluenceKeys.add(cellKey(cell[0], cell[1]));
+        }
+
+        Map<Long, Set<PathDirection>> usage = new HashMap<>();
+        for (Map.Entry<PathDirection, List<int[]>> entry : riverPaths.entrySet()) {
+            PathDirection dir = entry.getKey();
+            for (int[] cell : entry.getValue()) {
+                long key = cellKey(cell[0], cell[1]);
+                if (confluenceKeys.contains(key)) {
+                    usage.computeIfAbsent(key, k -> new HashSet<>()).add(dir);
+                }
+            }
+        }
+
+        return usage;
+    }
+
+    private static int findFirstConfluence(List<int[]> path, Set<Long> confluenceKeys) {
+        for (int i = 0; i < path.size(); i++) {
+            int[] cell = path.get(i);
+            if (confluenceKeys.contains(cellKey(cell[0], cell[1]))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int computeTributaryLength(
+            RiverRegionKey key,
+            PathDirection inputDir,
+            int localCellCount,
+            DensityProvider provider,
+            RandomState randomState) {
+
+        int remaining = getMinimumRiverLength() - localCellCount;
+        if (remaining <= 0) {
+            return localCellCount;
+        }
+
+        if (provider == null) {
+            return localCellCount;
+        }
+
+        int upstream = traceUpstream(key, inputDir, remaining, provider, randomState);
+        return localCellCount + upstream;
+    }
+
+    private static void evictTributary(
+            Map<PathDirection, List<int[]>> validatedPaths,
+            Map<Long, Set<PathDirection>> confluenceUsage,
+            PathDirection inputDir,
+            int confluenceIdx,
+            EdgeCrossing[] crossings,
+            double[] strengths) {
+
+        List<int[]> path = validatedPaths.get(inputDir);
+        if (path == null) {
+            return;
+        }
+
+        int[] confluenceCell = path.get(confluenceIdx);
+        long confluenceKey = cellKey(confluenceCell[0], confluenceCell[1]);
+        Set<PathDirection> usage = confluenceUsage.get(confluenceKey);
+        if (usage != null) {
+            usage.remove(inputDir);
+        }
+
+        validatedPaths.remove(inputDir);
+        crossings[inputDir.ordinal()] = null;
+        strengths[inputDir.ordinal()] = 0;
+    }
+
+    private static List<int[]> cleanupConfluences(
+            List<int[]> confluenceCells,
+            Map<Long, Set<PathDirection>> confluenceUsage) {
+
+        List<int[]> cleaned = new ArrayList<>();
+        for (int[] cell : confluenceCells) {
+            long key = cellKey(cell[0], cell[1]);
+            Set<PathDirection> usage = confluenceUsage.get(key);
+            if (usage != null && usage.size() >= 2) {
+                cleaned.add(cell);
+            }
+        }
+        return cleaned;
     }
 }
