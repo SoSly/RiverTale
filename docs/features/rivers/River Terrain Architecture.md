@@ -11,7 +11,7 @@ The Cell-based Network (CBN) determines WHERE rivers flow—which regions connec
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | River-authoritative terrain | Rivers dictate elevation; terrain is carved or filled to match | Guarantees rivers descend toward ocean regardless of local terrain noise. Alternative (terrain-authoritative) would cause rivers to pool or reverse in valleys. |
-| Feature-based architecture | Cells select features by type; features handle terrain modification | Extensible—new features (waterfalls, rapids) register without changing core logic. Alternative (monolithic carver) would require extensive conditionals. |
+| Feature-based architecture | Cells select features by cellType; features handle terrain modification | Extensible—new features (waterfalls, rapids) register without changing core logic. Alternative (monolithic carver) would require extensive conditionals. |
 | Inject at buildSurface HEAD | Mixin runs before vanilla surface rules | Surface rules automatically apply biome materials (grass, sand) to our modifications. Alternative injection points would require manual surface handling. |
 | Stone for embankments | Fill with `defaultBlock` (stone) | Surface rules only decorate stone. Using dirt or other blocks would leave embankments visually distinct from natural terrain. |
 | Deterministic feature selection | Seeded noise picks features from eligible set | Same world seed = identical rivers. No exploration-order artifacts. |
@@ -76,7 +76,7 @@ This system consumes region data from the Cell-based Network. See `Cell-based Ne
 
 **Data availability:**
 
-Region data is computed on demand. Queries are fast and deterministic—same coordinates always produce the same result.
+Region data is computed on demand. Queries are fast and deterministic—same coordinates always produce the same flow.
 
 ## Feature-Based Architecture
 
@@ -92,7 +92,7 @@ Each region also has a **region feature** that defines its role in the broader n
 
 ### Cell Feature Types
 
-Cell features are categorized by their role along the river path. Each type has a default feature that handles the common case, with optional variants for special conditions.
+Cell features are categorized by their role along the river path. Each cellType has a default feature that handles the common case, with optional variants for special conditions.
 
 | Type | Location | Conditions | Features (* = default) |
 |------|----------|------------|------------------------|
@@ -101,7 +101,7 @@ Cell features are categorized by their role along the river path. Each type has 
 | **JUNCTION** | Merging point | Cell has 2+ inlets from upstream | confluence*, bifurcation, braid |
 | **TERMINUS** | Last cell before ending | Cell borders ocean, lake, or basin | mouth*, estuary, delta, wetland, sink |
 
-A cell along a river path has exactly one type (SOURCE, COURSE, JUNCTION, or TERMINUS). The type determines which features are eligible for selection.
+A cell along a river path has exactly one cellType (SOURCE, COURSE, JUNCTION, or TERMINUS). The cellType determines which features are eligible for selection.
 
 ### Region Feature Types
 
@@ -116,7 +116,7 @@ Region features classify what kind of area the region represents. Some have terr
 | **BARREN** | No visible water system | none* |
 | **BODY** | Minecraft placed water here (ocean or lake) | none* |
 
-Every region has exactly one region type. Region types with "none*" as default have no terrain modification behavior—they're for categorization only.
+Every region has exactly one region cellType. Region types with "none*" as default have no terrain modification behavior—they're for categorization only.
 
 ### Relationship Between Scales
 
@@ -133,8 +133,8 @@ The cell-level features describe what the river is doing at a specific point. Th
 
 For each cell in a river path:
 
-1. **Determine type** — Check inlet count, terminus status, and source status
-2. **Get eligible features** — Filter registered features by type
+1. **Determine cellType** — Check inlet count, terminus status, and source status
+2. **Get eligible features** — Filter registered features by cellType
 3. **Evaluate conditions** — Each feature declares conditions that affect its weight (elevation drop, biome, width, etc.)
 4. **Select feature** — Use seeded noise to pick from eligible features based on weights
 
@@ -446,7 +446,7 @@ There is no inter-chunk communication during terrain modification. Determinism g
 
 **River chunks do moderate work.** A river crossing a chunk might modify 500-3000 blocks depending on width and embankment needs. This is small compared to vanilla terrain generation's per-chunk work.
 
-**CBN queries are fast.** Region data is computed deterministically on demand. Same coordinates always produce the same result.
+**CBN queries are fast.** Region data is computed deterministically on demand. Same coordinates always produce the same flow.
 
 **Heightmap recalculation is bounded.** Recalculating heightmaps scans columns top-to-bottom—limited by chunk size (256 columns), not river complexity.
 
@@ -471,7 +471,7 @@ Terrain modification uses CBN data and seeded noise for feature selection and me
 ### What This System Does
 
 - Provides feature-based architecture for river terrain modification at both cell and region scales
-- Selects cell features based on type and conditions
+- Selects cell features based on cellType and conditions
 - Assigns region features based on network position
 - Implements run and confluence cell features
 - Implements endorheic region feature

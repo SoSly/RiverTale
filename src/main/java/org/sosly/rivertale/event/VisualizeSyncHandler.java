@@ -7,7 +7,7 @@ import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.command.VisualizeCommand;
-import org.sosly.rivertale.worldgen.river.RiverRegionKey;
+import org.sosly.rivertale.core.RegionPos;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -16,7 +16,7 @@ import java.util.UUID;
 @Mod.EventBusSubscriber
 public class VisualizeSyncHandler {
 
-    private static final Map<UUID, RiverRegionKey> LAST_KNOWN_REGION = new HashMap<>();
+    private static final Map<UUID, RegionPos> LAST_KNOWN_REGION = new HashMap<>();
     private static int tickCounter = 0;
     private static final int SYNC_INTERVAL = 20;
 
@@ -44,8 +44,8 @@ public class VisualizeSyncHandler {
                 continue;
             }
 
-            RiverRegionKey currentRegion = VisualizeCommand.getPlayerRegion(player);
-            RiverRegionKey lastRegion = LAST_KNOWN_REGION.get(playerId);
+            RegionPos currentRegion = VisualizeCommand.getPlayerRegion(player);
+            RegionPos lastRegion = LAST_KNOWN_REGION.get(playerId);
 
             if (lastRegion == null || !lastRegion.equals(currentRegion)) {
                 LAST_KNOWN_REGION.put(playerId, currentRegion);

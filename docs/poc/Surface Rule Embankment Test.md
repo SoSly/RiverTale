@@ -1,5 +1,5 @@
 ---
-type: poc
+cellType: poc
 validates: "[[River Terrain System]]"
 assumption: "Stone blocks placed before surface rules receive biome-appropriate surface treatment"
 status: success

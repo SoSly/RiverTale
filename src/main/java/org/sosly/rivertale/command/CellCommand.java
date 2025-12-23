@@ -8,13 +8,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
-import org.sosly.rivertale.worldgen.river.CellFeatureType;
-import org.sosly.rivertale.worldgen.river.D8FlowCalculator;
-import org.sosly.rivertale.worldgen.river.FlowDirection;
-import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
-import org.sosly.rivertale.worldgen.river.RiverRegion;
-import org.sosly.rivertale.worldgen.river.RiverRegionKey;
-import org.sosly.rivertale.worldgen.river.RiverRegionManager;
+import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.cell.CellType;
+import org.sosly.rivertale.path.FlowCalculator;
+import org.sosly.rivertale.terrain.RegionDensityProvider;
+import org.sosly.rivertale.region.Region;
+import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.path.Manager;
 
 import java.util.function.BiFunction;
 
@@ -33,11 +34,11 @@ public class CellCommand {
                 int playerX = pos.getX();
                 int playerZ = pos.getZ();
 
-                RiverRegionKey regionKey = RiverRegionKey.fromBlockPos(playerX, playerZ);
-                RiverRegion region = RiverRegionManager.createRegionFor(regionKey, provider, randomState);
-                java.util.Map<org.sosly.rivertale.worldgen.river.PathDirection, java.util.List<int[]>> paths = RiverRegionManager.computePaths(region, provider, randomState);
+                RegionPos regionKey = RegionPos.at(playerX, playerZ);
+                Region region = Manager.createRegionFor(regionKey, provider, randomState);
+                java.util.Map<Direction, java.util.List<CellPos>> paths = Manager.computePaths(region, provider, randomState);
 
-                int regionSize = RiverRegionKey.getRegionSize();
+                int regionSize = RegionPos.getRegionSize();
                 int cellSpacing = regionSize / 8;
 
                 int localX = Math.floorMod(playerX - regionKey.worldX(), regionSize);
@@ -49,19 +50,19 @@ public class CellCommand {
                 int cellCenterZ = regionKey.worldZ() + row * cellSpacing + cellSpacing / 2;
 
                 BiFunction<Integer, Integer, Double> densitySampler = provider::getDensity;
-                FlowDirection[][] flowDirections = D8FlowCalculator.computeFlowDirections(regionKey, densitySampler);
-                FlowDirection flowDirection = flowDirections[row][col];
+                Direction[][] flowDirections = FlowCalculator.compute(regionKey, densitySampler);
+                Direction flowDirection = flowDirections[row][col];
 
-                CellFeatureType featureType = RiverRegionManager.getCellFeatureType(region, row, col, paths, provider);
+                CellType featureCellType = Manager.getCellFeatureType(region, row, col, paths, provider);
 
                 source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
-                source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d) in Region (%d, %d)", row, col, regionKey.regionX(), regionKey.regionZ()))
+                source.sendSuccess(() -> Component.literal(String.format("Cell (%d, %d) in Region (%d, %d)", row, col, regionKey.x(), regionKey.z()))
                     .withStyle(ChatFormatting.YELLOW), false);
                 source.sendSuccess(() -> Component.literal(String.format("  World position: (%,d, %,d)", cellCenterX, cellCenterZ))
                     .withStyle(ChatFormatting.WHITE), false);
                 source.sendSuccess(() -> Component.literal(String.format("  Flow Direction: %s", flowDirection))
                     .withStyle(ChatFormatting.WHITE), false);
-                source.sendSuccess(() -> Component.literal(String.format("  Cell Type: %s", featureType))
+                source.sendSuccess(() -> Component.literal(String.format("  Cell CellType: %s", featureCellType))
                     .withStyle(ChatFormatting.WHITE), false);
 
                 double continents = provider.getContinents(cellCenterX, cellCenterZ);

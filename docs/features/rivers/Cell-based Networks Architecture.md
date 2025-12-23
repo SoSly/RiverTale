@@ -41,7 +41,7 @@ Participation rate is a configurable percentage, independent of region size. Thi
 
 ## Flow Determination
 
-Each region determines its flow by comparing its density to its participating neighbors. Non-participating neighbors are ignored entirely. This comparison is deterministic—same coordinates and world seed always produce the same result.
+Each region determines its flow by comparing its density to its participating neighbors. Non-participating neighbors are ignored entirely. This comparison is deterministic—same coordinates and world seed always produce the same flow.
 
 **Outputs:**
 
@@ -83,7 +83,7 @@ A region receives water from participating neighbors with higher density. Each h
 
 Multiple inflows each pathfind toward the exit. When paths intersect, they merge at that point and share the remaining route. If paths don't intersect until the exit, they merge there—two streams dumping into the same output edge is a valid confluence.
 
-**Region type:**
+**Region cellType:**
 
 Regions are classified based on their cell densities. Two thresholds apply:
 - **Ocean threshold** (continents < -0.13) — saltwater ocean
@@ -100,7 +100,7 @@ Region types:
 | Basin | Flow-based local minimum | Terminus, rivers collect here |
 | Barren | No visible water system | Not participating in river network |
 
-Region type is determined during region creation by checking the 8×8 cell densities against both thresholds. No additional sampling required.
+Region cellType is determined during region creation by checking the 8×8 cell densities against both thresholds. No additional sampling required.
 
 **Ocean termination:**
 
@@ -143,7 +143,7 @@ reaches an ocean cell—perhaps (3,4) or (2,4). The river mouth
 forms at the actual coastline, not at an arbitrary edge center.
 ```
 
-This region type provides a hook for future estuary and delta features. A coastal region carries the context those systems need: cell-level coastline geography, upstream accumulation, and the specific cells where river meets ocean.
+This region cellType provides a hook for future estuary and delta features. A coastal region carries the context those systems need: cell-level coastline geography, upstream accumulation, and the specific cells where river meets ocean.
 
 ## Edge Centers
 
@@ -395,7 +395,7 @@ Region data is computed on demand, not cached. This keeps the system simple and 
 Computation is fast:
 1. **Region computation is cheap.** Each region does density sampling and neighbor comparison. No pathfinding, no flood fill.
 2. **Chain length is bounded.** Distance-to-terminus recurses downstream, but even a massive continent is only ~25 regions across.
-3. **All inputs are deterministic.** Density derives from world seed. Same coordinates = same result, always.
+3. **All inputs are deterministic.** Density derives from world seed. Same coordinates = same flow, always.
 
 **World borders:**
 

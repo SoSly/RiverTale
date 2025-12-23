@@ -13,7 +13,7 @@ RiverTale makes rivers that follow rules. A river exists because water would col
 
 Rivers exist *because* of terrain, not despite it. A river should feel like it had to be here—like the landscape demanded it.
 
-**Key constraint:** Rivers are the natural result of elevation, drainage, and accumulation.
+**Key constraint:** Rivers are the natural flow of elevation, drainage, and accumulation.
 
 **What this means in practice:**
 

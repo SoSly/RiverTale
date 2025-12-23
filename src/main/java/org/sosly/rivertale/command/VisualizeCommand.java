@@ -9,14 +9,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.RandomState;
+import org.sosly.rivertale.path.Flow;
 import org.sosly.rivertale.network.RiverTaleNetwork;
-import org.sosly.rivertale.network.VisualizeD8Packet;
-import org.sosly.rivertale.network.VisualizeD8Packet.D8RegionData;
-import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
-import org.sosly.rivertale.worldgen.river.RegionFeatureType;
-import org.sosly.rivertale.worldgen.river.D8FlowResult;
-import org.sosly.rivertale.worldgen.river.RiverRegionKey;
-import org.sosly.rivertale.worldgen.river.RiverRegionManager;
+import org.sosly.rivertale.network.VisualizePacket;
+import org.sosly.rivertale.network.VisualizePacket.D8RegionData;
+import org.sosly.rivertale.terrain.RegionDensityProvider;
+import org.sosly.rivertale.region.RegionType;
+import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.path.Manager;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -43,7 +43,7 @@ public class VisualizeCommand {
 
                 if (ENABLED_PLAYERS.contains(playerId)) {
                     ENABLED_PLAYERS.remove(playerId);
-                    RiverTaleNetwork.sendToPlayer(new VisualizeD8Packet(false, new ArrayList<>()), player);
+                    RiverTaleNetwork.sendToPlayer(new VisualizePacket(false, new ArrayList<>()), player);
                     source.sendSuccess(() -> Component.literal("River visualization disabled")
                         .withStyle(ChatFormatting.YELLOW), false);
                     return 1;
@@ -73,36 +73,36 @@ public class VisualizeCommand {
         RandomState randomState = level.getChunkSource().randomState();
 
         RegionDensityProvider provider = new RegionDensityProvider(randomState);
-        RiverRegionKey playerRegion = RiverRegionKey.fromBlockPos(pos.getX(), pos.getZ());
+        RegionPos playerRegion = RegionPos.at(pos.getX(), pos.getZ());
 
         List<D8RegionData> regionDataList = new ArrayList<>();
 
         for (int dx = -REGION_RADIUS; dx <= REGION_RADIUS; dx++) {
             for (int dz = -REGION_RADIUS; dz <= REGION_RADIUS; dz++) {
-                RiverRegionKey key = new RiverRegionKey(playerRegion.regionX() + dx, playerRegion.regionZ() + dz);
+                RegionPos regionPos = new RegionPos(playerRegion.x() + dx, playerRegion.z() + dz);
 
-                RegionFeatureType terrain = RiverRegionManager.classifyTerrain(key, provider);
-                RegionFeatureType featureType = terrain != null ? terrain : RegionFeatureType.DIVIDE;
+                RegionType terrain = Manager.classifyTerrain(regionPos, provider);
+                RegionType featureRegionType = terrain != null ? terrain : RegionType.DIVIDE;
 
-                D8FlowResult d8Result = RiverRegionManager.computeFlowResult(key, provider, randomState);
+                Flow d8Flow = Manager.computeFlowResult(regionPos, provider, randomState);
 
                 regionDataList.add(new D8RegionData(
-                    key.regionX(), key.regionZ(),
-                    featureType,
-                    d8Result.crossings(),
-                    d8Result.primaryOutputDirection(), d8Result.flowDirection(),
-                    d8Result.terminusCells(), d8Result.riverPaths(),
-                    d8Result.confluenceCells()
+                    regionPos.x(), regionPos.z(),
+                        featureRegionType,
+                    d8Flow.crossings(),
+                    d8Flow.primaryOutputDirection(), d8Flow.flowDirection(),
+                    d8Flow.terminusCells(), d8Flow.riverPaths(),
+                    d8Flow.confluenceCells()
                 ));
             }
         }
 
-        RiverTaleNetwork.sendToPlayer(new VisualizeD8Packet(true, regionDataList), player);
+        RiverTaleNetwork.sendToPlayer(new VisualizePacket(true, regionDataList), player);
     }
 
-    public static RiverRegionKey getPlayerRegion(ServerPlayer player) {
+    public static RegionPos getPlayerRegion(ServerPlayer player) {
         BlockPos pos = player.blockPosition();
-        return RiverRegionKey.fromBlockPos(pos.getX(), pos.getZ());
+        return RegionPos.at(pos.getX(), pos.getZ());
     }
 
     public static void clearEnabledPlayers() {

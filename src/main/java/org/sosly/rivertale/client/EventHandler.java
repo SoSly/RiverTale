@@ -7,10 +7,10 @@ import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.RiverTale;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID, value = Dist.CLIENT)
-public class ClientEventHandler {
+public class EventHandler {
 
     @SubscribeEvent
     public static void onPlayerLogout(ClientPlayerNetworkEvent.LoggingOut event) {
-        ClientD8Cache.setEnabled(false);
+        Cache.setEnabled(false);
     }
 }

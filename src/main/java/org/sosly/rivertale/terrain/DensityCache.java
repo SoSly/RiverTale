@@ -1,26 +1,26 @@
-package org.sosly.rivertale.worldgen.river;
+package org.sosly.rivertale.terrain;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-public class CellSampleDensityCache {
+public class DensityCache {
 
     private static final int DEFAULT_CAPACITY = 10000;
 
     private final int capacity;
     private final Map<Long, Double> cache;
 
-    public CellSampleDensityCache() {
+    public DensityCache() {
         this(DEFAULT_CAPACITY);
     }
 
-    public CellSampleDensityCache(int capacity) {
+    public DensityCache(int capacity) {
         this.capacity = capacity;
         this.cache = new LinkedHashMap<>(capacity, 0.75f, false) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<Long, Double> eldest) {
-                return size() > CellSampleDensityCache.this.capacity;
+                return size() > DensityCache.this.capacity;
             }
         };
     }

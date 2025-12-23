@@ -5,6 +5,7 @@ import net.minecraftforge.common.ForgeConfigSpec;
 public class RiverConfig {
 
     public static final ForgeConfigSpec SPEC;
+    public static final ForgeConfigSpec.IntValue CELLS_PER_REGION;
     public static final ForgeConfigSpec.IntValue REGION_SIZE;
     public static final ForgeConfigSpec.DoubleValue PARTICIPATION_RATE;
     public static final ForgeConfigSpec.DoubleValue OCEAN_THRESHOLD;
@@ -15,6 +16,10 @@ public class RiverConfig {
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
+
+        CELLS_PER_REGION = builder
+            .comment("The number of cells in each region. Fewer cells improve performance but reduce detail. This value is squared to get the actual value.")
+            .defineInRange("cellsPerRegion", 8, 2, 16);
 
         REGION_SIZE = builder
             .comment("Size of each river region in blocks. Larger regions improve performance but reduce detail.")

@@ -14,14 +14,14 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.RiverTale;
-import org.sosly.rivertale.network.VisualizeD8Packet.D8RegionData;
-import org.sosly.rivertale.worldgen.river.EdgeCrossing;
-import org.sosly.rivertale.worldgen.river.FlowDirection;
-import org.sosly.rivertale.worldgen.river.PathDirection;
-import org.sosly.rivertale.worldgen.river.RiverRegionKey;
+import org.sosly.rivertale.network.VisualizePacket.D8RegionData;
+import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.path.Crossing;
+import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.RegionPos;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
-public class D8FlowRenderer {
+public class FlowRenderer {
 
     private static final double SEA_LEVEL = 63.0;
     private static final double ARROW_LENGTH = 3.5;
@@ -31,7 +31,7 @@ public class D8FlowRenderer {
     private static final double DIAG_HEAD = ARROWHEAD_SIZE / Math.sqrt(2.0);
 
     private static int getRegionSize() {
-        return RiverRegionKey.getRegionSize();
+        return RegionPos.getRegionSize();
     }
 
     private static double getCellStep() {
@@ -52,7 +52,7 @@ public class D8FlowRenderer {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
             return;
         }
-        if (!ClientD8Cache.isEnabled()) {
+        if (!Cache.isEnabled()) {
             return;
         }
 
@@ -65,7 +65,7 @@ public class D8FlowRenderer {
 
         renderRegionBorders(poseStack, camPos, bufferBuilder);
 
-        for (D8RegionData region : ClientD8Cache.getRegions()) {
+        for (D8RegionData region : Cache.getRegions()) {
             renderRegion(region, poseStack, camPos, bufferBuilder);
         }
 
@@ -81,7 +81,7 @@ public class D8FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        for (D8RegionData region : ClientD8Cache.getRegions()) {
+        for (D8RegionData region : Cache.getRegions()) {
             int regionSize = getRegionSize();
             double minX = region.regionX * regionSize;
             double maxX = minX + regionSize;
@@ -124,33 +124,33 @@ public class D8FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        for (D8RegionData region : ClientD8Cache.getRegions()) {
+        for (D8RegionData region : Cache.getRegions()) {
             int regionWorldX = region.regionX * getRegionSize();
             int regionWorldZ = region.regionZ * getRegionSize();
 
             for (int dir = 0; dir < 4; dir++) {
-                EdgeCrossing crossing = region.crossings[dir];
-                if (crossing == null || crossing.direction() != EdgeCrossing.Direction.OUT) {
+                Crossing crossing = region.crossings[dir];
+                if (crossing == null || crossing.direction() != Crossing.Direction.OUT) {
                     continue;
                 }
 
-                PathDirection pathDir = PathDirection.values()[dir];
+                Direction pathDir = Direction.values()[dir];
                 D8RegionData neighbor = findNeighborRegion(region.regionX, region.regionZ, pathDir);
                 if (neighbor == null) {
                     continue;
                 }
 
-                PathDirection oppositeDir = pathDir.opposite();
-                EdgeCrossing neighborInput = neighbor.crossings[oppositeDir.ordinal()];
-                if (neighborInput == null || neighborInput.direction() != EdgeCrossing.Direction.IN) {
+                Direction oppositeDir = pathDir.opposite();
+                Crossing neighborInput = neighbor.crossings[oppositeDir.ordinal()];
+                if (neighborInput == null || neighborInput.direction() != Crossing.Direction.IN) {
                     continue;
                 }
 
                 int neighborWorldX = neighbor.regionX * getRegionSize();
                 int neighborWorldZ = neighbor.regionZ * getRegionSize();
 
-                Vec3 outputPos = cellToWorld(new int[]{crossing.row(), crossing.col()}, regionWorldX, regionWorldZ);
-                Vec3 inputPos = cellToWorld(new int[]{neighborInput.row(), neighborInput.col()}, neighborWorldX, neighborWorldZ);
+                Vec3 outputPos = cellToWorld(crossing.row(), crossing.col(), regionWorldX, regionWorldZ);
+                Vec3 inputPos = cellToWorld(neighborInput.row(), neighborInput.col(), neighborWorldX, neighborWorldZ);
 
                 drawLine(poseStack, bufferBuilder, outputPos, inputPos, camPos, COLOR_RIVER_PATH);
             }
@@ -161,7 +161,7 @@ public class D8FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static D8RegionData findNeighborRegion(int regionX, int regionZ, PathDirection dir) {
+    private static D8RegionData findNeighborRegion(int regionX, int regionZ, Direction dir) {
         int neighborX = regionX;
         int neighborZ = regionZ;
 
@@ -173,7 +173,7 @@ public class D8FlowRenderer {
             default -> { }
         }
 
-        for (D8RegionData region : ClientD8Cache.getRegions()) {
+        for (D8RegionData region : Cache.getRegions()) {
             if (region.regionX == neighborX && region.regionZ == neighborZ) {
                 return region;
             }
@@ -195,11 +195,11 @@ public class D8FlowRenderer {
         double margin = 1.0;
 
         for (int dir = 0; dir < 4; dir++) {
-            EdgeCrossing crossing = region.crossings[dir];
+            Crossing crossing = region.crossings[dir];
             if (crossing == null) {
                 continue;
             }
-            if (crossing.direction() != EdgeCrossing.Direction.IN) {
+            if (crossing.direction() != Crossing.Direction.IN) {
                 continue;
             }
             renderCrossingBox(regionWorldX, regionWorldZ, crossing, cellStep, margin,
@@ -207,11 +207,11 @@ public class D8FlowRenderer {
         }
 
         for (int dir = 0; dir < 4; dir++) {
-            EdgeCrossing crossing = region.crossings[dir];
+            Crossing crossing = region.crossings[dir];
             if (crossing == null) {
                 continue;
             }
-            if (crossing.direction() != EdgeCrossing.Direction.OUT || PathDirection.values()[dir] == region.primaryOutputDirection) {
+            if (crossing.direction() != Crossing.Direction.OUT || Direction.values()[dir] == region.primaryOutputDirection) {
                 continue;
             }
             renderCrossingBox(regionWorldX, regionWorldZ, crossing, cellStep, margin,
@@ -219,11 +219,11 @@ public class D8FlowRenderer {
         }
 
         for (int dir = 0; dir < 4; dir++) {
-            EdgeCrossing crossing = region.crossings[dir];
+            Crossing crossing = region.crossings[dir];
             if (crossing == null) {
                 continue;
             }
-            if (crossing.direction() != EdgeCrossing.Direction.OUT || PathDirection.values()[dir] != region.primaryOutputDirection) {
+            if (crossing.direction() != Crossing.Direction.OUT || Direction.values()[dir] != region.primaryOutputDirection) {
                 continue;
             }
             renderCrossingBox(regionWorldX, regionWorldZ, crossing, cellStep, margin,
@@ -235,7 +235,7 @@ public class D8FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static void renderCrossingBox(int regionWorldX, int regionWorldZ, EdgeCrossing crossing,
+    private static void renderCrossingBox(int regionWorldX, int regionWorldZ, Crossing crossing,
                                            double cellStep, double margin,
                                            PoseStack poseStack, BufferBuilder bufferBuilder,
                                            Vec3 camPos, float[] color) {
@@ -260,7 +260,7 @@ public class D8FlowRenderer {
 
     private static void renderTerminus(D8RegionData region, int regionWorldX, int regionWorldZ,
                                         PoseStack poseStack, Vec3 camPos, BufferBuilder bufferBuilder) {
-        if (region.terminusCells == null || region.terminusCells.length == 0) {
+        if (region.terminusCells == null || region.terminusCells.isEmpty()) {
             return;
         }
 
@@ -275,9 +275,9 @@ public class D8FlowRenderer {
         double cellStep = getCellStep();
         double margin = 1.0;
 
-        for (int[] terminus : region.terminusCells) {
-            int row = terminus[0];
-            int col = terminus[1];
+        for (CellPos terminus : region.terminusCells) {
+            int row = terminus.row();
+            int col = terminus.col();
 
             double minX = regionWorldX + col * cellStep + margin;
             double maxX = regionWorldX + (col + 1) * cellStep - margin;
@@ -314,7 +314,7 @@ public class D8FlowRenderer {
 
         bufferBuilder.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        for (java.util.List<int[]> path : region.riverPaths.values()) {
+        for (java.util.List<CellPos> path : region.riverPaths.values()) {
             for (int i = 0; i < path.size() - 1; i++) {
                 Vec3 start = cellToWorld(path.get(i), regionWorldX, regionWorldZ);
                 Vec3 end = cellToWorld(path.get(i + 1), regionWorldX, regionWorldZ);
@@ -344,9 +344,9 @@ public class D8FlowRenderer {
         double cellStep = getCellStep();
         double margin = 1.0;
 
-        for (int[] confluence : region.confluenceCells) {
-            int row = confluence[0];
-            int col = confluence[1];
+        for (CellPos confluence : region.confluenceCells) {
+            int row = confluence.row();
+            int col = confluence.col();
 
             double minX = regionWorldX + col * cellStep + margin;
             double maxX = regionWorldX + (col + 1) * cellStep - margin;
@@ -381,13 +381,13 @@ public class D8FlowRenderer {
 
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
-                FlowDirection flowDirection = region.flowDirections[row][col];
+                Direction flowDirection = region.flowDirections[row][col];
 
-                if (flowDirection == FlowDirection.SINK) {
+                if (flowDirection == Direction.NONE) {
                     continue;
                 }
 
-                Vec3 center = cellToWorld(new int[]{row, col}, regionWorldX, regionWorldZ);
+                Vec3 center = cellToWorld(row, col, regionWorldX, regionWorldZ);
                 Vec3 arrowEnd = calculateArrowEnd(center, flowDirection);
 
                 drawLine(poseStack, bufferBuilder, center, arrowEnd, camPos, COLOR_ARROW);
@@ -403,7 +403,7 @@ public class D8FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static Vec3 calculateArrowEnd(Vec3 center, FlowDirection flowDirection) {
+    private static Vec3 calculateArrowEnd(Vec3 center, Direction flowDirection) {
         return switch (flowDirection) {
             case NORTH -> new Vec3(center.x, center.y, center.z - ARROW_LENGTH);
             case SOUTH -> new Vec3(center.x, center.y, center.z + ARROW_LENGTH);
@@ -413,11 +413,11 @@ public class D8FlowRenderer {
             case NORTHWEST -> new Vec3(center.x - DIAG_COMPONENT, center.y, center.z - DIAG_COMPONENT);
             case SOUTHEAST -> new Vec3(center.x + DIAG_COMPONENT, center.y, center.z + DIAG_COMPONENT);
             case SOUTHWEST -> new Vec3(center.x - DIAG_COMPONENT, center.y, center.z + DIAG_COMPONENT);
-            case SINK -> center;
+            case NONE -> center;
         };
     }
 
-    private static Vec3[] calculateArrowhead(Vec3 tip, FlowDirection flowDirection) {
+    private static Vec3[] calculateArrowhead(Vec3 tip, Direction flowDirection) {
         return switch (flowDirection) {
             case NORTH -> new Vec3[]{
                 new Vec3(tip.x - ARROWHEAD_SIZE, tip.y, tip.z + ARROWHEAD_SIZE),
@@ -451,18 +451,19 @@ public class D8FlowRenderer {
                 new Vec3(tip.x + ARROWHEAD_SIZE, tip.y, tip.z),
                 new Vec3(tip.x, tip.y, tip.z - ARROWHEAD_SIZE)
             };
-            case SINK -> new Vec3[]{tip, tip};
+            case NONE -> new Vec3[]{tip, tip};
         };
     }
 
-    private static Vec3 cellToWorld(int[] cell, int regionWorldX, int regionWorldZ) {
-        int row = cell[0];
-        int col = cell[1];
-
+    private static Vec3 cellToWorld(int row, int col, int regionWorldX, int regionWorldZ) {
         double worldX = regionWorldX + (col * getCellStep()) + (getCellStep() / 2);
         double worldZ = regionWorldZ + (row * getCellStep()) + (getCellStep() / 2);
 
         return new Vec3(worldX, SEA_LEVEL, worldZ);
+    }
+
+    private static Vec3 cellToWorld(CellPos cell, int regionWorldX, int regionWorldZ) {
+        return cellToWorld(cell.row(), cell.col(), regionWorldX, regionWorldZ);
     }
 
     private static void drawLine(PoseStack poseStack, BufferBuilder bufferBuilder,

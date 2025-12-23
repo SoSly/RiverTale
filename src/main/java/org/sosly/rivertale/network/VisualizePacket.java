@@ -4,11 +4,12 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
-import org.sosly.rivertale.client.ClientD8Cache;
-import org.sosly.rivertale.worldgen.river.EdgeCrossing;
-import org.sosly.rivertale.worldgen.river.FlowDirection;
-import org.sosly.rivertale.worldgen.river.PathDirection;
-import org.sosly.rivertale.worldgen.river.RegionFeatureType;
+import org.sosly.rivertale.client.Cache;
+import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.path.Crossing;
+import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.region.RegionType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,12 +17,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
-public class VisualizeD8Packet {
+public class VisualizePacket {
 
     private final boolean enabled;
     private final List<D8RegionData> regions;
 
-    public VisualizeD8Packet(boolean enabled, List<D8RegionData> regions) {
+    public VisualizePacket(boolean enabled, List<D8RegionData> regions) {
         this.enabled = enabled;
         this.regions = regions != null ? regions : new ArrayList<>();
     }
@@ -33,15 +34,15 @@ public class VisualizeD8Packet {
         for (D8RegionData region : regions) {
             buf.writeInt(region.regionX);
             buf.writeInt(region.regionZ);
-            buf.writeEnum(region.featureType);
+            buf.writeEnum(region.featureRegionType);
 
             for (int i = 0; i < 4; i++) {
-                EdgeCrossing crossing = region.crossings[i];
+                Crossing crossing = region.crossings[i];
                 buf.writeBoolean(crossing != null);
                 if (crossing != null) {
                     buf.writeInt(crossing.row());
                     buf.writeInt(crossing.col());
-                    buf.writeBoolean(crossing.direction() == EdgeCrossing.Direction.OUT);
+                    buf.writeBoolean(crossing.direction() == Crossing.Direction.OUT);
                 }
             }
             buf.writeEnum(region.primaryOutputDirection);
@@ -52,31 +53,31 @@ public class VisualizeD8Packet {
                 }
             }
 
-            buf.writeInt(region.terminusCells.length);
-            for (int[] terminus : region.terminusCells) {
-                buf.writeInt(terminus[0]);
-                buf.writeInt(terminus[1]);
+            buf.writeInt(region.terminusCells.size());
+            for (CellPos terminus : region.terminusCells) {
+                buf.writeInt(terminus.row());
+                buf.writeInt(terminus.col());
             }
 
             buf.writeInt(region.riverPaths.size());
-            for (Map.Entry<PathDirection, List<int[]>> entry : region.riverPaths.entrySet()) {
+            for (Map.Entry<Direction, List<CellPos>> entry : region.riverPaths.entrySet()) {
                 buf.writeEnum(entry.getKey());
                 buf.writeInt(entry.getValue().size());
-                for (int[] cell : entry.getValue()) {
-                    buf.writeInt(cell[0]);
-                    buf.writeInt(cell[1]);
+                for (CellPos cell : entry.getValue()) {
+                    buf.writeInt(cell.row());
+                    buf.writeInt(cell.col());
                 }
             }
 
             buf.writeInt(region.confluenceCells.size());
-            for (int[] confluence : region.confluenceCells) {
-                buf.writeInt(confluence[0]);
-                buf.writeInt(confluence[1]);
+            for (CellPos confluence : region.confluenceCells) {
+                buf.writeInt(confluence.row());
+                buf.writeInt(confluence.col());
             }
         }
     }
 
-    public static VisualizeD8Packet decode(FriendlyByteBuf buf) {
+    public static VisualizePacket decode(FriendlyByteBuf buf) {
         boolean enabled = buf.readBoolean();
         int regionCount = buf.readInt();
         List<D8RegionData> regions = new ArrayList<>(regionCount);
@@ -84,61 +85,67 @@ public class VisualizeD8Packet {
         for (int i = 0; i < regionCount; i++) {
             int regionX = buf.readInt();
             int regionZ = buf.readInt();
-            RegionFeatureType featureType = buf.readEnum(RegionFeatureType.class);
+            RegionPos regionPos = new RegionPos(regionX, regionZ);
+            RegionType featureRegionType = buf.readEnum(RegionType.class);
 
-            EdgeCrossing[] crossings = new EdgeCrossing[4];
+            Crossing[] crossings = new Crossing[4];
             for (int j = 0; j < 4; j++) {
                 boolean hasCrossing = buf.readBoolean();
                 if (hasCrossing) {
                     int row = buf.readInt();
                     int col = buf.readInt();
                     boolean isOutput = buf.readBoolean();
-                    EdgeCrossing.Direction dir = isOutput
-                        ? EdgeCrossing.Direction.OUT
-                        : EdgeCrossing.Direction.IN;
-                    crossings[j] = new EdgeCrossing(row, col, dir);
+                    Crossing.Direction dir = isOutput
+                        ? Crossing.Direction.OUT
+                        : Crossing.Direction.IN;
+                    crossings[j] = new Crossing(row, col, dir);
                 }
             }
-            PathDirection primaryOutputDirection = buf.readEnum(PathDirection.class);
+            Direction primaryOutputDirection = buf.readEnum(Direction.class);
 
-            FlowDirection[][] flowDirections = new FlowDirection[8][8];
+            Direction[][] flowDirections = new Direction[8][8];
             for (int row = 0; row < 8; row++) {
                 for (int col = 0; col < 8; col++) {
-                    flowDirections[row][col] = buf.readEnum(FlowDirection.class);
+                    flowDirections[row][col] = buf.readEnum(Direction.class);
                 }
             }
 
             int terminusCount = buf.readInt();
-            int[][] terminusCells = new int[terminusCount][2];
+            List<CellPos> terminusCells = new ArrayList<>(terminusCount);
             for (int t = 0; t < terminusCount; t++) {
-                terminusCells[t][0] = buf.readInt();
-                terminusCells[t][1] = buf.readInt();
+                int row = buf.readInt();
+                int col = buf.readInt();
+                terminusCells.add(CellPos.fromLocal(regionPos, row, col));
             }
 
             int pathCount = buf.readInt();
-            Map<PathDirection, List<int[]>> riverPaths = new HashMap<>();
+            Map<Direction, List<CellPos>> riverPaths = new HashMap<>();
             for (int p = 0; p < pathCount; p++) {
-                PathDirection dir = buf.readEnum(PathDirection.class);
+                Direction dir = buf.readEnum(Direction.class);
                 int pathLength = buf.readInt();
-                List<int[]> path = new ArrayList<>(pathLength);
+                List<CellPos> path = new ArrayList<>(pathLength);
                 for (int s = 0; s < pathLength; s++) {
-                    path.add(new int[]{buf.readInt(), buf.readInt()});
+                    int row = buf.readInt();
+                    int col = buf.readInt();
+                    path.add(CellPos.fromLocal(regionPos, row, col));
                 }
                 riverPaths.put(dir, path);
             }
 
             int confluenceCount = buf.readInt();
-            List<int[]> confluenceCells = new ArrayList<>(confluenceCount);
+            List<CellPos> confluenceCells = new ArrayList<>(confluenceCount);
             for (int c = 0; c < confluenceCount; c++) {
-                confluenceCells.add(new int[]{buf.readInt(), buf.readInt()});
+                int row = buf.readInt();
+                int col = buf.readInt();
+                confluenceCells.add(CellPos.fromLocal(regionPos, row, col));
             }
 
-            regions.add(new D8RegionData(regionX, regionZ, featureType,
+            regions.add(new D8RegionData(regionX, regionZ, featureRegionType,
                 crossings, primaryOutputDirection, flowDirections,
                 terminusCells, riverPaths, confluenceCells));
         }
 
-        return new VisualizeD8Packet(enabled, regions);
+        return new VisualizePacket(enabled, regions);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -151,35 +158,35 @@ public class VisualizeD8Packet {
     }
 
     private void handleClient() {
-        ClientD8Cache.setEnabled(enabled);
+        Cache.setEnabled(enabled);
         if (enabled) {
-            ClientD8Cache.updateRegions(regions);
+            Cache.updateRegions(regions);
         }
     }
 
     public static class D8RegionData {
         public final int regionX;
         public final int regionZ;
-        public final RegionFeatureType featureType;
-        public final EdgeCrossing[] crossings;
-        public final PathDirection primaryOutputDirection;
-        public final FlowDirection[][] flowDirections;
-        public final int[][] terminusCells;
-        public final Map<PathDirection, List<int[]>> riverPaths;
-        public final List<int[]> confluenceCells;
+        public final RegionType featureRegionType;
+        public final Crossing[] crossings;
+        public final Direction primaryOutputDirection;
+        public final Direction[][] flowDirections;
+        public final List<CellPos> terminusCells;
+        public final Map<Direction, List<CellPos>> riverPaths;
+        public final List<CellPos> confluenceCells;
 
-        public D8RegionData(int regionX, int regionZ, RegionFeatureType featureType,
-                          EdgeCrossing[] crossings,
-                          PathDirection primaryOutputDirection, FlowDirection[][] flowDirections,
-                          int[][] terminusCells, Map<PathDirection, List<int[]>> riverPaths,
-                          List<int[]> confluenceCells) {
+        public D8RegionData(int regionX, int regionZ, RegionType featureRegionType,
+                            Crossing[] crossings,
+                            Direction primaryOutputDirection, Direction[][] flowDirections,
+                            List<CellPos> terminusCells, Map<Direction, List<CellPos>> riverPaths,
+                            List<CellPos> confluenceCells) {
             this.regionX = regionX;
             this.regionZ = regionZ;
-            this.featureType = featureType;
+            this.featureRegionType = featureRegionType;
             this.crossings = crossings;
             this.primaryOutputDirection = primaryOutputDirection;
             this.flowDirections = flowDirections;
-            this.terminusCells = terminusCells;
+            this.terminusCells = terminusCells != null ? terminusCells : new ArrayList<>();
             this.riverPaths = riverPaths != null ? riverPaths : new HashMap<>();
             this.confluenceCells = confluenceCells != null ? confluenceCells : new ArrayList<>();
         }

@@ -129,7 +129,7 @@ An enum with six values:
 - `Basin` — flow-based local minimum where rivers collect; terminus with no outputs
 - `Barren` — no visible water system; not participating in river network
 
-Region type is determined during region creation by checking each cell against both thresholds. Ocean threshold is checked first (takes precedence), then lake threshold.
+Region cellType is determined during region creation by checking each cell against both thresholds. Ocean threshold is checked first (takes precedence), then lake threshold.
 
 **DensityProvider:**
 
@@ -225,10 +225,10 @@ Region (5, 3):
 | Feature | Available After | Description |
 |---------|-----------------|-------------|
 | `basin` | Phase 5 | Nearest region that is a basin terminus |
-| `body` | Phase 5 | Nearest region of type Body (ocean or lake) |
-| `shore` | Phase 5 | Nearest region of type Shore (river mouth to water) |
-| `fluvial` | Phase 5 | Nearest region of type Fluvial (river passes through) |
-| `divide` | Phase 5 | Nearest region of type Divide (river source) |
+| `body` | Phase 5 | Nearest region of cellType Body (ocean or lake) |
+| `shore` | Phase 5 | Nearest region of cellType Shore (river mouth to water) |
+| `fluvial` | Phase 5 | Nearest region of cellType Fluvial (river passes through) |
+| `divide` | Phase 5 | Nearest region of cellType Divide (river source) |
 | `source` | Phase 5 | Nearest region with no inputs (river source) |
 | `confluence` | Phase 5 | Nearest region with multiple inputs |
 
@@ -391,7 +391,7 @@ Once the density provider is implemented, update `/rivertale region` to display 
 
 ```
 computeFlow(region):
-    // Region type was set during region creation based on cell densities
+    // Region cellType was set during region creation based on cell densities
     // All terminus types have no output
     if region.regionType == Body:
         region.primaryOutput = NONE
@@ -459,7 +459,7 @@ isParticipating(key):
 
 **Integration with Phase 2 command:**
 
-Update `/rivertale region` to show region type, output direction, and inputs. These are computed on-the-fly by calling the flow algorithm.
+Update `/rivertale region` to show region cellType, output direction, and inputs. These are computed on-the-fly by calling the flow algorithm.
 
 **Validation:**
 1. Generate cells in a test area

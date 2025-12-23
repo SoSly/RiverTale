@@ -1,4 +1,4 @@
-package org.sosly.rivertale.worldgen.river;
+package org.sosly.rivertale.terrain;
 
 public interface DensityProvider {
 

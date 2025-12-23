@@ -12,12 +12,14 @@ import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.RandomState;
-import org.sosly.rivertale.worldgen.river.CellFeatureType;
-import org.sosly.rivertale.worldgen.river.RegionDensityProvider;
-import org.sosly.rivertale.worldgen.river.RegionFeatureType;
-import org.sosly.rivertale.worldgen.river.RiverRegion;
-import org.sosly.rivertale.worldgen.river.RiverRegionKey;
-import org.sosly.rivertale.worldgen.river.RiverRegionManager;
+import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.cell.CellType;
+import org.sosly.rivertale.region.RegionType;
+import org.sosly.rivertale.terrain.RegionDensityProvider;
+import org.sosly.rivertale.region.Region;
+import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.path.Manager;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -38,20 +40,20 @@ public class LocateCommand {
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal("locate");
 
-        for (RegionFeatureType type : RegionFeatureType.values()) {
-            builder = builder.then(Commands.literal(type.name().toLowerCase())
-                .executes(context -> locateRegionType(context, type)));
+        for (RegionType regionType : RegionType.values()) {
+            builder = builder.then(Commands.literal(regionType.name().toLowerCase())
+                .executes(context -> locateRegionType(context, regionType)));
         }
 
-        for (CellFeatureType type : CellFeatureType.values()) {
-            builder = builder.then(Commands.literal(type.name().toLowerCase())
-                .executes(context -> locateCellType(context, type)));
+        for (CellType cellType : CellType.values()) {
+            builder = builder.then(Commands.literal(cellType.name().toLowerCase())
+                .executes(context -> locateCellType(context, cellType)));
         }
 
         return builder;
     }
 
-    private static int locateRegionType(CommandContext<CommandSourceStack> context, RegionFeatureType target) {
+    private static int locateRegionType(CommandContext<CommandSourceStack> context, RegionType target) {
         CommandSourceStack source = context.getSource();
         ServerLevel level = source.getLevel();
         MinecraftServer server = level.getServer();
@@ -84,7 +86,7 @@ public class LocateCommand {
         return 1;
     }
 
-    private static int locateCellType(CommandContext<CommandSourceStack> context, CellFeatureType target) {
+    private static int locateCellType(CommandContext<CommandSourceStack> context, CellType target) {
         CommandSourceStack source = context.getSource();
         ServerLevel level = source.getLevel();
         MinecraftServer server = level.getServer();
@@ -117,8 +119,8 @@ public class LocateCommand {
         return 1;
     }
 
-    private static BlockPos searchForRegionType(int playerX, int playerY, int playerZ, RegionDensityProvider provider, RandomState randomState, RegionFeatureType target) {
-        int regionSize = RiverRegionKey.getRegionSize();
+    private static BlockPos searchForRegionType(int playerX, int playerY, int playerZ, RegionDensityProvider provider, RandomState randomState, RegionType target) {
+        int regionSize = RegionPos.getRegionSize();
         int playerRegionX = Math.floorDiv(playerX, regionSize);
         int playerRegionZ = Math.floorDiv(playerZ, regionSize);
         int maxRegions = MAX_SEARCH_RADIUS / regionSize;
@@ -152,8 +154,8 @@ public class LocateCommand {
         return null;
     }
 
-    private static BlockPos searchForCellType(int playerX, int playerY, int playerZ, RegionDensityProvider provider, RandomState randomState, CellFeatureType target) {
-        int regionSize = RiverRegionKey.getRegionSize();
+    private static BlockPos searchForCellType(int playerX, int playerY, int playerZ, RegionDensityProvider provider, RandomState randomState, CellType target) {
+        int regionSize = RegionPos.getRegionSize();
         int playerRegionX = Math.floorDiv(playerX, regionSize);
         int playerRegionZ = Math.floorDiv(playerZ, regionSize);
         int maxRegions = MAX_SEARCH_RADIUS / regionSize;
@@ -187,37 +189,37 @@ public class LocateCommand {
         return null;
     }
 
-    private static BlockPos checkRegionType(int regionX, int regionZ, int playerY, RegionDensityProvider provider, RandomState randomState, RegionFeatureType target) {
-        RiverRegionKey key = new RiverRegionKey(regionX, regionZ);
-        RiverRegion region = RiverRegionManager.createRegionFor(key, provider, randomState);
-        RegionFeatureType type = RiverRegionManager.getRegionFeatureType(region, provider, randomState);
+    private static BlockPos checkRegionType(int regionX, int regionZ, int playerY, RegionDensityProvider provider, RandomState randomState, RegionType target) {
+        RegionPos regionPos = new RegionPos(regionX, regionZ);
+        Region region = Manager.createRegionFor(regionPos, provider, randomState);
+        RegionType regionType = Manager.getRegionFeatureType(region, provider, randomState);
 
-        if (type == target) {
-            return new BlockPos(key.centerX(), playerY, key.centerZ());
+        if (regionType == target) {
+            return new BlockPos(regionPos.centerX(), playerY, regionPos.centerZ());
         }
 
         return null;
     }
 
-    private static BlockPos checkCellType(int regionX, int regionZ, int playerY, RegionDensityProvider provider, RandomState randomState, CellFeatureType target) {
-        RiverRegionKey key = new RiverRegionKey(regionX, regionZ);
-        RiverRegion region = RiverRegionManager.createRegionFor(key, provider, randomState);
+    private static BlockPos checkCellType(int regionX, int regionZ, int playerY, RegionDensityProvider provider, RandomState randomState, CellType target) {
+        RegionPos regionPos = new RegionPos(regionX, regionZ);
+        Region region = Manager.createRegionFor(regionPos, provider, randomState);
 
         if (!region.isParticipating()) {
             return null;
         }
 
-        java.util.Map<org.sosly.rivertale.worldgen.river.PathDirection, java.util.List<int[]>> paths = RiverRegionManager.computePaths(region, provider, randomState);
+        java.util.Map<Direction, java.util.List<CellPos>> paths = Manager.computePaths(region, provider, randomState);
 
-        int regionSize = RiverRegionKey.getRegionSize();
+        int regionSize = RegionPos.getRegionSize();
         int cellSpacing = regionSize / 8;
 
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
-                CellFeatureType cellType = RiverRegionManager.getCellFeatureType(region, row, col, paths, provider);
+                CellType cellType = Manager.getCellFeatureType(region, row, col, paths, provider);
                 if (cellType != null && cellType == target) {
-                    int cellX = key.worldX() + (col * cellSpacing) + (cellSpacing / 2);
-                    int cellZ = key.worldZ() + (row * cellSpacing) + (cellSpacing / 2);
+                    int cellX = regionPos.worldX() + (col * cellSpacing) + (cellSpacing / 2);
+                    int cellZ = regionPos.worldZ() + (row * cellSpacing) + (cellSpacing / 2);
                     return new BlockPos(cellX, playerY, cellZ);
                 }
             }

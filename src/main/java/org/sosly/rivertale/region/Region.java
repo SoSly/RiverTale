@@ -1,29 +1,31 @@
-package org.sosly.rivertale.worldgen.river;
+package org.sosly.rivertale.region;
 
 import java.util.HashSet;
 import java.util.Set;
+import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.RegionPos;
 
-public class RiverRegion {
+public class Region {
 
-    private final RiverRegionKey key;
+    private final RegionPos pos;
     private final double density;
     private final double[][] cellDensities;
     private final boolean participating;
 
-    private PathDirection primaryOutput;
-    private Set<PathDirection> secondaryOutputs;
+    private Direction primaryOutput;
+    private Set<Direction> secondaryOutputs;
 
-    public RiverRegion(RiverRegionKey key, double density, double[][] cellDensities, boolean participating) {
-        this.key = key;
+    public Region(RegionPos pos, double density, double[][] cellDensities, boolean participating) {
+        this.pos = pos;
         this.density = density;
         this.cellDensities = cellDensities;
         this.participating = participating;
-        this.primaryOutput = PathDirection.NONE;
+        this.primaryOutput = Direction.NONE;
         this.secondaryOutputs = new HashSet<>();
     }
 
-    public RiverRegionKey getKey() {
-        return key;
+    public RegionPos pos() {
+        return pos;
     }
 
     public double getDensity() {
@@ -38,19 +40,19 @@ public class RiverRegion {
         return participating;
     }
 
-    public PathDirection getPrimaryOutput() {
+    public Direction getPrimaryOutput() {
         return primaryOutput;
     }
 
-    public void setPrimaryOutput(PathDirection primaryOutput) {
+    public void setPrimaryOutput(Direction primaryOutput) {
         this.primaryOutput = primaryOutput;
     }
 
-    public Set<PathDirection> getSecondaryOutputs() {
+    public Set<Direction> getSecondaryOutputs() {
         return secondaryOutputs;
     }
 
-    public void setSecondaryOutputs(Set<PathDirection> secondaryOutputs) {
+    public void setSecondaryOutputs(Set<Direction> secondaryOutputs) {
         this.secondaryOutputs = secondaryOutputs;
     }
 }

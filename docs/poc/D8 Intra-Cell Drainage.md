@@ -1,5 +1,5 @@
 ---
-type: poc
+cellType: poc
 validates: "[[Cell-based Networks Architecture]]"
 assumption: "D8 flow accumulation within cells produces more accurate drainage than density averaging, without significant performance cost"
 status: pending

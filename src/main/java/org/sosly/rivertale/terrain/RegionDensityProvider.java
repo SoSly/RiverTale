@@ -1,4 +1,4 @@
-package org.sosly.rivertale.worldgen.river;
+package org.sosly.rivertale.terrain;
 
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.NoiseRouter;
@@ -10,8 +10,8 @@ public class RegionDensityProvider implements DensityProvider {
     private static final int SAMPLE_Y = 63;
     private static final int CELL_SAMPLES = 8;
 
-    private static final CellSampleDensityCache CONTINENTS_CACHE = new CellSampleDensityCache();
-    private static final CellSampleDensityCache DEPTH_CACHE = new CellSampleDensityCache();
+    private static final DensityCache CONTINENTS_CACHE = new DensityCache();
+    private static final DensityCache DEPTH_CACHE = new DensityCache();
 
     private final DensityFunction continentsFunction;
     private final DensityFunction depthFunction;

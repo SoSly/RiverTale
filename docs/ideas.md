@@ -9,7 +9,7 @@ Rivers flow from continental interiors to ocean edges. But what *is* a continent
 **Current implementation:**
 - Flood-fill from a starting position, bounded by continentalness < -0.13
 - Track highest `depth` value found during flood-fill as the "center"
-- Fine-search phase refines using actual heightmap within 512 blocks of coarse result
+- Fine-search phase refines using actual heightmap within 512 blocks of coarse flow
 - 16-block sample step, up to 100k samples, 16km max radius
 - Continent ID computed from minimum visited region
 
