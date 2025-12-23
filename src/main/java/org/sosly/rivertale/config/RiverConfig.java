@@ -11,6 +11,7 @@ public class RiverConfig {
     public static final ForgeConfigSpec.DoubleValue LAKE_THRESHOLD;
     public static final ForgeConfigSpec.DoubleValue DEPTH_WEIGHT;
     public static final ForgeConfigSpec.IntValue UPSTREAM_DEPTH_LIMIT;
+    public static final ForgeConfigSpec.IntValue MINIMUM_RIVER_LENGTH;
 
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -38,6 +39,10 @@ public class RiverConfig {
         UPSTREAM_DEPTH_LIMIT = builder
             .comment("Maximum recursion depth when counting upstream cells for river width calculation.")
             .defineInRange("upstreamDepthLimit", 3, 1, 10);
+
+        MINIMUM_RIVER_LENGTH = builder
+            .comment("Minimum total river length in cells. Rivers shorter than this are evicted.")
+            .defineInRange("minimumRiverLength", 3, 1, 64);
 
         SPEC = builder.build();
     }

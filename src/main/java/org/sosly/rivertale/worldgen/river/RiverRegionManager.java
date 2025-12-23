@@ -127,7 +127,10 @@ public class RiverRegionManager {
     }
 
     public static Map<PathDirection, List<int[]>> computePaths(RiverRegion region, DensityProvider provider, RandomState randomState) {
-        RiverRegionKey key = region.getKey();
+        return computeFlowResult(region.getKey(), provider, randomState).riverPaths();
+    }
+
+    public static D8FlowResult computeFlowResult(RiverRegionKey key, DensityProvider provider, RandomState randomState) {
         RegionDensityProvider cdp = (RegionDensityProvider) provider;
 
         BiFunction<Integer, Integer, Double> densitySampler = cdp::getDensity;
@@ -156,7 +159,7 @@ public class RiverRegionManager {
             densitySampler, continentsSampler, depthSampler,
             oceanThreshold, lakeThreshold);
 
-        return result.riverPaths();
+        return RiverPathValidator.validate(result, key, featureType, provider, randomState);
     }
 
     public static RegionFeatureType[] loadNeighborFeatures(RiverRegionKey key, DensityProvider provider) {
