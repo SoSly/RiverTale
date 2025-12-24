@@ -348,6 +348,7 @@ public class Refiner {
         InputCollection collection = collectInputsAndForbidden(regionPos, crossings, primaryOutputDirection);
 
         if (collection.inputs().isEmpty()) {
+            buildDividePaths(regionPos, crossings, riverPaths);
             return;
         }
 
@@ -359,6 +360,22 @@ public class Refiner {
 
             pathCovered.addAll(path);
             riverPaths.put(input.direction(), path);
+        }
+    }
+
+    private static void buildDividePaths(
+            RegionPos regionPos,
+            Crossing[] crossings,
+            Map<Direction, List<CellPos>> riverPaths) {
+
+        for (int dir = 0; dir < 4; dir++) {
+            Crossing crossing = crossings[dir];
+            if (crossing == null || crossing.direction() != Crossing.Direction.OUT) {
+                continue;
+            }
+
+            CellPos cell = CellPos.fromLocal(regionPos, crossing.row(), crossing.col());
+            riverPaths.put(Direction.values()[dir], List.of(cell));
         }
     }
 
