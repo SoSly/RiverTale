@@ -4,11 +4,13 @@ import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.config.RiverConfig;
+import org.sosly.rivertale.core.CellPos;
 
 public class RegionDensityProvider implements DensityProvider {
 
     private static final int SAMPLE_Y = 63;
     private static final int CELL_SAMPLES = 8;
+    private static final int COASTAL_CHECK_CELLS = 3;
 
     private static final DensityCache CONTINENTS_CACHE = new DensityCache();
     private static final DensityCache DEPTH_CACHE = new DensityCache();
@@ -78,6 +80,20 @@ public class RegionDensityProvider implements DensityProvider {
         if (isOcean(worldX, worldZ)) {
             return false;
         }
-        return getDepth(worldX, worldZ) < RiverConfig.LAKE_THRESHOLD.get();
+        if (getDepth(worldX, worldZ) >= RiverConfig.LAKE_THRESHOLD.get()) {
+            return false;
+        }
+        if (isOceanNearby(worldX, worldZ)) {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean isOceanNearby(int worldX, int worldZ) {
+        int distance = CellPos.getCellSize() * COASTAL_CHECK_CELLS;
+        return isOcean(worldX + distance, worldZ)
+            || isOcean(worldX - distance, worldZ)
+            || isOcean(worldX, worldZ + distance)
+            || isOcean(worldX, worldZ - distance);
     }
 }

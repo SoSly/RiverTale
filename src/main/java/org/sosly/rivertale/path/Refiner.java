@@ -56,14 +56,20 @@ public class Refiner {
             crossings, crossingStrengths);
 
         boolean isShore = featureRegionType == RegionType.SHORE;
-        Direction primaryOutputDirection = isShore
+        boolean isCoastalApproach = isShore
+            && !hasOceanCells(regionPos, regionOriginX, regionOriginZ, cellSize, densityProvider)
+            && neighborHasOcean(regionPos, neighborFeatureRegionTypes, cellSize, densityProvider);
+
+        boolean shouldTerminate = isShore && !isCoastalApproach;
+
+        Direction primaryOutputDirection = shouldTerminate
             ? Direction.NONE
             : findPrimaryOutput(regionPos, flowGrid, crossings);
 
         PathResult paths = resolvePaths(regionPos, flowGrid, crossings, primaryOutputDirection,
-            isShore, regionOriginX, regionOriginZ, cellSize, densityProvider);
+            shouldTerminate, regionOriginX, regionOriginZ, cellSize, densityProvider);
 
-        if (isShore) {
+        if (shouldTerminate) {
             clearOutputCrossings(regionPos, crossings, crossingStrengths);
         }
 
@@ -135,9 +141,8 @@ public class Refiner {
             Direction dir) {
 
         RegionType neighborRegionType = neighborFeatureRegionTypes[dir.ordinal()];
-        boolean neighborIsLand = neighborRegionType != null
-            && neighborRegionType != RegionType.BODY
-            && neighborRegionType != RegionType.SHORE;
+        boolean neighborIsLand = isTraversableNeighbor(
+            regionPos, neighborRegionType, dir, cellSize, densityProvider);
         boolean neighborCanProvideInput = neighborIsLand
             && neighborFlowGrids[dir.ordinal()] != null;
 
@@ -666,5 +671,73 @@ public class Refiner {
         int dr = a.row() - b.row();
         int dc = a.col() - b.col();
         return dr * dr + dc * dc;
+    }
+
+    private static boolean isTraversableNeighbor(
+            RegionPos regionPos,
+            RegionType neighborRegionType,
+            Direction dir,
+            int cellSize,
+            DensityProvider densityProvider) {
+
+        if (neighborRegionType == null || neighborRegionType == RegionType.BODY) {
+            return false;
+        }
+        if (neighborRegionType != RegionType.SHORE) {
+            return true;
+        }
+
+        RegionPos neighbor = regionPos.relative(dir);
+        int neighborOriginX = neighbor.worldX();
+        int neighborOriginZ = neighbor.worldZ();
+        return !hasOceanCells(neighbor, neighborOriginX, neighborOriginZ, cellSize, densityProvider);
+    }
+
+    private static boolean hasOceanCells(
+            RegionPos regionPos,
+            int regionOriginX,
+            int regionOriginZ,
+            int cellSize,
+            DensityProvider densityProvider) {
+
+        int cellsPerRegion = RiverConfig.CELLS_PER_REGION.get();
+        for (int row = 0; row < cellsPerRegion; row++) {
+            for (int col = 0; col < cellsPerRegion; col++) {
+                int worldX = regionOriginX + col * cellSize + cellSize / 2;
+                int worldZ = regionOriginZ + row * cellSize + cellSize / 2;
+                if (densityProvider.isOcean(worldX, worldZ)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean neighborHasOcean(
+            RegionPos regionPos,
+            RegionType[] neighborFeatureRegionTypes,
+            int cellSize,
+            DensityProvider densityProvider) {
+
+        Direction[] cardinals = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+
+        for (int i = 0; i < 4; i++) {
+            RegionType neighborType = neighborFeatureRegionTypes[i];
+            if (neighborType == RegionType.BODY) {
+                return true;
+            }
+            if (neighborType != RegionType.SHORE) {
+                continue;
+            }
+
+            RegionPos neighbor = regionPos.relative(cardinals[i]);
+            int neighborOriginX = neighbor.worldX();
+            int neighborOriginZ = neighbor.worldZ();
+
+            if (hasOceanCells(neighbor, neighborOriginX, neighborOriginZ, cellSize, densityProvider)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
