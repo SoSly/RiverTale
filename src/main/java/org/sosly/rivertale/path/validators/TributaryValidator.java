@@ -7,6 +7,7 @@ import org.sosly.rivertale.cell.Grid;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.path.Crossing;
 import org.sosly.rivertale.path.Flow;
 import org.sosly.rivertale.path.FlowCalculator;
 import org.sosly.rivertale.path.Manager;
@@ -32,6 +33,12 @@ public class TributaryValidator {
         List<CellPos> path = state.getPath(dir);
         if (path.isEmpty()) {
             return false;
+        }
+
+        Crossing crossing = state.getCrossing(dir);
+        boolean isOutput = crossing != null && crossing.isSource(ctx.regionPos());
+        if (isOutput) {
+            return true;
         }
 
         Set<CellPos> confluenceSet = state.getConfluenceSet();

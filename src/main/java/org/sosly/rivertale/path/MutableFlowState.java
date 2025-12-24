@@ -64,6 +64,10 @@ public class MutableFlowState {
         return primaryOutputDirection;
     }
 
+    public Crossing getCrossing(Direction dir) {
+        return crossings[dir.ordinal()];
+    }
+
     public void removePath(Direction dir) {
         List<CellPos> path = riverPaths.remove(dir);
         if (path == null) {

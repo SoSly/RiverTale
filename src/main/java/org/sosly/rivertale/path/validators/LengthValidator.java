@@ -6,6 +6,7 @@ import org.sosly.rivertale.cell.Grid;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.path.Crossing;
 import org.sosly.rivertale.path.Flow;
 import org.sosly.rivertale.path.FlowCalculator;
 import org.sosly.rivertale.path.Manager;
@@ -33,11 +34,19 @@ public class LengthValidator {
             return false;
         }
 
-        int totalLength = computeTotalLength(dir, path.size(), state.getPrimaryOutputDirection(), ctx);
+        Crossing crossing = state.getCrossing(dir);
+        boolean isOutput = crossing != null && crossing.isSource(ctx.regionPos());
+
+        int totalLength;
+        if (isOutput) {
+            totalLength = computeOutputLength(dir, path.size(), ctx);
+        } else {
+            totalLength = computeInputLength(dir, path.size(), state.getPrimaryOutputDirection(), ctx);
+        }
         return totalLength >= ctx.minimumRiverLength();
     }
 
-    private static int computeTotalLength(
+    private static int computeInputLength(
             Direction inputDir,
             int localPathLength,
             Direction outputDir,
@@ -56,6 +65,16 @@ public class LengthValidator {
 
         int downstream = traceDownstream(outputDir, ctx, remaining);
         return localPathLength + upstream + downstream;
+    }
+
+    private static int computeOutputLength(Direction outputDir, int localPathLength, ValidationContext ctx) {
+        int remaining = ctx.minimumRiverLength() - localPathLength;
+        if (remaining <= 0) {
+            return localPathLength;
+        }
+
+        int downstream = traceDownstream(outputDir, ctx, remaining);
+        return localPathLength + downstream;
     }
 
     private static int traceUpstream(RegionPos pos, Direction dir, int remaining, ValidationContext ctx) {
