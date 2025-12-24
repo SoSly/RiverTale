@@ -70,7 +70,10 @@ public class MutableFlowState {
             return;
         }
 
-        crossings[dir.ordinal()] = null;
+        Crossing crossing = crossings[dir.ordinal()];
+        if (crossing != null) {
+            crossing.invalidate();
+        }
         strengths[dir.ordinal()] = 0;
 
         Set<CellPos> confluenceSet = new HashSet<>(originalConfluences);
@@ -87,7 +90,9 @@ public class MutableFlowState {
     public Flow toFlow() {
         if (riverPaths.isEmpty()) {
             for (int i = 0; i < 4; i++) {
-                crossings[i] = null;
+                if (crossings[i] != null) {
+                    crossings[i].invalidate();
+                }
                 strengths[i] = 0;
             }
 

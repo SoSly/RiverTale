@@ -22,7 +22,6 @@ public class Refiner {
         List<CellPos> confluenceCells
     ) {}
 
-    private record CrossingCoords(int row, int col) {}
 
     private record CrossingCandidate(int slot, double[] densities, boolean isOutput) {}
 
@@ -52,20 +51,20 @@ public class Refiner {
 
         Crossing[] crossings = new Crossing[4];
         double[] crossingStrengths = new double[4];
-        findEdgeCrossings(regionOriginX, regionOriginZ, cellSize, densityProvider,
+        findEdgeCrossings(regionPos, regionOriginX, regionOriginZ, cellSize, densityProvider,
             flowGrid, neighborFlowGrids, neighborFeatureRegionTypes,
             crossings, crossingStrengths);
 
         boolean isShore = featureRegionType == RegionType.SHORE;
         Direction primaryOutputDirection = isShore
             ? Direction.NONE
-            : findPrimaryOutput(flowGrid, crossings);
+            : findPrimaryOutput(regionPos, flowGrid, crossings);
 
         PathResult paths = resolvePaths(regionPos, flowGrid, crossings, primaryOutputDirection,
             isShore, regionOriginX, regionOriginZ, cellSize, densityProvider);
 
         if (isShore) {
-            clearOutputCrossings(crossings, crossingStrengths);
+            clearOutputCrossings(regionPos, crossings, crossingStrengths);
         }
 
         return new Flow(flowGrid, crossings, crossingStrengths, primaryOutputDirection,
@@ -94,7 +93,7 @@ public class Refiner {
         } else if (primaryOutputDirection != Direction.NONE) {
             buildPathsToOutput(regionPos, flowGrid, crossings, primaryOutputDirection,
                 riverPaths, confluenceCells);
-        } else if (!hasAnyOutput(crossings)) {
+        } else if (!hasAnyOutput(regionPos, crossings)) {
             buildBasinPaths(regionPos, crossings, riverPaths);
             collectPathEndpoints(riverPaths, terminusList);
         }
@@ -103,6 +102,7 @@ public class Refiner {
     }
 
     private static void findEdgeCrossings(
+            RegionPos regionPos,
             int regionOriginX, int regionOriginZ, int cellSize,
             DensityProvider densityProvider,
             Grid flowGrid,
@@ -110,21 +110,22 @@ public class Refiner {
             RegionType[] neighborFeatureRegionTypes,
             Crossing[] crossings, double[] crossingStrengths) {
 
-        findCrossing(regionOriginX, regionOriginZ, cellSize, densityProvider,
+        findCrossing(regionPos, regionOriginX, regionOriginZ, cellSize, densityProvider,
             flowGrid, neighborFlowGrids, neighborFeatureRegionTypes,
             crossings, crossingStrengths, Direction.NORTH);
-        findCrossing(regionOriginX, regionOriginZ, cellSize, densityProvider,
+        findCrossing(regionPos, regionOriginX, regionOriginZ, cellSize, densityProvider,
             flowGrid, neighborFlowGrids, neighborFeatureRegionTypes,
             crossings, crossingStrengths, Direction.SOUTH);
-        findCrossing(regionOriginX, regionOriginZ, cellSize, densityProvider,
+        findCrossing(regionPos, regionOriginX, regionOriginZ, cellSize, densityProvider,
             flowGrid, neighborFlowGrids, neighborFeatureRegionTypes,
             crossings, crossingStrengths, Direction.EAST);
-        findCrossing(regionOriginX, regionOriginZ, cellSize, densityProvider,
+        findCrossing(regionPos, regionOriginX, regionOriginZ, cellSize, densityProvider,
             flowGrid, neighborFlowGrids, neighborFeatureRegionTypes,
             crossings, crossingStrengths, Direction.WEST);
     }
 
     private static void findCrossing(
+            RegionPos regionPos,
             int regionOriginX, int regionOriginZ, int cellSize,
             DensityProvider densityProvider,
             Grid flowGrid,
@@ -151,11 +152,10 @@ public class Refiner {
         }
 
         double diff = Math.abs(candidate.densities()[0] - candidate.densities()[1]);
-        CrossingCoords coords = toCrossingCoords(dir, candidate.slot());
-        Crossing.Direction crossingDir = candidate.isOutput()
-            ? Crossing.Direction.OUT
-            : Crossing.Direction.IN;
-        crossings[dir.ordinal()] = new Crossing(coords.row(), coords.col(), crossingDir);
+        RegionPos neighbor = regionPos.relative(dir);
+        RegionPos source = candidate.isOutput() ? regionPos : neighbor;
+        RegionPos destination = candidate.isOutput() ? neighbor : regionPos;
+        crossings[dir.ordinal()] = CrossingStore.getInstance().getOrCreate(source, destination, candidate.slot());
         crossingStrengths[dir.ordinal()] = diff;
     }
 
@@ -209,23 +209,6 @@ public class Refiner {
         return new CrossingCandidate(bestSlot, bestDensities, bestIsOutput);
     }
 
-    private static CrossingCoords toCrossingCoords(Direction edge, int slot) {
-        int edgeIndex = RiverConfig.CELLS_PER_REGION.get() - 1;
-        int row = switch (edge) {
-            case NORTH -> 0;
-            case SOUTH -> edgeIndex;
-            case EAST, WEST -> slot;
-            default -> -1;
-        };
-        int col = switch (edge) {
-            case NORTH, SOUTH -> slot;
-            case EAST -> edgeIndex;
-            case WEST -> 0;
-            default -> -1;
-        };
-        return new CrossingCoords(row, col);
-    }
-
     private static double[] sampleEdgeDensities(
             int regionOriginX, int regionOriginZ, int cellSize,
             DensityProvider densityProvider,
@@ -264,7 +247,7 @@ public class Refiner {
         };
     }
 
-    private static Direction findPrimaryOutput(Grid flowGrid, Crossing[] crossings) {
+    private static Direction findPrimaryOutput(RegionPos regionPos, Grid flowGrid, Crossing[] crossings) {
         int sumX = 0;
         int sumZ = 0;
         int gridSize = flowGrid.size();
@@ -294,7 +277,7 @@ public class Refiner {
 
         for (int dir = 0; dir < 4; dir++) {
             Crossing crossing = crossings[dir];
-            boolean isOutput = crossing != null && crossing.direction() == Crossing.Direction.OUT;
+            boolean isOutput = crossing != null && crossing.isSource(regionPos);
             if (isOutput && dotProducts[dir] > bestDot) {
                 bestDot = dotProducts[dir];
                 bestDir = Direction.values()[dir];
@@ -304,18 +287,18 @@ public class Refiner {
         return bestDir;
     }
 
-    private static boolean hasAnyOutput(Crossing[] crossings) {
+    private static boolean hasAnyOutput(RegionPos regionPos, Crossing[] crossings) {
         for (Crossing crossing : crossings) {
-            if (crossing != null && crossing.direction() == Crossing.Direction.OUT) {
+            if (crossing != null && crossing.isSource(regionPos)) {
                 return true;
             }
         }
         return false;
     }
 
-    private static void clearOutputCrossings(Crossing[] crossings, double[] crossingStrengths) {
+    private static void clearOutputCrossings(RegionPos regionPos, Crossing[] crossings, double[] crossingStrengths) {
         for (int i = 0; i < 4; i++) {
-            if (crossings[i] != null && crossings[i].direction() == Crossing.Direction.OUT) {
+            if (crossings[i] != null && crossings[i].isSource(regionPos)) {
                 crossings[i] = null;
                 crossingStrengths[i] = 0;
             }
@@ -344,7 +327,7 @@ public class Refiner {
             return;
         }
 
-        CellPos outputCell = CellPos.fromLocal(regionPos, outputCrossing.row(), outputCrossing.col());
+        CellPos outputCell = outputCrossing.cellFor(regionPos);
         InputCollection collection = collectInputsAndForbidden(regionPos, crossings, primaryOutputDirection);
 
         if (collection.inputs().isEmpty()) {
@@ -370,11 +353,11 @@ public class Refiner {
 
         for (int dir = 0; dir < 4; dir++) {
             Crossing crossing = crossings[dir];
-            if (crossing == null || crossing.direction() != Crossing.Direction.OUT) {
+            if (crossing == null || !crossing.isSource(regionPos)) {
                 continue;
             }
 
-            CellPos cell = CellPos.fromLocal(regionPos, crossing.row(), crossing.col());
+            CellPos cell = crossing.cellFor(regionPos);
             riverPaths.put(Direction.values()[dir], List.of(cell));
         }
     }
@@ -393,9 +376,9 @@ public class Refiner {
                 continue;
             }
 
-            CellPos cell = CellPos.fromLocal(regionPos, crossing.row(), crossing.col());
+            CellPos cell = crossing.cellFor(regionPos);
 
-            if (crossing.direction() == Crossing.Direction.IN) {
+            if (crossing.isDestination(regionPos)) {
                 inputs.add(new InputCrossing(cell, Direction.values()[dir]));
                 continue;
             }
@@ -416,11 +399,11 @@ public class Refiner {
             if (crossing == null) {
                 continue;
             }
-            if (crossing.direction() != Crossing.Direction.IN) {
+            if (!crossing.isDestination(regionPos)) {
                 continue;
             }
 
-            CellPos cell = CellPos.fromLocal(regionPos, crossing.row(), crossing.col());
+            CellPos cell = crossing.cellFor(regionPos);
             inputs.add(new InputCrossing(cell, Direction.values()[dir]));
         }
 

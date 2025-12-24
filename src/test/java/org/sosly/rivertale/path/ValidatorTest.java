@@ -30,6 +30,16 @@ class ValidatorTest {
         return Grid.create(TEST_REGION, CELLS_PER_REGION);
     }
 
+    private static Crossing inputCrossing(Direction edge, int slot) {
+        RegionPos neighbor = TEST_REGION.relative(edge);
+        return new Crossing(neighbor, TEST_REGION, slot);
+    }
+
+    private static Crossing outputCrossing(Direction edge, int slot) {
+        RegionPos neighbor = TEST_REGION.relative(edge);
+        return new Crossing(TEST_REGION, neighbor, slot);
+    }
+
     @Test
     @DisplayName("Empty paths with no output should remain empty")
     void testEmptyPathsRemainEmpty() {
@@ -57,8 +67,8 @@ class ValidatorTest {
         ));
 
         Crossing[] crossings = new Crossing[4];
-        crossings[Direction.NORTH.ordinal()] = new Crossing(0, 3, Crossing.Direction.IN);
-        crossings[Direction.SOUTH.ordinal()] = new Crossing(7, 3, Crossing.Direction.OUT);
+        crossings[Direction.NORTH.ordinal()] = inputCrossing(Direction.NORTH, 3);
+        crossings[Direction.SOUTH.ordinal()] = outputCrossing(Direction.SOUTH, 3);
 
         Flow input = new Flow(
             emptyGrid(),
@@ -88,7 +98,7 @@ class ValidatorTest {
         paths.put(Direction.NORTH, List.of());
 
         Crossing[] crossings = new Crossing[4];
-        crossings[Direction.NORTH.ordinal()] = new Crossing(0, 3, Crossing.Direction.IN);
+        crossings[Direction.NORTH.ordinal()] = inputCrossing(Direction.NORTH, 3);
 
         Flow input = new Flow(
             emptyGrid(),
@@ -108,7 +118,8 @@ class ValidatorTest {
             null);
 
         assertTrue(flow.riverPaths().isEmpty());
-        assertNull(flow.crossings()[Direction.NORTH.ordinal()]);
+        Crossing northCrossing = flow.crossings()[Direction.NORTH.ordinal()];
+        assertTrue(northCrossing == null || !northCrossing.isValid());
     }
 
     @Test
@@ -122,7 +133,7 @@ class ValidatorTest {
         ));
 
         Crossing[] crossings = new Crossing[4];
-        crossings[Direction.NORTH.ordinal()] = new Crossing(0, 3, Crossing.Direction.IN);
+        crossings[Direction.NORTH.ordinal()] = inputCrossing(Direction.NORTH, 3);
 
         Flow input = new Flow(
             emptyGrid(),
@@ -161,9 +172,9 @@ class ValidatorTest {
         ));
 
         Crossing[] crossings = new Crossing[4];
-        crossings[Direction.NORTH.ordinal()] = new Crossing(0, 3, Crossing.Direction.IN);
-        crossings[Direction.SOUTH.ordinal()] = new Crossing(7, 3, Crossing.Direction.OUT);
-        crossings[Direction.WEST.ordinal()] = new Crossing(3, 0, Crossing.Direction.IN);
+        crossings[Direction.NORTH.ordinal()] = inputCrossing(Direction.NORTH, 3);
+        crossings[Direction.SOUTH.ordinal()] = outputCrossing(Direction.SOUTH, 3);
+        crossings[Direction.WEST.ordinal()] = inputCrossing(Direction.WEST, 3);
 
         List<CellPos> confluences = List.of(cell(3, 3));
 
@@ -186,7 +197,8 @@ class ValidatorTest {
 
         assertEquals(1, flow.riverPaths().size());
         assertTrue(flow.riverPaths().containsKey(Direction.NORTH));
-        assertNull(flow.crossings()[Direction.WEST.ordinal()]);
+        Crossing westCrossing = flow.crossings()[Direction.WEST.ordinal()];
+        assertTrue(westCrossing == null || !westCrossing.isValid());
         assertTrue(flow.confluenceCells().isEmpty());
     }
 
@@ -208,9 +220,9 @@ class ValidatorTest {
         ));
 
         Crossing[] crossings = new Crossing[4];
-        crossings[Direction.NORTH.ordinal()] = new Crossing(0, 3, Crossing.Direction.IN);
-        crossings[Direction.SOUTH.ordinal()] = new Crossing(7, 3, Crossing.Direction.OUT);
-        crossings[Direction.WEST.ordinal()] = new Crossing(3, 0, Crossing.Direction.IN);
+        crossings[Direction.NORTH.ordinal()] = inputCrossing(Direction.NORTH, 3);
+        crossings[Direction.SOUTH.ordinal()] = outputCrossing(Direction.SOUTH, 3);
+        crossings[Direction.WEST.ordinal()] = inputCrossing(Direction.WEST, 3);
 
         List<CellPos> confluences = List.of(cell(3, 3));
 
@@ -248,8 +260,8 @@ class ValidatorTest {
         ));
 
         Crossing[] crossings = new Crossing[4];
-        crossings[Direction.NORTH.ordinal()] = new Crossing(0, 3, Crossing.Direction.IN);
-        crossings[Direction.SOUTH.ordinal()] = new Crossing(7, 3, Crossing.Direction.OUT);
+        crossings[Direction.NORTH.ordinal()] = inputCrossing(Direction.NORTH, 3);
+        crossings[Direction.SOUTH.ordinal()] = outputCrossing(Direction.SOUTH, 3);
 
         Flow input = new Flow(
             emptyGrid(),
@@ -286,9 +298,9 @@ class ValidatorTest {
         ));
 
         Crossing[] crossings = new Crossing[4];
-        crossings[Direction.NORTH.ordinal()] = new Crossing(0, 3, Crossing.Direction.IN);
-        crossings[Direction.SOUTH.ordinal()] = new Crossing(7, 3, Crossing.Direction.OUT);
-        crossings[Direction.WEST.ordinal()] = new Crossing(1, 0, Crossing.Direction.IN);
+        crossings[Direction.NORTH.ordinal()] = inputCrossing(Direction.NORTH, 3);
+        crossings[Direction.SOUTH.ordinal()] = outputCrossing(Direction.SOUTH, 3);
+        crossings[Direction.WEST.ordinal()] = inputCrossing(Direction.WEST, 1);
 
         List<CellPos> confluences = List.of(cell(1, 3));
 

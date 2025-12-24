@@ -131,10 +131,11 @@ public class FlowRenderer {
         for (D8RegionData region : Cache.getRegions()) {
             int regionWorldX = region.regionX * getRegionSize();
             int regionWorldZ = region.regionZ * getRegionSize();
+            RegionPos regionPos = new RegionPos(region.regionX, region.regionZ);
 
             for (int dir = 0; dir < 4; dir++) {
                 Crossing crossing = region.crossings[dir];
-                if (crossing == null || crossing.direction() != Crossing.Direction.OUT) {
+                if (crossing == null || !crossing.isSource(regionPos) || !crossing.isValid()) {
                     continue;
                 }
 
@@ -144,17 +145,20 @@ public class FlowRenderer {
                     continue;
                 }
 
+                RegionPos neighborPos = new RegionPos(neighbor.regionX, neighbor.regionZ);
                 Direction oppositeDir = pathDir.opposite();
                 Crossing neighborInput = neighbor.crossings[oppositeDir.ordinal()];
-                if (neighborInput == null || neighborInput.direction() != Crossing.Direction.IN) {
+                if (neighborInput == null || !neighborInput.isDestination(neighborPos) || !neighborInput.isValid()) {
                     continue;
                 }
 
                 int neighborWorldX = neighbor.regionX * getRegionSize();
                 int neighborWorldZ = neighbor.regionZ * getRegionSize();
 
-                Vec3 outputPos = cellToWorld(region, crossing.row(), crossing.col(), regionWorldX, regionWorldZ);
-                Vec3 inputPos = cellToWorld(neighbor, neighborInput.row(), neighborInput.col(), neighborWorldX, neighborWorldZ);
+                CellPos outputCell = crossing.cellFor(regionPos);
+                CellPos inputCell = neighborInput.cellFor(neighborPos);
+                Vec3 outputPos = cellToWorld(region, outputCell.row(), outputCell.col(), regionWorldX, regionWorldZ);
+                Vec3 inputPos = cellToWorld(neighbor, inputCell.row(), inputCell.col(), neighborWorldX, neighborWorldZ);
 
                 drawLine(poseStack, bufferBuilder, outputPos, inputPos, camPos, COLOR_RIVER_PATH);
             }
@@ -197,40 +201,41 @@ public class FlowRenderer {
 
         double cellStep = getCellStep(region);
         double margin = 1.0;
+        RegionPos regionPos = new RegionPos(region.regionX, region.regionZ);
 
         for (int dir = 0; dir < 4; dir++) {
             Crossing crossing = region.crossings[dir];
-            if (crossing == null) {
+            if (crossing == null || !crossing.isValid()) {
                 continue;
             }
-            if (crossing.direction() != Crossing.Direction.IN) {
+            if (!crossing.isDestination(regionPos)) {
                 continue;
             }
-            renderCrossingBox(regionWorldX, regionWorldZ, crossing, cellStep, margin,
+            renderCrossingBox(regionWorldX, regionWorldZ, regionPos, crossing, cellStep, margin,
                 poseStack, bufferBuilder, camPos, COLOR_INPUT);
         }
 
         for (int dir = 0; dir < 4; dir++) {
             Crossing crossing = region.crossings[dir];
-            if (crossing == null) {
+            if (crossing == null || !crossing.isValid()) {
                 continue;
             }
-            if (crossing.direction() != Crossing.Direction.OUT || Direction.values()[dir] == region.primaryOutputDirection) {
+            if (!crossing.isSource(regionPos) || Direction.values()[dir] == region.primaryOutputDirection) {
                 continue;
             }
-            renderCrossingBox(regionWorldX, regionWorldZ, crossing, cellStep, margin,
+            renderCrossingBox(regionWorldX, regionWorldZ, regionPos, crossing, cellStep, margin,
                 poseStack, bufferBuilder, camPos, COLOR_SECONDARY_OUTPUT);
         }
 
         for (int dir = 0; dir < 4; dir++) {
             Crossing crossing = region.crossings[dir];
-            if (crossing == null) {
+            if (crossing == null || !crossing.isValid()) {
                 continue;
             }
-            if (crossing.direction() != Crossing.Direction.OUT || Direction.values()[dir] != region.primaryOutputDirection) {
+            if (!crossing.isSource(regionPos) || Direction.values()[dir] != region.primaryOutputDirection) {
                 continue;
             }
-            renderCrossingBox(regionWorldX, regionWorldZ, crossing, cellStep, margin,
+            renderCrossingBox(regionWorldX, regionWorldZ, regionPos, crossing, cellStep, margin,
                 poseStack, bufferBuilder, camPos, COLOR_PRIMARY_OUTPUT);
         }
 
@@ -239,12 +244,13 @@ public class FlowRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static void renderCrossingBox(int regionWorldX, int regionWorldZ, Crossing crossing,
-                                           double cellStep, double margin,
+    private static void renderCrossingBox(int regionWorldX, int regionWorldZ, RegionPos regionPos,
+                                           Crossing crossing, double cellStep, double margin,
                                            PoseStack poseStack, BufferBuilder bufferBuilder,
                                            Vec3 camPos, float[] color) {
-        int row = crossing.row();
-        int col = crossing.col();
+        CellPos cell = crossing.cellFor(regionPos);
+        int row = cell.row();
+        int col = cell.col();
 
         double minX = regionWorldX + col * cellStep + margin;
         double maxX = regionWorldX + (col + 1) * cellStep - margin;

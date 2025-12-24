@@ -42,9 +42,12 @@ public class VisualizePacket {
                 Crossing crossing = region.crossings[i];
                 buf.writeBoolean(crossing != null);
                 if (crossing != null) {
-                    buf.writeInt(crossing.row());
-                    buf.writeInt(crossing.col());
-                    buf.writeBoolean(crossing.direction() == Crossing.Direction.OUT);
+                    buf.writeInt(crossing.source().x());
+                    buf.writeInt(crossing.source().z());
+                    buf.writeInt(crossing.destination().x());
+                    buf.writeInt(crossing.destination().z());
+                    buf.writeInt(crossing.slot());
+                    buf.writeBoolean(crossing.isValid());
                 }
             }
             buf.writeEnum(region.primaryOutputDirection);
@@ -96,13 +99,15 @@ public class VisualizePacket {
             for (int j = 0; j < 4; j++) {
                 boolean hasCrossing = buf.readBoolean();
                 if (hasCrossing) {
-                    int row = buf.readInt();
-                    int col = buf.readInt();
-                    boolean isOutput = buf.readBoolean();
-                    Crossing.Direction dir = isOutput
-                        ? Crossing.Direction.OUT
-                        : Crossing.Direction.IN;
-                    crossings[j] = new Crossing(row, col, dir);
+                    RegionPos source = new RegionPos(buf.readInt(), buf.readInt());
+                    RegionPos destination = new RegionPos(buf.readInt(), buf.readInt());
+                    int slot = buf.readInt();
+                    boolean valid = buf.readBoolean();
+                    Crossing crossing = new Crossing(source, destination, slot);
+                    if (!valid) {
+                        crossing.invalidate();
+                    }
+                    crossings[j] = crossing;
                 }
             }
             Direction primaryOutputDirection = buf.readEnum(Direction.class);

@@ -110,7 +110,7 @@ public class Manager {
         Set<Direction> secondaries = new HashSet<>();
         Crossing[] crossings = flow.crossings();
         for (int i = 0; i < 4; i++) {
-            if (crossings[i] != null && crossings[i].direction() == Crossing.Direction.OUT) {
+            if (crossings[i] != null && crossings[i].isSource(key)) {
                 Direction dir = cardinals[i];
                 if (dir != flow.primaryOutputDirection()) {
                     secondaries.add(dir);
