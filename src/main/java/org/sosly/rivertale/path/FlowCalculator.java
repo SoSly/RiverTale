@@ -6,6 +6,9 @@ import org.sosly.rivertale.config.RiverConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
+import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.levelgen.RandomState;
+import org.sosly.rivertale.poc.vis.SampleCache;
 
 public class FlowCalculator {
 
@@ -13,6 +16,31 @@ public class FlowCalculator {
 
     private FlowCalculator() {
     }
+
+    public static Grid compute(
+            RegionPos regionPos,
+            int cellsPerRegion,
+            SampleCache cache,
+            RandomState randomState,
+            BiomeSource biomeSource) {
+
+        int cellSize = 64;
+        Grid grid = Grid.create(regionPos, cellsPerRegion);
+        BiFunction<Integer, Integer, Double> sampler = (x, z) ->
+            cache.getOrCompute(x, z, randomState, biomeSource).depth();
+
+        for (int row = 0; row < grid.size(); row++) {
+            for (int col = 0; col < grid.size(); col++) {
+                int worldX = regionPos.worldX() + col * cellSize + cellSize / 2;
+                int worldZ = regionPos.worldZ() + row * cellSize + cellSize / 2;
+                Direction dir = findSteepestNeighbor(worldX, worldZ, cellSize, sampler);
+                grid.get(row, col).setFlowDirection(dir);
+            }
+        }
+
+        return grid;
+    }
+
 
     public static Grid compute(
             RegionPos regionPos,

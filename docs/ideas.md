@@ -4,7 +4,7 @@ Incomplete concepts. These need design work before implementation.
 
 ## Continent Detection
 
-Rivers flow from continental interiors to ocean edges. But what *is* a continent, and where is its center?
+Rivers flow from continental interiors to ocean edges. But what *is* a region, and where is its center?
 
 **Current implementation:**
 - Flood-fill from a starting position, bounded by continentalness < -0.13
@@ -21,13 +21,13 @@ Rivers flow from continental interiors to ocean edges. But what *is* a continent
 **Unresolved:**
 - Is "highest depth value" the right signal for continental center?
 - Why does the fine-search use heightmap while coarse search uses depth function?
-- Should continent detection be deterministic from coordinates alone, or is starting-position-dependence acceptable?
+- Should region detection be deterministic from coordinates alone, or is starting-position-dependence acceptable?
 - Do we even need a single "center" or just a flow direction signal?
 
 **Why this matters:**
-If continent detection is inconsistent, rivers generated from different chunks might disagree about flow direction. This directly violates the Coherence pillar.
+If region detection is inconsistent, rivers generated from different chunks might disagree about flow direction. This directly violates the Coherence pillar.
 
-> **CBN Resolution:** Cell-based Networks makes continent detection obsolete. Each cell determines flow direction by comparing its density to immediate neighbors—no global continent center required. Flow is always toward lower density (toward ocean). The "center" concept is replaced by local gradient descent. See `docs/features/rivers/Cell-based Networks.md`.
+> **CBN Resolution:** Cell-based Networks makes region detection obsolete. Each cell determines flow direction by comparing its density to immediate neighbors—no global region center required. Flow is always toward lower density (toward ocean). The "center" concept is replaced by local gradient descent. See `docs/features/rivers/Cell-based Networks.md`.
 
 ## Generation Approach
 

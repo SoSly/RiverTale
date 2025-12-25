@@ -22,7 +22,7 @@ You're exploring unfamiliar terrain, no map, no coordinates. You crest a hill an
 
 - The ocean is *that* direction (downstream)
 - High ground is *that* direction (upstream)
-- This is a major drainage (the river is wide), so you're probably mid-continent
+- This is a major drainage (the river is wide), so you're probably mid-region
 - If you follow this downstream, you'll hit the coast eventually
 
 You descend to the riverbank and start walking downstream. The river widens as smaller streams join from side valleys. The terrain flattens. After a few minutes, you smell salt water. You've reached the sea without ever being lost.
@@ -51,7 +51,7 @@ Rivers exist because the terrain demands them. They don't appear randomly—they
 | Region | What You Find |
 |--------|---------------|
 | Continental interior | Narrow streams emerging from high ground, highland terrain |
-| Mid-continent | Medium rivers with visible tributaries, valleys carved into terrain |
+| Mid-region | Medium rivers with visible tributaries, valleys carved into terrain |
 | Near the coast | Wide rivers at low elevation, multiple tributaries joining near the mouth |
 | Endorheic basins | Rivers flowing into inland lakes, terrain sloping inward from all directions |
 
@@ -68,7 +68,7 @@ Rivers encode geographic information. A player can read the landscape by reading
 | Which way is the ocean? | Downstream. Always. |
 | Am I near the coast or inland? | Wide rivers = coastal. Narrow streams = inland. |
 | Where is high ground? | Follow rivers upstream to their sources. |
-| Is this a continent or an island? | Large river networks = continent. No rivers = small island. |
+| Is this a region or an island? | Large river networks = region. No rivers = small island. |
 
 **What river properties mean:**
 
@@ -144,7 +144,7 @@ The system needs a way to assign elevation that's consistent across the entire r
 
 Every river must reach the ocean (or an endorheic basin). But during generation, you might not know where the ocean is—it could be thousands of blocks away in ungenerated terrain.
 
-The system needs a way to guarantee rivers terminate correctly without requiring the entire continent to be analyzed.
+The system needs a way to guarantee rivers terminate correctly without requiring the entire region to be analyzed.
 
 ### Determinism
 

@@ -11,12 +11,20 @@ import org.sosly.rivertale.core.RegionPos;
 
 public class Grid {
 
-    private final int size;
+    private final int rows;
+    private final int cols;
     private final Cell[] cells;
 
     public Grid(int size) {
-        this.size = size;
+        this.rows = size;
+        this.cols = size;
         this.cells = new Cell[size * size];
+    }
+
+    public Grid(int rows, int cols) {
+        this.rows = rows;
+        this.cols = cols;
+        this.cells = new Cell[rows * cols];
     }
 
     public static Grid create(RegionPos regionPos) {
@@ -24,10 +32,14 @@ public class Grid {
     }
 
     public static Grid create(RegionPos regionPos, int size) {
-        Grid grid = new Grid(size);
-        for (int row = 0; row < size; row++) {
-            for (int col = 0; col < size; col++) {
-                CellPos pos = CellPos.fromLocal(regionPos, row, col, size);
+        return Grid.create(regionPos, size, size);
+    }
+
+    public static Grid create(RegionPos regionPos, int rows, int cols) {
+        Grid grid = new Grid(rows, cols);
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                CellPos pos = CellPos.fromLocal(regionPos, row, col, rows, cols);
                 grid.set(row, col, new Cell(pos));
             }
         }
@@ -35,19 +47,19 @@ public class Grid {
     }
 
     public void copyFlowsFrom(Grid other) {
-        for (int row = 0; row < size; row++) {
-            for (int col = 0; col < size; col++) {
-                cells[row * size + col].setFlowDirection(other.getFlowAt(row, col));
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                cells[row * rows + col].setFlowDirection(other.getFlowAt(row, col));
             }
         }
     }
 
     public int size() {
-        return size;
+        return rows; // todo: this is VERY WRONG
     }
 
     public Cell get(int row, int col) {
-        return cells[row * size + col];
+        return cells[row * rows + col];
     }
 
     public Cell get(CellPos pos) {
@@ -55,15 +67,15 @@ public class Grid {
     }
 
     public void set(int row, int col, Cell cell) {
-        cells[row * size + col] = cell;
+        cells[row * rows + col] = cell;
     }
 
     public Direction getFlowAt(int row, int col) {
-        return cells[row * size + col].flowDirection();
+        return cells[row * rows + col].flowDirection();
     }
 
     public Direction getOuterEdge(Direction dir, int pos) {
-        int edgeIndex = size - 1;
+        int edgeIndex = rows - 1;
         return switch (dir) {
             case NORTH -> getFlowAt(0, pos);
             case SOUTH -> getFlowAt(edgeIndex, pos);
@@ -74,7 +86,7 @@ public class Grid {
     }
 
     public Direction getNeighborEdge(Direction dirFromUs, int pos) {
-        int edgeIndex = size - 1;
+        int edgeIndex = rows - 1;
         return switch (dirFromUs) {
             case NORTH -> getFlowAt(edgeIndex, pos);
             case SOUTH -> getFlowAt(0, pos);

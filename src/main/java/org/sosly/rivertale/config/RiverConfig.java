@@ -18,12 +18,12 @@ public class RiverConfig {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
         CELLS_PER_REGION = builder
-            .comment("The number of cells in each region. Fewer cells improve performance but reduce detail. This value is squared to get the actual value.")
-            .defineInRange("cellsPerRegion", 8, 2, 16);
+            .comment("The number of cells per region dimension. Total cells = this value squared.")
+            .defineInRange("cellsPerRegion", 32, 8, 64);
 
         REGION_SIZE = builder
             .comment("Size of each river region in blocks. Larger regions improve performance but reduce detail.")
-            .defineInRange("regionSize", 384, 384, 4096);
+            .defineInRange("regionSize", 2048, 512, 4096);
 
         PARTICIPATION_RATE = builder
             .comment("Probability that a land cell will participate in river generation (0.0 to 1.0).")

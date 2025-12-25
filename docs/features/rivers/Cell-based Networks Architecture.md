@@ -323,7 +323,7 @@ E calculates: 0 + 1 = 1. Returns 1 to F.
 F calculates: 1 + 1 = 2.
 ```
 
-Distance calculation recurses downstream until reaching a terminus, then returns. This is fast—even a massive continent is only ~25 regions across.
+Distance calculation recurses downstream until reaching a terminus, then returns. This is fast—even a massive region is only ~25 regions across.
 
 ## Upstream Accumulation
 
@@ -394,7 +394,7 @@ Region data is computed on demand, not cached. This keeps the system simple and 
 
 Computation is fast:
 1. **Region computation is cheap.** Each region does density sampling and neighbor comparison. No pathfinding, no flood fill.
-2. **Chain length is bounded.** Distance-to-terminus recurses downstream, but even a massive continent is only ~25 regions across.
+2. **Chain length is bounded.** Distance-to-terminus recurses downstream, but even a massive region is only ~25 regions across.
 3. **All inputs are deterministic.** Density derives from world seed. Same coordinates = same flow, always.
 
 **World borders:**

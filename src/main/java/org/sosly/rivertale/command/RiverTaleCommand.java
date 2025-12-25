@@ -20,6 +20,7 @@ import org.sosly.rivertale.poc.carve.CardinalDirection;
 import org.sosly.rivertale.poc.carve.CarveConfig;
 import org.sosly.rivertale.poc.carve.RiverCarveExecutor;
 import org.sosly.rivertale.poc.fill.RiverFillExecutor;
+import org.sosly.rivertale.poc.vis.VisCommand;
 
 @Mod.EventBusSubscriber
 public class RiverTaleCommand {
@@ -29,46 +30,47 @@ public class RiverTaleCommand {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
 
         dispatcher.register(Commands.literal("rivertale")
-            .then(Commands.literal("c")
+            .then(Commands.literal("sample")
                 .executes(context -> {
                     CommandSourceStack source = context.getSource();
                     ServerLevel level = source.getLevel();
                     BlockPos pos = BlockPos.containing(source.getPosition());
 
-                    int terrainHeight = level.getHeight(CarveConfig.TERRAIN_HEIGHTMAP, pos.getX(), pos.getZ());
-                    String biomeName = level.getBiome(pos).unwrapKey()
-                        .map(key -> key.location().toString())
-                        .orElse("unknown");
+                    int chunkX = pos.getX() >> 4;
+                    int chunkZ = pos.getZ() >> 4;
+                    int sampleX = (chunkX << 4) + 8;
+                    int sampleZ = (chunkZ << 4) + 8;
 
                     RandomState randomState = level.getChunkSource().randomState();
-                    NoiseRouter router = randomState.router();
+                    net.minecraft.world.level.biome.BiomeSource biomeSource =
+                        level.getChunkSource().getGenerator().getBiomeSource();
 
-                    DensityFunction.SinglePointContext ctxTerrain =
-                        new DensityFunction.SinglePointContext(pos.getX(), terrainHeight, pos.getZ());
-                    DensityFunction.SinglePointContext ctxSea =
-                        new DensityFunction.SinglePointContext(pos.getX(), 63, pos.getZ());
+                    org.sosly.rivertale.poc.vis.SampleCache cache =
+                        new org.sosly.rivertale.poc.vis.SampleCache(1);
+                    org.sosly.rivertale.poc.vis.Sample sample =
+                        cache.getOrCompute(sampleX, sampleZ, randomState, biomeSource);
 
-                    double continentsSea = router.continents().compute(ctxSea);
-                    double continentsTerrain = router.continents().compute(ctxTerrain);
-                    double depthSea = router.depth().compute(ctxSea);
-                    double depthTerrain = router.depth().compute(ctxTerrain);
-                    double erosionSea = router.erosion().compute(ctxSea);
-                    double erosionTerrain = router.erosion().compute(ctxTerrain);
-                    double ridgesSea = router.ridges().compute(ctxSea);
-                    double ridgesTerrain = router.ridges().compute(ctxTerrain);
+                    int terrainY = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, sampleX, sampleZ);
+                    String biomeName = level.getBiome(new BlockPos(sampleX, terrainY, sampleZ)).unwrapKey()
+                        .map(key -> key.location().getPath())
+                        .orElse("unknown");
 
                     source.sendSuccess(() -> Component.literal("-----").withStyle(ChatFormatting.GRAY), false);
-                    source.sendSuccess(() -> Component.literal(String.format("Noise at (%d, %d), terrain height %d:", pos.getX(), pos.getZ(), terrainHeight))
+                    source.sendSuccess(() -> Component.literal(String.format("Sample at (%d, %d) [chunk %d, %d]:", sampleX, sampleZ, chunkX, chunkZ))
                         .withStyle(ChatFormatting.YELLOW), false);
                     source.sendSuccess(() -> Component.literal(String.format("  Biome: %s", biomeName))
                         .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Continents: %.3f at y=63, %.3f at y=%d", continentsSea, continentsTerrain, terrainHeight))
+                    source.sendSuccess(() -> Component.literal(String.format("  Continents: %.3f", sample.continents()))
                         .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Depth: %.3f at y=63, %.3f at y=%d", depthSea, depthTerrain, terrainHeight))
+                    source.sendSuccess(() -> Component.literal(String.format("  Depth: %.3f", sample.depth()))
                         .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Erosion: %.3f at y=63, %.3f at y=%d", erosionSea, erosionTerrain, terrainHeight))
+                    source.sendSuccess(() -> Component.literal(String.format("  Erosion: %.3f", sample.erosion()))
                         .withStyle(ChatFormatting.WHITE), false);
-                    source.sendSuccess(() -> Component.literal(String.format("  Ridges: %.3f at y=63, %.3f at y=%d", ridgesSea, ridgesTerrain, terrainHeight))
+                    source.sendSuccess(() -> Component.literal(String.format("  Ridges: %.3f", sample.ridges()))
+                        .withStyle(ChatFormatting.WHITE), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Temperature: %.3f", sample.temperature()))
+                        .withStyle(ChatFormatting.WHITE), false);
+                    source.sendSuccess(() -> Component.literal(String.format("  Vegetation: %.3f", sample.vegetation()))
                         .withStyle(ChatFormatting.WHITE), false);
 
                     return 1;
@@ -235,6 +237,7 @@ public class RiverTaleCommand {
                         )
                     )
                 )
+                .then(VisCommand.register())
                 .then(Commands.literal("fill")
                     .then(Commands.argument("entryX", IntegerArgumentType.integer())
                         .then(Commands.argument("entryZ", IntegerArgumentType.integer())

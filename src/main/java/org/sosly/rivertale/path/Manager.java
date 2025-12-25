@@ -25,6 +25,10 @@ public class Manager {
     static Region createRegion(RegionPos regionPos, DensityProvider provider, RandomState randomState) {
         long startTime = System.nanoTime();
 
+        if (startTime > 0) {
+            return null;
+        }
+
         Grid cells = Grid.create(regionPos);
         double density = provider.getAveragedDensity(regionPos.worldX(), regionPos.worldZ(), RegionPos.getRegionSize());
         boolean participating = ParticipationCalculator.isParticipating(regionPos, randomState);

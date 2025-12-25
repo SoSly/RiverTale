@@ -28,6 +28,14 @@ public class RiverTaleNetwork {
             VisualizePacket::decode,
             VisualizePacket::handle
         );
+
+        channel.registerMessage(
+            packetId++,
+            RegionPacket.class,
+            RegionPacket::encode,
+            RegionPacket::decode,
+            RegionPacket::handle
+        );
     }
 
     public static void sendToPlayer(Object packet, ServerPlayer player) {

@@ -39,9 +39,13 @@ public record CellPos(int x, int z) {
     }
 
     public static CellPos fromLocal(RegionPos region, int row, int col, int cellsPerRegion) {
+        return fromLocal(region, row, col, cellsPerRegion, cellsPerRegion);
+    }
+
+    public static CellPos fromLocal(RegionPos region, int row, int col, int rows, int cols) {
         return new CellPos(
-            region.x() * cellsPerRegion + col,
-            region.z() * cellsPerRegion + row
+                region.x() * rows + col,
+                region.z() * cols + row
         );
     }
 
