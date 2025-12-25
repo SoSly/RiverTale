@@ -2,6 +2,7 @@ package org.sosly.rivertale.poc.carve;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -69,7 +70,7 @@ public class EmbankmentBuilder {
                 }
 
                 int motionBlockingHeight = level.getHeight(
-                    net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, columnPos.getX(), columnPos.getZ()) - 1;
+                    Heightmap.Types.MOTION_BLOCKING, columnPos.getX(), columnPos.getZ()) - 1;
 
                 if (motionBlockingHeight <= embankmentTopY) {
                     continue;
