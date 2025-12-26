@@ -38,6 +38,23 @@ public record Cell(CellPos pos, Sample sample, Feature feature, Direction flowDi
         return steepest;
     }
 
+    public static boolean hasUpstreamNeighbor(CellPos pos, SampleCache cache) {
+        if (cache == null) {
+            return false;
+        }
+
+        for (Direction dir : Direction.D8) {
+            CellPos neighbor = pos.relative(dir);
+            Sample neighborSample = cache.getOrCompute(neighbor.getMiddleBlockX(), neighbor.getMiddleBlockZ());
+            Direction neighborFlow = computeFlowDirection(neighbor, neighborSample, cache);
+            if (neighborFlow == dir.opposite()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public CompoundTag encode() {
         CompoundTag tag = new CompoundTag();
         tag.putLong("pos", pos.toLong());

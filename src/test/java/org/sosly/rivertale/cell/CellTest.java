@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.density.Sample;
@@ -15,6 +17,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class CellTest {
 
     @Mock
@@ -131,6 +134,76 @@ class CellTest {
         assertEquals(Direction.SOUTH, flow);
     }
 
+    @Test
+    void hasUpstreamNeighborReturnsFalseWhenNullCache() {
+        CellPos pos = new CellPos(0, 0);
+
+        boolean result = Cell.hasUpstreamNeighbor(pos, null);
+
+        assertEquals(false, result);
+    }
+
+    @Test
+    void hasUpstreamNeighborReturnsFalseWhenNoNeighborFlowsIn() {
+        CellPos pos = new CellPos(0, 0);
+        mockSampleAt(pos, 0.0);
+        for (Direction dir : Direction.D8) {
+            CellPos neighbor = pos.relative(dir);
+            mockSampleAt(neighbor, 1.0);
+            mockNeighborsOf(neighbor, 1.0);
+        }
+
+        boolean result = Cell.hasUpstreamNeighbor(pos, sampleCache);
+
+        assertEquals(false, result);
+    }
+
+    @Test
+    void hasUpstreamNeighborReturnsTrueWhenOneNeighborFlowsIn() {
+        CellPos pos = new CellPos(0, 0);
+        CellPos north = pos.relative(Direction.NORTH);
+
+        mockSampleAt(pos, 0.0);
+        mockSampleAt(north, 1.0);
+
+        for (Direction dir : Direction.D8) {
+            mockSampleAt(north.relative(dir), dir == Direction.SOUTH ? 0.0 : 1.0);
+        }
+
+        for (Direction dir : Direction.D8) {
+            if (dir == Direction.NORTH) {
+                continue;
+            }
+            CellPos neighbor = pos.relative(dir);
+            mockSampleAt(neighbor, 1.0);
+            for (Direction neighborDir : Direction.D8) {
+                CellPos nn = neighbor.relative(neighborDir);
+                if (!nn.equals(pos) && !nn.equals(north)) {
+                    mockSampleAt(nn, 1.0);
+                }
+            }
+        }
+
+        boolean result = Cell.hasUpstreamNeighbor(pos, sampleCache);
+
+        assertEquals(true, result);
+    }
+
+    @Test
+    void hasUpstreamNeighborReturnsFalseWhenAllNeighborsFlat() {
+        CellPos pos = new CellPos(0, 0);
+        mockSampleAt(pos, 0.5);
+        for (Direction dir : Direction.D8) {
+            CellPos neighbor = pos.relative(dir);
+            mockSampleAt(neighbor, 0.5);
+            mockNeighborsOf(neighbor, 0.5);
+        }
+
+        boolean result = Cell.hasUpstreamNeighbor(pos, sampleCache);
+
+        assertEquals(false, result);
+    }
+
     private Sample sampleAt(CellPos pos, double depth) {
         ChunkPos chunk = new ChunkPos(pos.getMiddleBlockX() >> 4, pos.getMiddleBlockZ() >> 4);
         return new Sample(chunk, 0.5, depth, 0, 0, 0, 0);
@@ -153,6 +226,13 @@ class CellTest {
         for (Direction dir : Direction.D8) {
             CellPos neighborPos = center.relative(dir);
             double depth = (dir == exception) ? exceptionDepth : defaultDepth;
+            mockSampleAt(neighborPos, depth);
+        }
+    }
+
+    private void mockNeighborsOf(CellPos center, double depth) {
+        for (Direction dir : Direction.D8) {
+            CellPos neighborPos = center.relative(dir);
             mockSampleAt(neighborPos, depth);
         }
     }
