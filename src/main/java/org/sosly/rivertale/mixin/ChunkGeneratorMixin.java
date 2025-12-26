@@ -5,9 +5,9 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
-import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.region.RegionType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -28,11 +28,11 @@ public abstract class ChunkGeneratorMixin {
             CallbackInfoReturnable<ChunkAccess> cir) {
 
         RegionPos center = new RegionPos(chunk.getPos().getMiddleBlockPosition(0));
-        CellCache cache = CellCache.get();
-        RegionType.classify(center, cache);
+        SampleCache sampleCache = SampleCache.get();
+        RegionType.classify(center, sampleCache);
 
         for (Direction dir : Direction.D8) {
-            RegionType.classify(center.relative(dir), cache);
+            RegionType.classify(center.relative(dir), sampleCache);
         }
     }
 }

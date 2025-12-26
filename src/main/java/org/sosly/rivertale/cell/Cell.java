@@ -11,7 +11,31 @@ public record Cell(CellPos pos, Sample sample, Feature feature) {
     private static final double SQRT2 = Math.sqrt(2.0);
 
     public Direction flowDirection(CellCache cache) {
-        return flowDirection(SampleCache.get());
+        if (cache == null) {
+            return Direction.NONE;
+        }
+
+        double currentDensity = sample.continents() + sample.depth();
+        double steepestSlope = 0;
+        Direction steepest = Direction.NONE;
+
+        for (Direction dir : Direction.D8) {
+            CellPos neighbor = pos.relative(dir);
+            Cell neighborCell = cache.getOrCompute(neighbor);
+            double neighborDensity = neighborCell.sample().continents() + neighborCell.sample().depth();
+            double slope = currentDensity - neighborDensity;
+
+            if (dir.dx != 0 && dir.dz != 0) {
+                slope /= SQRT2;
+            }
+
+            if (slope > steepestSlope) {
+                steepestSlope = slope;
+                steepest = dir;
+            }
+        }
+
+        return steepest;
     }
 
     public Direction flowDirection(SampleCache cache) {

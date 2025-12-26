@@ -34,16 +34,13 @@ public class Region {
         this.type = type;
     }
 
-    public static Region create(RegionPos pos, CellCache cellCache) {
-        RegionType type = RegionType.classify(pos, cellCache);
+    public static Region create(RegionPos pos, CellCache cellCache, SampleCache sampleCache) {
+        RegionType type = RegionType.classify(pos, sampleCache);
         Region region = new Region(pos, type);
 
-        if (type == RegionType.COASTAL) {
-            SampleCache sampleCache = SampleCache.get();
-            if (sampleCache != null) {
-                for (OceanBoundary boundary : Oceans.boundaries(pos, cellCache, sampleCache)) {
-                    region.addBoundary(boundary);
-                }
+        if (type == RegionType.COASTAL && sampleCache != null) {
+            for (OceanBoundary boundary : Oceans.boundaries(pos, cellCache, sampleCache)) {
+                region.addBoundary(boundary);
             }
         }
 

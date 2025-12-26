@@ -117,8 +117,9 @@ public class SampleCommand {
 
     private static void sendRegionInfo(ServerPlayer player, BlockPos pos) {
         CellCache cellCache = CellCache.get();
+        SampleCache sampleCache = SampleCache.get();
         RegionPos regionPos = new RegionPos(pos);
-        Region region = Region.create(regionPos, cellCache);
+        Region region = Region.create(regionPos, cellCache, sampleCache);
 
         Map<CellType, Integer> counts = countCellTypes(regionPos, cellCache);
 

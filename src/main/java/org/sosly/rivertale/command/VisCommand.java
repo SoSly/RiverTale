@@ -24,6 +24,7 @@ import net.minecraftforge.server.ServerLifecycleHooks;
 import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.client.RegionCache;
+import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
@@ -91,7 +92,7 @@ public class VisCommand {
     }
 
     private static void sendRegion(ServerPlayer player, RegionPos pos, CellCache cellCache) {
-        Region region = Region.create(pos, cellCache);
+        Region region = Region.create(pos, cellCache, SampleCache.get());
         Network.sendToPlayer(new Region.Packet(region), player);
     }
 

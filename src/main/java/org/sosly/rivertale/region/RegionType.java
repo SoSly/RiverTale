@@ -1,11 +1,11 @@
 package org.sosly.rivertale.region;
 
-import org.sosly.rivertale.cell.Cell;
-import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 
@@ -21,7 +21,7 @@ public enum RegionType {
         this.color = color;
     }
 
-    public static RegionType classify(RegionPos pos, CellCache cellCache) {
+    public static RegionType classify(RegionPos pos, SampleCache sampleCache) {
         Timer.Record record = Store.getTimer(RegionType.class, "classify").start();
 
         boolean allOcean = true;
@@ -31,8 +31,9 @@ public enum RegionType {
         int cells = CommonConfig.get().cellsPerRegion();
         for (int x = 0; x < cells; x++) {
             for (int z = 0; z < cells; z++) {
-                Cell cell = cellCache.getOrCompute(new CellPos(min.x() + x, min.z() + z));
-                boolean ocean = cell.sample().isOcean();
+                CellPos cellPos = new CellPos(min.x() + x, min.z() + z);
+                Sample sample = sampleCache.getOrCompute(cellPos.getMiddleBlockX(), cellPos.getMiddleBlockZ());
+                boolean ocean = sample.isOcean();
                 allOcean &= ocean;
                 anyOcean |= ocean;
             }
@@ -48,7 +49,7 @@ public enum RegionType {
         }
 
         for (Direction dir : Direction.D4) {
-            if (isCoastal(pos.relative(dir), cellCache)) {
+            if (isCoastal(pos.relative(dir), sampleCache)) {
                 record.stop();
                 return FLUVIAL;
             }
@@ -58,7 +59,7 @@ public enum RegionType {
         return INLAND;
     }
 
-    private static boolean isCoastal(RegionPos pos, CellCache cellCache) {
+    private static boolean isCoastal(RegionPos pos, SampleCache sampleCache) {
         Timer.Record record = Store.getTimer(RegionType.class, "isCoastal").start();
 
         boolean hasOcean = false;
@@ -68,8 +69,9 @@ public enum RegionType {
         int cells = CommonConfig.get().cellsPerRegion();
         for (int x = 0; x < cells; x++) {
             for (int z = 0; z < cells; z++) {
-                Cell cell = cellCache.getOrCompute(new CellPos(min.x() + x, min.z() + z));
-                if (cell.sample().isOcean()) {
+                CellPos cellPos = new CellPos(min.x() + x, min.z() + z);
+                Sample sample = sampleCache.getOrCompute(cellPos.getMiddleBlockX(), cellPos.getMiddleBlockZ());
+                if (sample.isOcean()) {
                     hasOcean = true;
                 } else {
                     hasLand = true;

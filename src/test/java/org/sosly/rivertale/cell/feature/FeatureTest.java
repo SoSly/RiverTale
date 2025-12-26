@@ -1,14 +1,27 @@
 package org.sosly.rivertale.cell.feature;
 
 import net.minecraft.world.level.ChunkPos;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.density.SampleCache;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FeatureTest {
+
+    @BeforeEach
+    void setUp() {
+        SampleCache.init(chunk -> new Sample(chunk, 0.5, 0.0, 0, 0, 0, 0));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SampleCache.shutdown();
+    }
 
     @Test
     void classifiesHighScoreAsSnowmelt() {
