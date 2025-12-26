@@ -61,8 +61,9 @@ public class RegionCache implements Cache<Region> {
 
         Store.getRatio(RegionCache.class, "hits").failure();
 
-        Region value = Region.create(pos, cellCache, sampleCache);
+        Region value = Region.createSkeleton(pos, cellCache, sampleCache);
         cache.put(key, value);
+        value.computePaths(cellCache, sampleCache);
 
         return value;
     }

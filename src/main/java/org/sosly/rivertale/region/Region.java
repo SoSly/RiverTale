@@ -38,7 +38,7 @@ public class Region {
         this.type = type;
     }
 
-    public static Region create(RegionPos pos, CellCache cellCache, SampleCache sampleCache) {
+    static Region createSkeleton(RegionPos pos, CellCache cellCache, SampleCache sampleCache) {
         RegionType type = RegionType.classify(pos, sampleCache);
         Region region = new Region(pos, type);
 
@@ -48,11 +48,13 @@ public class Region {
             }
         }
 
-        if (type == RegionType.COASTAL || type == RegionType.FLUVIAL) {
-            region.tracePaths(cellCache, sampleCache);
-        }
-
         return region;
+    }
+
+    void computePaths(CellCache cellCache, SampleCache sampleCache) {
+        if (type == RegionType.COASTAL || type == RegionType.FLUVIAL) {
+            tracePaths(cellCache, sampleCache);
+        }
     }
 
     private void tracePaths(CellCache cellCache, SampleCache sampleCache) {
@@ -76,43 +78,33 @@ public class Region {
 
     private Set<Region> buildTraceRegions(CellCache cellCache, SampleCache sampleCache) {
         Set<Region> regions = new HashSet<>();
-        regions.add(this);
+        Set<RegionPos> visited = new HashSet<>();
 
-        if (type == RegionType.FLUVIAL) {
-            Set<Direction> neighbors = findCoastalNeighborDirections(sampleCache);
-            for (Direction dir : neighbors) {
-                RegionPos neighbor = pos.relative(dir);
-                regions.add(RegionCache.get().getOrCompute(neighbor, cellCache, sampleCache));
-            }
-        }
+        addRegionChain(pos, type, regions, visited, cellCache, sampleCache);
 
         return regions;
     }
 
-    private Set<Direction> findCoastalNeighborDirections(SampleCache sampleCache) {
-        int avgDx = 0;
-        int avgDz = 0;
-        for (Cell cell : cells()) {
-            Direction flow = cell.flowDirection();
-            if (flow != Direction.NONE) {
-                avgDx += flow.dx;
-                avgDz += flow.dz;
+    private void addRegionChain(RegionPos regionPos, RegionType regionType,
+                                Set<Region> regions, Set<RegionPos> visited,
+                                CellCache cellCache, SampleCache sampleCache) {
+        if (visited.contains(regionPos)) {
+            return;
+        }
+        visited.add(regionPos);
+
+        Region region = RegionCache.get().getOrCompute(regionPos, cellCache, sampleCache);
+        regions.add(region);
+
+        if (regionType == RegionType.FLUVIAL) {
+            for (Direction dir : Direction.D8) {
+                RegionPos neighborPos = regionPos.relative(dir);
+                RegionType neighborType = RegionType.classify(neighborPos, sampleCache);
+                if (neighborType == RegionType.COASTAL) {
+                    addRegionChain(neighborPos, neighborType, regions, visited, cellCache, sampleCache);
+                }
             }
         }
-
-        Set<Direction> neighbors = new HashSet<>();
-
-        for (Direction dir : Direction.D8) {
-            RegionPos neighborPos = pos.relative(dir);
-            RegionType neighborType = RegionType.classify(neighborPos, sampleCache);
-            if (neighborType != RegionType.COASTAL) {
-                continue;
-            }
-
-            neighbors.add(dir);
-        }
-
-        return neighbors;
     }
 
     void addBoundary(OceanBoundary boundary) {
@@ -167,7 +159,9 @@ public class Region {
             CompoundTag cellTag = new CompoundTag();
             cellTag.putLong("pos", cell.pos().toLong());
             cellTag.putString("feature", cell.feature().name());
-            cellTag.putString("flow", cell.flowDirection().name());
+            cellTag.putString("flow", cell.flowDirections().isEmpty()
+                ? Direction.NONE.name()
+                : cell.flowDirections().get(0).name());
             cellList.add(cellTag);
         }
         tag.put("cells", cellList);

@@ -1,5 +1,6 @@
 package org.sosly.rivertale.cell;
 
+import java.util.List;
 import net.minecraft.world.level.ChunkPos;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +14,7 @@ import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
@@ -24,73 +26,73 @@ class CellTest {
     SampleCache sampleCache;
 
     @Test
-    void computeFlowDirectionReturnsNoneWhenFlat() {
+    void computeFlowDirectionsReturnsEmptyWhenFlat() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
         mockNeighbors(pos, 0.5);
 
-        Direction flow = Cell.computeFlowDirection(pos, sample, sampleCache);
+        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.NONE, flow);
+        assertTrue(flow.isEmpty());
     }
 
     @Test
-    void computeFlowDirectionReturnsNorthWhenNorthIsLowest() {
+    void computeFlowDirectionsReturnsNorthFirstWhenNorthIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
         mockNeighborsExcept(pos, 0.5, Direction.NORTH, 0.2);
 
-        Direction flow = Cell.computeFlowDirection(pos, sample, sampleCache);
+        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.NORTH, flow);
+        assertEquals(Direction.NORTH, flow.get(0));
     }
 
     @Test
-    void computeFlowDirectionReturnsSouthWhenSouthIsLowest() {
+    void computeFlowDirectionsReturnsSouthFirstWhenSouthIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
         mockNeighborsExcept(pos, 0.5, Direction.SOUTH, 0.2);
 
-        Direction flow = Cell.computeFlowDirection(pos, sample, sampleCache);
+        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.SOUTH, flow);
+        assertEquals(Direction.SOUTH, flow.get(0));
     }
 
     @Test
-    void computeFlowDirectionReturnsEastWhenEastIsLowest() {
+    void computeFlowDirectionsReturnsEastFirstWhenEastIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
         mockNeighborsExcept(pos, 0.5, Direction.EAST, 0.2);
 
-        Direction flow = Cell.computeFlowDirection(pos, sample, sampleCache);
+        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.EAST, flow);
+        assertEquals(Direction.EAST, flow.get(0));
     }
 
     @Test
-    void computeFlowDirectionReturnsWestWhenWestIsLowest() {
+    void computeFlowDirectionsReturnsWestFirstWhenWestIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
         mockNeighborsExcept(pos, 0.5, Direction.WEST, 0.2);
 
-        Direction flow = Cell.computeFlowDirection(pos, sample, sampleCache);
+        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.WEST, flow);
+        assertEquals(Direction.WEST, flow.get(0));
     }
 
     @Test
-    void computeFlowDirectionReturnsDiagonalWhenDiagonalIsLowest() {
+    void computeFlowDirectionsReturnsDiagonalFirstWhenDiagonalIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
         mockNeighborsExcept(pos, 0.5, Direction.NORTHEAST, 0.0);
 
-        Direction flow = Cell.computeFlowDirection(pos, sample, sampleCache);
+        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.NORTHEAST, flow);
+        assertEquals(Direction.NORTHEAST, flow.get(0));
     }
 
     @Test
-    void computeFlowDirectionPrefersCardinalOverDiagonalWhenSlopeEqual() {
+    void computeFlowDirectionsPrefersCardinalOverDiagonalWhenSlopeEqual() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 1.0);
 
@@ -100,24 +102,24 @@ class CellTest {
             mockSampleAt(neighborPos, depth);
         }
 
-        Direction flow = Cell.computeFlowDirection(pos, sample, sampleCache);
+        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.NORTH, flow);
+        assertTrue(flow.get(0).dx == 0 || flow.get(0).dz == 0);
     }
 
     @Test
-    void computeFlowDirectionReturnsNoneWhenUphillEverywhere() {
+    void computeFlowDirectionsReturnsEmptyWhenUphillEverywhere() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.2);
         mockNeighbors(pos, 0.5);
 
-        Direction flow = Cell.computeFlowDirection(pos, sample, sampleCache);
+        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.NONE, flow);
+        assertTrue(flow.isEmpty());
     }
 
     @Test
-    void computeFlowDirectionPicksSteepestWhenMultipleDownhill() {
+    void computeFlowDirectionsReturnsSteepestFirstWhenMultipleDownhill() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 1.0);
 
@@ -129,9 +131,11 @@ class CellTest {
             mockSampleAt(pos.relative(dir), 0.9);
         }
 
-        Direction flow = Cell.computeFlowDirection(pos, sample, sampleCache);
+        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.SOUTH, flow);
+        assertEquals(8, flow.size());
+        assertEquals(Direction.SOUTH, flow.get(0));
+        assertEquals(Direction.NORTH, flow.get(1));
     }
 
     @Test

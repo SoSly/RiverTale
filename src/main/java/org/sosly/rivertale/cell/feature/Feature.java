@@ -51,11 +51,11 @@ public enum Feature {
         for (Feature feature : VALUES) {
             if (feature.handler.classify(cell)) {
                 record.stop();
-                return new Cell(cell.pos(), cell.sample(), feature, cell.flowDirection());
+                return new Cell(cell.pos(), cell.sample(), feature, cell.flowDirections());
             }
         }
 
         record.stop();
-        return new Cell(cell.pos(), cell.sample(), DEFAULT, cell.flowDirection());
+        return new Cell(cell.pos(), cell.sample(), DEFAULT, cell.flowDirections());
     }
 }

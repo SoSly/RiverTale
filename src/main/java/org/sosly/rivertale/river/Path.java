@@ -10,6 +10,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
@@ -19,8 +20,6 @@ import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.terrain.OceanBoundary;
 
 public class Path {
-    private static final double DISTANCE_TOLERANCE = 0.5;
-
     private final List<Cell> cells = new ArrayList<>();
     private final Set<RegionPos> allowedRegions = new HashSet<>();
     private final Set<CellPos> oceanCells = new HashSet<>();
@@ -61,6 +60,7 @@ public class Path {
 
             CellPos next = followFlow(current, nearest);
             if (next == null) {
+                valid = false;
                 record.stop();
                 return;
             }
@@ -105,47 +105,82 @@ public class Path {
     private CellPos followFlow(Cell current, CellPos nearestOcean) {
         Timer.Record record = Store.getTimer(Path.class, "followFlow").start();
 
-        Direction flow = current.flowDirection();
-        if (flow == Direction.NONE) {
-            CellPos next = stepTowardOcean(current.pos(), nearestOcean);
-            record.stop();
-            return next;
-        }
-
-        CellPos next = current.pos().relative(flow);
         double currentDistance = distance(current.pos(), nearestOcean);
-        double nextDistance = distance(next, nearestOcean);
+        int mergeThreshold = CommonConfig.get().mergeThreshold();
 
-        if (nextDistance < currentDistance) {
-            record.stop();
-            return next;
+        if (currentDistance <= mergeThreshold) {
+            CellPos aligned = followAlignedFlow(current, nearestOcean, currentDistance);
+            if (aligned != null) {
+                record.stop();
+                return aligned;
+            }
+        } else {
+            for (Direction dir : current.flowDirections()) {
+                CellPos next = current.pos().relative(dir);
+
+                if (!allowedRegions.contains(next.getRegion())) {
+                    continue;
+                }
+
+                if (distance(next, nearestOcean) < currentDistance) {
+                    record.stop();
+                    return next;
+                }
+            }
         }
 
-        if (!allowedRegions.contains(next.getRegion())) {
-            valid = false;
-            record.stop();
-            return null;
-        }
-
-        if (nextDistance > currentDistance + DISTANCE_TOLERANCE) {
-            valid = false;
-            record.stop();
-            return null;
-        }
-
+        CellPos forced = forceTowardOcean(current.pos(), nearestOcean, currentDistance);
         record.stop();
-        return next;
+        return forced;
     }
 
-    private CellPos stepTowardOcean(CellPos from, CellPos ocean) {
-        int dx = ocean.x() - from.x();
-        int dz = ocean.z() - from.z();
+    private CellPos followAlignedFlow(Cell current, CellPos nearestOcean, double currentDistance) {
+        int dx = nearestOcean.x() - current.pos().x();
+        int dz = nearestOcean.z() - current.pos().z();
 
-        if (Math.abs(dx) >= Math.abs(dz)) {
-            return new CellPos(from.x() + Integer.signum(dx), from.z());
+        CellPos best = null;
+        double bestAlignment = -Double.MAX_VALUE;
+
+        for (Direction dir : current.flowDirections()) {
+            CellPos next = current.pos().relative(dir);
+
+            if (!allowedRegions.contains(next.getRegion())) {
+                continue;
+            }
+
+            if (distance(next, nearestOcean) >= currentDistance) {
+                continue;
+            }
+
+            double alignment = dir.dx * dx + dir.dz * dz;
+            if (alignment > bestAlignment) {
+                bestAlignment = alignment;
+                best = next;
+            }
         }
 
-        return new CellPos(from.x(), from.z() + Integer.signum(dz));
+        return best;
+    }
+
+    private CellPos forceTowardOcean(CellPos current, CellPos nearestOcean, double currentDistance) {
+        CellPos best = null;
+        double bestDistance = currentDistance;
+
+        for (Direction dir : Direction.D8) {
+            CellPos next = current.relative(dir);
+
+            if (!allowedRegions.contains(next.getRegion())) {
+                continue;
+            }
+
+            double dist = distance(next, nearestOcean);
+            if (dist < bestDistance) {
+                bestDistance = dist;
+                best = next;
+            }
+        }
+
+        return best;
     }
 
     private boolean isTerminus(Cell cell) {

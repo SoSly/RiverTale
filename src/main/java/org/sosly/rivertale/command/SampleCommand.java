@@ -107,7 +107,7 @@ public class SampleCommand {
         player.sendSystemMessage(withTeleport("Cell " + cellPos, cellPos.getMiddleBlockX(), y, cellPos.getMiddleBlockZ()));
         player.sendSystemMessage(Component.literal("  feature: " + cell.feature().name()));
         player.sendSystemMessage(Component.literal("  type: " + cell.feature().type.name()));
-        player.sendSystemMessage(Component.literal("  flow: " + cell.flowDirection().name()));
+        player.sendSystemMessage(Component.literal("  flows: " + cell.flowDirections()));
         player.sendSystemMessage(Component.literal("  continents: " + format(sample.continents())));
         player.sendSystemMessage(Component.literal("  depth: " + format(sample.depth())));
         player.sendSystemMessage(Component.literal("  erosion: " + format(sample.erosion())));

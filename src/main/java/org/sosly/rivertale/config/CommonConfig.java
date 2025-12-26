@@ -5,14 +5,16 @@ import net.minecraftforge.common.ForgeConfigSpec;
 public record CommonConfig(
     int regionSize,
     int cellSize,
-    double oceanThreshold
+    double oceanThreshold,
+    int mergeThreshold
 ) {
-    private static final int DEFAULT_REGION_SIZE = 2048;
-    private static final int DEFAULT_CELL_SIZE = 64;
-    private static final double DEFAULT_OCEAN_THRESHOLD = -0.164;
+    private static final int DEFAULT_REGION_SIZE = 1024;
+    private static final int DEFAULT_CELL_SIZE = 32;
+    private static final double DEFAULT_OCEAN_THRESHOLD = -0.17;
+    private static final int DEFAULT_MERGE_THRESHOLD = 10;
 
     private static CommonConfig instance = new CommonConfig(
-        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD);
+        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD);
 
     public CommonConfig {
         if (regionSize % 16 != 0) {
@@ -43,6 +45,7 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue REGION_SIZE;
         public static final ForgeConfigSpec.IntValue CELL_SIZE;
         public static final ForgeConfigSpec.DoubleValue OCEAN_THRESHOLD;
+        public static final ForgeConfigSpec.IntValue MERGE_THRESHOLD;
 
         static {
             ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -59,6 +62,10 @@ public record CommonConfig(
                 .comment("Continents density value below which terrain is considered ocean.")
                 .defineInRange("oceanThreshold", DEFAULT_OCEAN_THRESHOLD, -1.0, 0.0);
 
+            MERGE_THRESHOLD = builder
+                .comment("Distance in cells from ocean at which rivers prioritize alignment over slope.")
+                .defineInRange("mergeThreshold", DEFAULT_MERGE_THRESHOLD, 0, 32);
+
             SPEC = builder.build();
         }
 
@@ -66,7 +73,8 @@ public record CommonConfig(
             set(new CommonConfig(
                 REGION_SIZE.get(),
                 CELL_SIZE.get(),
-                OCEAN_THRESHOLD.get()
+                OCEAN_THRESHOLD.get(),
+                MERGE_THRESHOLD.get()
             ));
         }
     }

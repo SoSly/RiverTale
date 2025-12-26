@@ -1,7 +1,6 @@
 package org.sosly.rivertale.cell.feature;
 
 import org.sosly.rivertale.cell.Cell;
-import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 
@@ -11,7 +10,7 @@ public class Snowmelt implements FeatureHandler {
     public void carve() {}
 
     public boolean classify(Cell cell) {
-        if (cell.flowDirection() == Direction.NONE) {
+        if (cell.flowDirections().isEmpty()) {
             return false;
         }
         if (Cell.hasUpstreamNeighbor(cell.pos(), SampleCache.get())) {
