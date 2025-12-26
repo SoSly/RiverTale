@@ -6,6 +6,7 @@ import java.util.Map;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
@@ -68,12 +69,13 @@ public class CellCache implements Cache<Cell> {
 
         RegionType regionType = RegionType.classify(pos.getRegion(), sampleCache);
         if (regionType == RegionType.OCEANIC || regionType == RegionType.INLAND) {
-            Cell value = new Cell(pos, sample, Feature.DEFAULT);
+            Cell value = new Cell(pos, sample, Feature.DEFAULT, Direction.NONE);
             cache.put(key, value);
             return value;
         }
 
-        Cell value = Feature.classify(new Cell(pos, sample, Feature.DEFAULT));
+        Direction flowDirection = Cell.computeFlowDirection(pos, sample, sampleCache);
+        Cell value = Feature.classify(new Cell(pos, sample, Feature.DEFAULT, flowDirection));
         cache.put(key, value);
 
         return value;

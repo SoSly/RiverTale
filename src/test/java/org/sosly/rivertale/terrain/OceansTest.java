@@ -12,6 +12,7 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.metric.Store;
@@ -191,7 +192,7 @@ class OceansTest {
             double continents = isOcean.test(x, z) ? -0.5 : 0.5;
             ChunkPos chunk = new ChunkPos(pos.getMiddleBlockX() >> 4, pos.getMiddleBlockZ() >> 4);
             Sample sample = new Sample(chunk, continents, 0, 0, 0, 0, 0);
-            return new Cell(pos, sample, Feature.DEFAULT);
+            return new Cell(pos, sample, Feature.DEFAULT, Direction.NONE);
         });
     }
 }

@@ -3,7 +3,6 @@ package org.sosly.rivertale.cell.feature;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.density.Sample;
-import org.sosly.rivertale.density.SampleCache;
 
 public class Spring implements FeatureHandler {
     private static final double DEPTH_THRESHOLD = 0.3;
@@ -12,7 +11,7 @@ public class Spring implements FeatureHandler {
     public void carve() {}
 
     public boolean classify(Cell cell) {
-        if (cell.flowDirection(SampleCache.get()) == Direction.NONE) {
+        if (cell.flowDirection() == Direction.NONE) {
             return false;
         }
 

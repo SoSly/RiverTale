@@ -91,12 +91,11 @@ public class Region {
         tag.put("boundaries", boundaryList);
 
         ListTag cellList = new ListTag();
-        CellCache cache = CellCache.get();
         for (Cell cell : cells()) {
             CompoundTag cellTag = new CompoundTag();
             cellTag.putLong("pos", cell.pos().toLong());
             cellTag.putString("feature", cell.feature().name());
-            cellTag.putString("flow", cell.flowDirection(cache).name());
+            cellTag.putString("flow", cell.flowDirection().name());
             cellList.add(cellTag);
         }
         tag.put("cells", cellList);

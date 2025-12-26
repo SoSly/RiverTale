@@ -7,38 +7,10 @@ import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 
-public record Cell(CellPos pos, Sample sample, Feature feature) {
+public record Cell(CellPos pos, Sample sample, Feature feature, Direction flowDirection) {
     private static final double SQRT2 = Math.sqrt(2.0);
 
-    public Direction flowDirection(CellCache cache) {
-        if (cache == null) {
-            return Direction.NONE;
-        }
-
-        double currentDensity = sample.continents() + sample.depth();
-        double steepestSlope = 0;
-        Direction steepest = Direction.NONE;
-
-        for (Direction dir : Direction.D8) {
-            CellPos neighbor = pos.relative(dir);
-            Cell neighborCell = cache.getOrCompute(neighbor);
-            double neighborDensity = neighborCell.sample().continents() + neighborCell.sample().depth();
-            double slope = currentDensity - neighborDensity;
-
-            if (dir.dx != 0 && dir.dz != 0) {
-                slope /= SQRT2;
-            }
-
-            if (slope > steepestSlope) {
-                steepestSlope = slope;
-                steepest = dir;
-            }
-        }
-
-        return steepest;
-    }
-
-    public Direction flowDirection(SampleCache cache) {
+    public static Direction computeFlowDirection(CellPos pos, Sample sample, SampleCache cache) {
         if (cache == null) {
             return Direction.NONE;
         }
@@ -71,6 +43,7 @@ public record Cell(CellPos pos, Sample sample, Feature feature) {
         tag.putLong("pos", pos.toLong());
         tag.put("sample", sample.encode());
         tag.putString("feature", feature.name());
+        tag.putString("flowDirection", flowDirection.name());
         return tag;
     }
 
@@ -78,7 +51,8 @@ public record Cell(CellPos pos, Sample sample, Feature feature) {
         return new Cell(
             new CellPos(tag.getLong("pos")),
             Sample.decode(tag.getCompound("sample")),
-            Feature.valueOf(tag.getString("feature"))
+            Feature.valueOf(tag.getString("feature")),
+            Direction.valueOf(tag.getString("flowDirection"))
         );
     }
 }
