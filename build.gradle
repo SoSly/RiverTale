@@ -61,6 +61,7 @@ minecraft {
     runs {
         configureEach {
             workingDirectory project.file("run/${it.name}")
+            jvmArgs '-Xmx2G', '-Xms1G'
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
             property 'mixin.env.remapRefMap', 'true'

@@ -40,7 +40,7 @@ public abstract class MultiNoiseBiomeSourceMixin {
             return;
         }
 
-        RiverTale.LOGGER.info("RiverTale: Removing river biomes from world generation...");
+        RiverTale.LOGGER.info("Removing river biomes from world generation...");
 
         AtomicBoolean progressRunning = new AtomicBoolean(true);
         Thread progressThread = new Thread(() -> {
@@ -81,7 +81,7 @@ public abstract class MultiNoiseBiomeSourceMixin {
                 Thread.currentThread().interrupt();
             }
             System.out.println();
-            RiverTale.LOGGER.info("RiverTale: River biomes removed successfully");
+            RiverTale.LOGGER.info("River biomes removed successfully");
         }
     }
 }

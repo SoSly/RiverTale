@@ -81,7 +81,7 @@ public class RiverFillExecutor {
 
         elapsedMs = System.currentTimeMillis() - startTime;
         double msPerChunk = chunksLoaded > 0 ? (double) elapsedMs / chunksLoaded : 0;
-        LOGGER.info("Fill complete: placed {} water blocks across {} path points in {}ms ({}ms/chunk)",
+        LOGGER.info("Filler complete: placed {} water blocks across {} path points in {}ms ({}ms/chunk)",
             waterBlocksPlaced, pathPointsProcessed, elapsedMs, String.format("%.1f", msPerChunk));
     }
 

@@ -1,4 +1,106 @@
 {
-  "type": "minecraft:constant",
-  "argument": 0.0
+  "type": "abs",
+  "argument": {
+    "type": "flat_cache",
+    "argument": {
+      "type": "cache_2d",
+      "argument": {
+        "type": "add",
+        "argument1": {
+          "type": "add",
+          "argument1": {
+            "type": "mul",
+            "argument1": {
+              "type": "minecraft:spline",
+              "spline": {
+                "coordinate": {
+                  "type": "noise",
+                  "noise": "minecraft:erosion_large",
+                  "xz_scale": 0.1,
+                  "y_scale": 0
+                },
+                "points": [
+                  {
+                    "location": -0.2,
+                    "value": 1,
+                    "derivative": 0
+                  },
+                  {
+                    "location": -0.1,
+                    "value": 0,
+                    "derivative": 0
+                  }
+                ]
+              }
+            },
+            "argument2": "lithosphere:river_valley_c"
+          },
+          "argument2": {
+            "type": "mul",
+            "argument1": "lithosphere:river_valley_u",
+            "argument2": {
+              "type": "minecraft:spline",
+              "spline": {
+                "coordinate": {
+                  "type": "noise",
+                  "noise": "minecraft:erosion_large",
+                  "xz_scale": 0.1,
+                  "y_scale": 0
+                },
+                "points": [
+                  {
+                    "location": -0.2,
+                    "value": 0,
+                    "derivative": 0
+                  },
+                  {
+                    "location": -0.1,
+                    "value": 1,
+                    "derivative": 0
+                  },
+                  {
+                    "location": 0.2029680059923502,
+                    "value": 0.9975880546997432,
+                    "derivative": 0
+                  },
+                  {
+                    "location": 0.3045291371814176,
+                    "value": -0.003445104388667977,
+                    "derivative": 0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "argument2": {
+          "type": "mul",
+          "argument1": "lithosphere:river_valley_g",
+          "argument2": {
+            "type": "minecraft:spline",
+            "spline": {
+              "coordinate": {
+                "type": "noise",
+                "noise": "minecraft:erosion_large",
+                "xz_scale": 0.1,
+                "y_scale": 0
+              },
+              "points": [
+                {
+                  "location": 0.20385214652993805,
+                  "value": 0.001440659571383729,
+                  "derivative": 0
+                },
+                {
+                  "location": 0.3020744126764428,
+                  "value": 1.0014724913605504,
+                  "derivative": 0
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
 }

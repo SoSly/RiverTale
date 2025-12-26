@@ -119,7 +119,7 @@ public class RiverCarveExecutor {
 
         elapsedMs = System.currentTimeMillis() - startTime;
         double msPerChunk = chunksLoaded > 0 ? (double) elapsedMs / chunksLoaded : 0;
-        LOGGER.info("Carve complete: placed {} blocks, removed {} blocks in {}ms ({}ms/chunk)",
+        LOGGER.info("Carver complete: placed {} blocks, removed {} blocks in {}ms ({}ms/chunk)",
             blocksPlaced, blocksRemoved, elapsedMs, String.format("%.1f", msPerChunk));
     }
 
