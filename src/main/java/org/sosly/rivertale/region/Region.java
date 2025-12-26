@@ -14,18 +14,22 @@ import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkEvent;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
-import org.sosly.rivertale.client.RegionCache;
+import org.sosly.rivertale.cell.CellType;
+import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.density.SampleCache;
+import org.sosly.rivertale.river.Path;
 import org.sosly.rivertale.terrain.OceanBoundary;
 import org.sosly.rivertale.terrain.Oceans;
 
 public class Region {
 
     private final Set<OceanBoundary> boundaries = new HashSet<>();
+    private final List<Path> paths = new ArrayList<>();
     private final RegionPos pos;
     private final RegionType type;
 
@@ -44,15 +48,83 @@ public class Region {
             }
         }
 
+        if (type == RegionType.COASTAL || type == RegionType.FLUVIAL) {
+            region.tracePaths(cellCache, sampleCache);
+        }
+
         return region;
+    }
+
+    private void tracePaths(CellCache cellCache, SampleCache sampleCache) {
+        Set<Region> traceRegions = buildTraceRegions(cellCache, sampleCache);
+        if (traceRegions.isEmpty()) {
+            return;
+        }
+
+        for (Cell cell : cells()) {
+            if (cell.feature().type != CellType.SOURCE) {
+                continue;
+            }
+
+            Path path = new Path(cell, traceRegions);
+            path.trace();
+            if (path.isValid()) {
+                paths.add(path);
+            }
+        }
+    }
+
+    private Set<Region> buildTraceRegions(CellCache cellCache, SampleCache sampleCache) {
+        Set<Region> regions = new HashSet<>();
+        regions.add(this);
+
+        if (type == RegionType.FLUVIAL) {
+            Set<Direction> neighbors = findCoastalNeighborDirections(sampleCache);
+            for (Direction dir : neighbors) {
+                RegionPos neighbor = pos.relative(dir);
+                regions.add(RegionCache.get().getOrCompute(neighbor, cellCache, sampleCache));
+            }
+        }
+
+        return regions;
+    }
+
+    private Set<Direction> findCoastalNeighborDirections(SampleCache sampleCache) {
+        int avgDx = 0;
+        int avgDz = 0;
+        for (Cell cell : cells()) {
+            Direction flow = cell.flowDirection();
+            if (flow != Direction.NONE) {
+                avgDx += flow.dx;
+                avgDz += flow.dz;
+            }
+        }
+
+        Set<Direction> neighbors = new HashSet<>();
+
+        for (Direction dir : Direction.D8) {
+            RegionPos neighborPos = pos.relative(dir);
+            RegionType neighborType = RegionType.classify(neighborPos, sampleCache);
+            if (neighborType != RegionType.COASTAL) {
+                continue;
+            }
+
+            neighbors.add(dir);
+        }
+
+        return neighbors;
     }
 
     void addBoundary(OceanBoundary boundary) {
         boundaries.add(boundary);
     }
 
-    Set<OceanBoundary> boundaries() {
+    public Set<OceanBoundary> boundaries() {
         return Collections.unmodifiableSet(boundaries);
+    }
+
+    public List<Path> paths() {
+        return Collections.unmodifiableList(paths);
     }
 
     List<Cell> cells() {
@@ -71,11 +143,11 @@ public class Region {
         return CellCache.get().getOrCompute(cellPos);
     }
 
-    RegionPos pos() {
+    public RegionPos pos() {
         return pos;
     }
 
-    RegionType type() {
+    public RegionType type() {
         return type;
     }
 
@@ -99,6 +171,12 @@ public class Region {
             cellList.add(cellTag);
         }
         tag.put("cells", cellList);
+
+        ListTag pathList = new ListTag();
+        for (Path path : paths) {
+            pathList.add(path.encode());
+        }
+        tag.put("paths", pathList);
 
         return tag;
     }
@@ -139,8 +217,8 @@ public class Region {
             if (data.isEmpty()) {
                 return;
             }
-            RegionCache.Region region = RegionCache.Region.decode(data);
-            RegionCache.get().put(region);
+            ClientRegionCache.Region region = ClientRegionCache.Region.decode(data);
+            ClientRegionCache.get().put(region);
         }
     }
 }

@@ -14,14 +14,14 @@ public class ClientEventHandler {
 
     @SubscribeEvent
     public static void onPlayerLogout(ClientPlayerNetworkEvent.LoggingOut event) {
-        RegionCache.setEnabled(false);
+        ClientRegionCache.setEnabled(false);
     }
 
     @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ModEvents {
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
-            RegionCache.init();
+            ClientRegionCache.init();
         }
     }
 }

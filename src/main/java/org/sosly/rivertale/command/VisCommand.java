@@ -23,13 +23,14 @@ import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.cell.CellCache;
-import org.sosly.rivertale.client.RegionCache;
+import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.networking.Network;
 import org.sosly.rivertale.region.Region;
+import org.sosly.rivertale.region.RegionCache;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID)
 public class VisCommand {
@@ -92,7 +93,7 @@ public class VisCommand {
     }
 
     private static void sendRegion(ServerPlayer player, RegionPos pos, CellCache cellCache) {
-        Region region = Region.create(pos, cellCache, SampleCache.get());
+        Region region = RegionCache.get().getOrCompute(pos, cellCache, SampleCache.get());
         Network.sendToPlayer(new Region.Packet(region), player);
     }
 
@@ -157,7 +158,7 @@ public class VisCommand {
         public static void handle(TogglePacket msg, Supplier<NetworkEvent.Context> ctx) {
             NetworkEvent.Context context = ctx.get();
             if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
-                context.enqueueWork(() -> RegionCache.setEnabled(msg.enabled));
+                context.enqueueWork(() -> ClientRegionCache.setEnabled(msg.enabled));
             }
             context.setPacketHandled(true);
         }

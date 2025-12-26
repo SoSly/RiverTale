@@ -14,8 +14,10 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import java.util.List;
 import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.terrain.OceanBoundary;
 
@@ -28,17 +30,18 @@ public class RegionRenderer {
     private static final double DIAG_COMPONENT = ARROW_LENGTH / Math.sqrt(2.0);
 
     private static final float[] COLOR_BOUNDARY = {1.0f, 0.5f, 0.0f, 1.0f};
+    private static final float[] COLOR_PATH = {0.0f, 0.0f, 1.0f, 1.0f};
 
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             return;
         }
-        if (!RegionCache.isEnabled()) {
+        if (!ClientRegionCache.isEnabled()) {
             return;
         }
 
-        RegionCache cache = RegionCache.get();
+        ClientRegionCache cache = ClientRegionCache.get();
         if (cache.getRegions().isEmpty()) {
             return;
         }
@@ -60,11 +63,12 @@ public class RegionRenderer {
         int regionSize = CommonConfig.get().regionSize();
         int cellsPerRegion = CommonConfig.get().cellsPerRegion();
 
-        for (RegionCache.Region region : cache.getRegions()) {
+        for (ClientRegionCache.Region region : cache.getRegions()) {
             renderRegionBorder(region, regionSize, poseStack, buffer, camPos);
             renderCellBorders(region, regionSize, cellsPerRegion, poseStack, buffer, camPos);
             renderOceanBoundaries(region, poseStack, buffer, camPos);
             renderFlowArrows(region, regionSize, cellsPerRegion, poseStack, buffer, camPos);
+            renderPaths(region, poseStack, buffer, camPos);
         }
 
         tesselator.end();
@@ -72,7 +76,7 @@ public class RegionRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static void renderRegionBorder(RegionCache.Region region, int regionSize,
+    private static void renderRegionBorder(ClientRegionCache.Region region, int regionSize,
                                            PoseStack poseStack, BufferBuilder buffer, Vec3 camPos) {
         float[] color = region.type().color;
         int minX = region.pos().getMinBlockX() + 1;
@@ -91,7 +95,7 @@ public class RegionRenderer {
         drawLine(poseStack, buffer, sw, nw, camPos, color);
     }
 
-    private static void renderOceanBoundaries(RegionCache.Region region, PoseStack poseStack,
+    private static void renderOceanBoundaries(ClientRegionCache.Region region, PoseStack poseStack,
                                               BufferBuilder buffer, Vec3 camPos) {
         for (OceanBoundary boundary : region.boundaries()) {
             int landChunkX = boundary.land().x;
@@ -132,13 +136,13 @@ public class RegionRenderer {
         }
     }
 
-    private static void renderCellBorders(RegionCache.Region region, int regionSize, int cellsPerRegion,
+    private static void renderCellBorders(ClientRegionCache.Region region, int regionSize, int cellsPerRegion,
                                           PoseStack poseStack, BufferBuilder buffer, Vec3 camPos) {
         int baseX = region.pos().getMinBlockX();
         int baseZ = region.pos().getMinBlockZ();
         double cellSize = (double) regionSize / cellsPerRegion;
 
-        for (RegionCache.Cell cell : region.cells()) {
+        for (ClientRegionCache.Cell cell : region.cells()) {
             int localX = cell.pos().x() - region.pos().getMinCell().x();
             int localZ = cell.pos().z() - region.pos().getMinCell().z();
 
@@ -161,13 +165,13 @@ public class RegionRenderer {
         }
     }
 
-    private static void renderFlowArrows(RegionCache.Region region, int regionSize, int cellsPerRegion,
+    private static void renderFlowArrows(ClientRegionCache.Region region, int regionSize, int cellsPerRegion,
                                          PoseStack poseStack, BufferBuilder buffer, Vec3 camPos) {
         int baseX = region.pos().getMinBlockX();
         int baseZ = region.pos().getMinBlockZ();
         double cellSize = (double) regionSize / cellsPerRegion;
 
-        for (RegionCache.Cell cell : region.cells()) {
+        for (ClientRegionCache.Cell cell : region.cells()) {
             Direction dir = cell.flow();
             if (dir == Direction.NONE) {
                 continue;
@@ -188,6 +192,26 @@ public class RegionRenderer {
             Vec3[] arrowhead = calculateArrowhead(arrowEnd, dir);
             drawLine(poseStack, buffer, arrowEnd, arrowhead[0], camPos, arrowColor);
             drawLine(poseStack, buffer, arrowEnd, arrowhead[1], camPos, arrowColor);
+        }
+    }
+
+    private static void renderPaths(ClientRegionCache.Region region, PoseStack poseStack,
+                                     BufferBuilder buffer, Vec3 camPos) {
+        for (List<CellPos> path : region.paths()) {
+            for (int i = 0; i < path.size() - 1; i++) {
+                CellPos current = path.get(i);
+                CellPos next = path.get(i + 1);
+
+                double currentX = current.getMiddleBlockX();
+                double currentZ = current.getMiddleBlockZ();
+                double nextX = next.getMiddleBlockX();
+                double nextZ = next.getMiddleBlockZ();
+
+                Vec3 start = new Vec3(currentX, Y, currentZ);
+                Vec3 end = new Vec3(nextX, Y, nextZ);
+
+                drawLine(poseStack, buffer, start, end, camPos, COLOR_PATH);
+            }
         }
     }
 

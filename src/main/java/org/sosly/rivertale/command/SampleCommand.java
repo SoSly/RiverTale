@@ -21,6 +21,7 @@ import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.region.Region;
+import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.RiverTale;
 
 public class SampleCommand {
@@ -119,7 +120,7 @@ public class SampleCommand {
         CellCache cellCache = CellCache.get();
         SampleCache sampleCache = SampleCache.get();
         RegionPos regionPos = new RegionPos(pos);
-        Region region = Region.create(regionPos, cellCache, sampleCache);
+        Region region = RegionCache.get().getOrCompute(regionPos, cellCache, sampleCache);
 
         Map<CellType, Integer> counts = countCellTypes(regionPos, cellCache);
 

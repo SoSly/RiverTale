@@ -18,13 +18,14 @@ import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.region.RegionType;
+import org.sosly.rivertale.river.Path;
 import org.sosly.rivertale.terrain.OceanBoundary;
 
 @OnlyIn(Dist.CLIENT)
-public class RegionCache implements Cache<RegionCache.Region> {
+public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
     private static final int DEFAULT_CAPACITY = 100;
 
-    private static RegionCache instance;
+    private static ClientRegionCache instance;
     private static boolean enabled = false;
 
     private final Map<Long, Region> cache;
@@ -40,7 +41,8 @@ public class RegionCache implements Cache<RegionCache.Region> {
         }
     }
 
-    public record Region(RegionPos pos, RegionType type, Set<OceanBoundary> boundaries, List<Cell> cells) {
+    public record Region(RegionPos pos, RegionType type, Set<OceanBoundary> boundaries, List<Cell> cells,
+                         List<List<CellPos>> paths) {
         public static Region decode(CompoundTag tag) {
             RegionPos pos = new RegionPos(tag.getLong("pos"));
             RegionType type = RegionType.valueOf(tag.getString("type"));
@@ -57,29 +59,35 @@ public class RegionCache implements Cache<RegionCache.Region> {
                 cells.add(Cell.decode(cellList.getCompound(i)));
             }
 
-            return new Region(pos, type, boundaries, cells);
+            List<List<CellPos>> paths = new ArrayList<>();
+            ListTag pathList = tag.getList("paths", Tag.TAG_COMPOUND);
+            for (int i = 0; i < pathList.size(); i++) {
+                paths.add(Path.decode(pathList.getCompound(i)));
+            }
+
+            return new Region(pos, type, boundaries, cells, paths);
         }
     }
 
-    private RegionCache(int capacity) {
+    private ClientRegionCache(int capacity) {
         this.capacity = capacity;
         this.cache = new LinkedHashMap<>(capacity, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<Long, Region> eldest) {
-                return size() > RegionCache.this.capacity;
+                return size() > ClientRegionCache.this.capacity;
             }
         };
     }
 
-    public static RegionCache get() {
+    public static ClientRegionCache get() {
         if (instance == null) {
-            throw new IllegalStateException("RegionCache not initialized");
+            throw new IllegalStateException("ClientRegionCache not initialized");
         }
         return instance;
     }
 
     public static void init() {
-        instance = new RegionCache(DEFAULT_CAPACITY);
+        instance = new ClientRegionCache(DEFAULT_CAPACITY);
     }
 
     public static void shutdown() {
