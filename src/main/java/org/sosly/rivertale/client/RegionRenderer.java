@@ -97,34 +97,33 @@ public class RegionRenderer {
     private static void renderOceanBoundaries(ClientRegionCache.Region region, PoseStack poseStack,
                                               BufferBuilder buffer, Vec3 camPos) {
         for (OceanBoundary boundary : region.boundaries()) {
-            int landChunkX = boundary.land().x;
-            int landChunkZ = boundary.land().z;
+            CellPos land = boundary.land();
             Direction bearing = boundary.bearing();
 
             Vec3 start;
             Vec3 end;
 
-            int chunkMinX = landChunkX << 4;
-            int chunkMaxX = (landChunkX + 1) << 4;
-            int chunkMinZ = landChunkZ << 4;
-            int chunkMaxZ = (landChunkZ + 1) << 4;
+            int cellMinX = land.getMinBlockX();
+            int cellMaxX = land.getMaxBlockX();
+            int cellMinZ = land.getMinBlockZ();
+            int cellMaxZ = land.getMaxBlockZ();
 
             switch (bearing) {
                 case NORTH -> {
-                    start = new Vec3(chunkMinX, Y, chunkMinZ);
-                    end = new Vec3(chunkMaxX, Y, chunkMinZ);
+                    start = new Vec3(cellMinX, Y, cellMinZ);
+                    end = new Vec3(cellMaxX, Y, cellMinZ);
                 }
                 case SOUTH -> {
-                    start = new Vec3(chunkMinX, Y, chunkMaxZ);
-                    end = new Vec3(chunkMaxX, Y, chunkMaxZ);
+                    start = new Vec3(cellMinX, Y, cellMaxZ);
+                    end = new Vec3(cellMaxX, Y, cellMaxZ);
                 }
                 case EAST -> {
-                    start = new Vec3(chunkMaxX, Y, chunkMinZ);
-                    end = new Vec3(chunkMaxX, Y, chunkMaxZ);
+                    start = new Vec3(cellMaxX, Y, cellMinZ);
+                    end = new Vec3(cellMaxX, Y, cellMaxZ);
                 }
                 case WEST -> {
-                    start = new Vec3(chunkMinX, Y, chunkMinZ);
-                    end = new Vec3(chunkMinX, Y, chunkMaxZ);
+                    start = new Vec3(cellMinX, Y, cellMinZ);
+                    end = new Vec3(cellMinX, Y, cellMaxZ);
                 }
                 default -> {
                     continue;

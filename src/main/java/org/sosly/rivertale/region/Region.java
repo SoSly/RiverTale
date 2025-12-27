@@ -43,8 +43,8 @@ public class Region {
         RegionType type = RegionTypeCache.get().getOrCompute(pos, sampleCache);
         Region region = new Region(pos, type);
 
-        if (type == RegionType.COASTAL && sampleCache != null) {
-            for (OceanBoundary boundary : Oceans.boundaries(pos, cellCache, sampleCache)) {
+        if (type == RegionType.COASTAL) {
+            for (OceanBoundary boundary : Oceans.boundaries(pos, sampleCache)) {
                 region.addBoundary(boundary);
             }
         }

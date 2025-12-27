@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -34,9 +33,7 @@ public class Path {
         for (Region region : regions) {
             this.allowedRegions.add(region.pos());
             for (OceanBoundary boundary : region.boundaries()) {
-                int blockX = boundary.land().getMinBlockX();
-                int blockZ = boundary.land().getMinBlockZ();
-                this.oceanCells.add(new CellPos(new BlockPos(blockX, 0, blockZ)));
+                this.oceanCells.add(boundary.land());
             }
         }
     }
