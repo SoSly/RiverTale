@@ -13,7 +13,7 @@ import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 
-public record Cell(CellPos pos, Sample sample, Feature feature, List<Direction> flowDirections) {
+public record Cell(CellPos pos, Sample sample, Feature feature, List<Direction> flowDirections, int y) {
     private static final double SQRT2 = Math.sqrt(2.0);
 
     private record SlopeEntry(Direction dir, double slope) {}
@@ -62,11 +62,20 @@ public record Cell(CellPos pos, Sample sample, Feature feature, List<Direction> 
         return false;
     }
 
+    public Cell withY(int newY) {
+        return new Cell(pos, sample, feature, flowDirections, newY);
+    }
+
+    public Cell withFeature(Feature newFeature) {
+        return new Cell(pos, sample, newFeature, flowDirections, y);
+    }
+
     public CompoundTag encode() {
         CompoundTag tag = new CompoundTag();
         tag.putLong("pos", pos.toLong());
         tag.put("sample", sample.encode());
         tag.putString("feature", feature.name());
+        tag.putInt("y", y);
 
         ListTag flowList = new ListTag();
         for (Direction dir : flowDirections) {
@@ -88,7 +97,8 @@ public record Cell(CellPos pos, Sample sample, Feature feature, List<Direction> 
             new CellPos(tag.getLong("pos")),
             Sample.decode(tag.getCompound("sample")),
             Feature.valueOf(tag.getString("feature")),
-            flows
+            flows,
+            tag.getInt("y")
         );
     }
 }

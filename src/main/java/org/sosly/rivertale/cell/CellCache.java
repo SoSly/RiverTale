@@ -69,15 +69,17 @@ public class CellCache implements Cache<Cell> {
         SampleCache sampleCache = SampleCache.get();
         Sample sample = sampleCache.getOrCompute(pos.getMiddleBlockX(), pos.getMiddleBlockZ());
 
+        int y = sample.estimatedHeight();
+
         RegionType regionType = RegionTypeCache.get().getOrCompute(pos.getRegion(), sampleCache);
         if (regionType == RegionType.OCEANIC || regionType == RegionType.INLAND) {
-            Cell value = new Cell(pos, sample, Feature.DEFAULT, List.of());
+            Cell value = new Cell(pos, sample, Feature.DEFAULT, List.of(), y);
             cache.put(key, value);
             return value;
         }
 
         List<Direction> flowDirections = Cell.computeFlowDirections(pos, sample, sampleCache);
-        Cell value = Feature.classify(new Cell(pos, sample, Feature.DEFAULT, flowDirections), null);
+        Cell value = Feature.classify(new Cell(pos, sample, Feature.DEFAULT, flowDirections, y), null);
         cache.put(key, value);
 
         return value;

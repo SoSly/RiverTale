@@ -30,21 +30,24 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
     private final Map<Long, Region> cache;
     private final int capacity;
 
-    public record Cell(CellPos pos, Feature feature, Direction flow) {
+    public record Cell(CellPos pos, Feature feature, Direction flow, int y) {
         public static Cell decode(CompoundTag tag) {
             return new Cell(
                 new CellPos(tag.getLong("pos")),
                 Feature.valueOf(tag.getString("feature")),
-                Direction.valueOf(tag.getString("flow"))
+                Direction.valueOf(tag.getString("flow")),
+                tag.getInt("y")
             );
         }
     }
 
-    public record Edge(CellPos from, CellPos to) {
+    public record Edge(CellPos from, CellPos to, int fromY, int toY) {
         public static Edge decode(CompoundTag tag) {
             return new Edge(
                 new CellPos(tag.getLong("from")),
-                new CellPos(tag.getLong("to"))
+                new CellPos(tag.getLong("to")),
+                tag.getInt("fromY"),
+                tag.getInt("toY")
             );
         }
     }

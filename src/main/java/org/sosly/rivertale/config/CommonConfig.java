@@ -6,15 +6,17 @@ public record CommonConfig(
     int regionSize,
     int cellSize,
     double oceanThreshold,
-    int mergeThreshold
+    int mergeThreshold,
+    int minSlope
 ) {
     private static final int DEFAULT_REGION_SIZE = 1024;
     private static final int DEFAULT_CELL_SIZE = 32;
     private static final double DEFAULT_OCEAN_THRESHOLD = -0.17;
     private static final int DEFAULT_MERGE_THRESHOLD = 10;
+    private static final int DEFAULT_MIN_SLOPE = 1;
 
     private static CommonConfig instance = new CommonConfig(
-        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD);
+        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE);
 
     public CommonConfig {
         if (regionSize % 16 != 0) {
@@ -46,6 +48,7 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue CELL_SIZE;
         public static final ForgeConfigSpec.DoubleValue OCEAN_THRESHOLD;
         public static final ForgeConfigSpec.IntValue MERGE_THRESHOLD;
+        public static final ForgeConfigSpec.IntValue MIN_SLOPE;
 
         static {
             ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -66,6 +69,10 @@ public record CommonConfig(
                 .comment("Distance in cells from ocean at which rivers prioritize alignment over slope.")
                 .defineInRange("mergeThreshold", DEFAULT_MERGE_THRESHOLD, 0, 32);
 
+            MIN_SLOPE = builder
+                .comment("Minimum drop in blocks between adjacent river cells. Rivers carve down when terrain rises.")
+                .defineInRange("minSlope", DEFAULT_MIN_SLOPE, 0, 10);
+
             SPEC = builder.build();
         }
 
@@ -74,7 +81,8 @@ public record CommonConfig(
                 REGION_SIZE.get(),
                 CELL_SIZE.get(),
                 OCEAN_THRESHOLD.get(),
-                MERGE_THRESHOLD.get()
+                MERGE_THRESHOLD.get(),
+                MIN_SLOPE.get()
             ));
         }
     }

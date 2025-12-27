@@ -37,7 +37,7 @@ class WatershedTest {
     Sample sample;
 
     private Cell dummyCell(CellPos pos) {
-        return new Cell(pos, sample, Feature.DEFAULT, List.of());
+        return new Cell(pos, sample, Feature.DEFAULT, List.of(), 63);
     }
 
     private Path mockPath(List<CellPos> cells) {

@@ -63,11 +63,11 @@ public enum Feature {
         for (Feature feature : VALUES) {
             if (feature.handler.classify(cell, watershed)) {
                 record.stop();
-                return new Cell(cell.pos(), cell.sample(), feature, cell.flowDirections());
+                return cell.withFeature(feature);
             }
         }
 
         record.stop();
-        return new Cell(cell.pos(), cell.sample(), DEFAULT, cell.flowDirections());
+        return cell.withFeature(DEFAULT);
     }
 }

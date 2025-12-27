@@ -145,16 +145,17 @@ public class RegionRenderer {
             int localZ = cell.pos().z() - region.pos().getMinCell().z();
 
             float[] color = cell.feature().type.color;
+            double y = cell.y();
 
             double minX = baseX + localX * cellSize;
             double minZ = baseZ + localZ * cellSize;
             double maxX = minX + cellSize;
             double maxZ = minZ + cellSize;
 
-            Vec3 nw = new Vec3(minX, Y, minZ);
-            Vec3 ne = new Vec3(maxX, Y, minZ);
-            Vec3 se = new Vec3(maxX, Y, maxZ);
-            Vec3 sw = new Vec3(minX, Y, maxZ);
+            Vec3 nw = new Vec3(minX, y, minZ);
+            Vec3 ne = new Vec3(maxX, y, minZ);
+            Vec3 se = new Vec3(maxX, y, maxZ);
+            Vec3 sw = new Vec3(minX, y, maxZ);
 
             drawLine(poseStack, buffer, nw, ne, camPos, color);
             drawLine(poseStack, buffer, ne, se, camPos, color);
@@ -180,7 +181,7 @@ public class RegionRenderer {
 
             double centerX = baseX + (localX + 0.5) * cellSize;
             double centerZ = baseZ + (localZ + 0.5) * cellSize;
-            Vec3 center = new Vec3(centerX, Y, centerZ);
+            Vec3 center = new Vec3(centerX, cell.y(), centerZ);
 
             float[] arrowColor = cell.feature().color;
 
@@ -201,8 +202,8 @@ public class RegionRenderer {
             double toX = edge.to().getMiddleBlockX();
             double toZ = edge.to().getMiddleBlockZ();
 
-            Vec3 start = new Vec3(fromX, Y, fromZ);
-            Vec3 end = new Vec3(toX, Y, toZ);
+            Vec3 start = new Vec3(fromX, edge.fromY(), fromZ);
+            Vec3 end = new Vec3(toX, edge.toY(), toZ);
 
             drawLine(poseStack, buffer, start, end, camPos, COLOR_PATH);
         }

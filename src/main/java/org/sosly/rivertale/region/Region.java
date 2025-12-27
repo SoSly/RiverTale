@@ -167,12 +167,13 @@ public class Region {
             cellTag.putString("flow", cell.flowDirections().isEmpty()
                 ? Direction.NONE.name()
                 : cell.flowDirections().get(0).name());
+            cellTag.putInt("y", cell.y());
             cellList.add(cellTag);
         }
         tag.put("cells", cellList);
 
         if (watershed != null) {
-            tag.put("watershed", watershed.encode());
+            tag.put("watershed", watershed.encode(cellCache));
         }
 
         return tag;

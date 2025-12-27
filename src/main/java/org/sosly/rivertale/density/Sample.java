@@ -17,6 +17,10 @@ public record Sample(
         return continents < CommonConfig.get().oceanThreshold();
     }
 
+    public int estimatedHeight() {
+        return (int) Math.round(70 + 144 * depth);
+    }
+
     public CompoundTag encode() {
         CompoundTag tag = new CompoundTag();
         tag.putLong("pos", pos.toLong());

@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
@@ -31,6 +32,7 @@ public class Watershed {
             addPath(path);
         }
 
+        assignYLevels();
         reclassify();
 
         record.stop();
@@ -121,6 +123,48 @@ public class Watershed {
         }
     }
 
+    private void assignYLevels() {
+        Timer.Record record = Store.getTimer(Watershed.class, "assignYLevels").start();
+
+        CellCache cache = CellCache.get();
+        int minSlope = CommonConfig.get().minSlope();
+        Set<CellPos> visited = new HashSet<>();
+
+        for (CellPos cellPos : allCells()) {
+            if (!upstream.containsKey(cellPos) || upstream.get(cellPos).isEmpty()) {
+                assignYLevelsFromSource(cellPos, cache, minSlope, visited);
+            }
+        }
+
+        record.stop();
+    }
+
+    private void assignYLevelsFromSource(CellPos source, CellCache cache, int minSlope, Set<CellPos> visited) {
+        CellPos current = source;
+
+        while (current != null && !visited.contains(current)) {
+            visited.add(current);
+
+            Cell cell = cache.getOrCompute(current);
+            int terrainY = cell.sample().estimatedHeight();
+
+            Set<CellPos> upstreamCells = upstream.get(current);
+            if (upstreamCells == null || upstreamCells.isEmpty()) {
+                cache.put(cell.withY(terrainY));
+            } else {
+                int maxAllowedY = Integer.MAX_VALUE;
+                for (CellPos upstreamPos : upstreamCells) {
+                    Cell upstreamCell = cache.getOrCompute(upstreamPos);
+                    maxAllowedY = Math.min(maxAllowedY, upstreamCell.y() - minSlope);
+                }
+                int constrainedY = Math.min(terrainY, maxAllowedY);
+                cache.put(cell.withY(constrainedY));
+            }
+
+            current = downstream.get(current);
+        }
+    }
+
     private void reclassify() {
         Timer.Record record = Store.getTimer(Watershed.class, "reclassify").start();
 
@@ -185,7 +229,7 @@ public class Watershed {
         return Optional.of(current);
     }
 
-    public ListTag encode() {
+    public ListTag encode(CellCache cellCache) {
         Timer.Record record = Store.getTimer(Watershed.class, "encode").start();
 
         ListTag edges = new ListTag();
@@ -193,9 +237,15 @@ public class Watershed {
             if (entry.getValue() == null) {
                 continue;
             }
+
+            Cell fromCell = cellCache.getOrCompute(entry.getKey());
+            Cell toCell = cellCache.getOrCompute(entry.getValue());
+
             CompoundTag edge = new CompoundTag();
             edge.putLong("from", entry.getKey().toLong());
             edge.putLong("to", entry.getValue().toLong());
+            edge.putInt("fromY", fromCell.y());
+            edge.putInt("toY", toCell.y());
             edges.add(edge);
         }
 
