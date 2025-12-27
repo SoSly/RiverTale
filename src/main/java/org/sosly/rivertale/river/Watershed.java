@@ -45,6 +45,24 @@ public class Watershed {
             CellPos current = cells.get(i);
             CellPos next = cells.get(i + 1);
 
+            CellPos crossingTarget = detectDiagonalCrossing(current, next);
+            if (crossingTarget != null) {
+                int currentAccumulation = i;
+                int existingAccumulation = accumulation(crossingTarget);
+                CellPos crossingDownstream = downstream.get(crossingTarget);
+
+                if (currentAccumulation <= existingAccumulation) {
+                    downstream.put(current, crossingDownstream);
+                    upstream.computeIfAbsent(crossingDownstream, k -> new HashSet<>()).add(current);
+                    record.stop();
+                    return;
+                } else {
+                    pruneDownstream(crossingTarget);
+                    downstream.put(crossingTarget, next);
+                    upstream.computeIfAbsent(next, k -> new HashSet<>()).add(crossingTarget);
+                }
+            }
+
             downstream.put(current, next);
             upstream.computeIfAbsent(next, k -> new HashSet<>()).add(current);
         }
@@ -55,6 +73,52 @@ public class Watershed {
         }
 
         record.stop();
+    }
+
+    private CellPos detectDiagonalCrossing(CellPos current, CellPos next) {
+        int dx = next.x() - current.x();
+        int dz = next.z() - current.z();
+
+        if (dx == 0 || dz == 0) {
+            return null;
+        }
+
+        CellPos neighborX = new CellPos(current.x() + dx, current.z());
+        CellPos neighborZ = new CellPos(current.x(), current.z() + dz);
+
+        if (downstream.containsKey(neighborX) && downstream.get(neighborX) != null) {
+            if (downstream.get(neighborX).equals(neighborZ)) {
+                return neighborX;
+            }
+        }
+
+        if (downstream.containsKey(neighborZ) && downstream.get(neighborZ) != null) {
+            if (downstream.get(neighborZ).equals(neighborX)) {
+                return neighborZ;
+            }
+        }
+
+        return null;
+    }
+
+    private void pruneDownstream(CellPos start) {
+        CellPos current = downstream.get(start);
+
+        while (current != null) {
+            Set<CellPos> upstreamSet = upstream.get(current);
+            if (upstreamSet != null && upstreamSet.size() > 1) {
+                upstreamSet.remove(start);
+                break;
+            }
+
+            CellPos next = downstream.get(current);
+            downstream.remove(current);
+            upstream.remove(current);
+            upstreamCountCache.remove(current);
+
+            start = current;
+            current = next;
+        }
     }
 
     private void reclassify() {
