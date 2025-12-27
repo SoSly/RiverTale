@@ -31,7 +31,7 @@ public enum Feature {
     MOUTH(CellType.TERMINUS, new Mouth(), new float[]{0.7f, 0.2f, 0.9f, 0.9f}),
 
     // Fallback
-    DEFAULT(CellType.NONE, new Default(), new float[]{1.0f, 1.0f, 1.0f, 1.0f});
+    DEFAULT(CellType.NONE, new Default(), new float[]{0.8f, 0.8f, 0.8f, 0.9f});
 
     public final CellType type;
     public final float[] color;
