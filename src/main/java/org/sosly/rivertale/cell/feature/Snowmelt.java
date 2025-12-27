@@ -6,7 +6,7 @@ import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Watershed;
 
 public class Snowmelt implements FeatureHandler {
-    private static final double THRESHOLD = 1.25;
+    private static final double THRESHOLD = 1.20;
 
     public void carve() {}
 

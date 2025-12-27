@@ -10,6 +10,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
+import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
@@ -60,6 +61,13 @@ public class Path {
 
             CellPos next = followFlow(current, nearest);
             if (next == null) {
+                valid = false;
+                record.stop();
+                return;
+            }
+
+            Cell nextCell = CellCache.get().getOrCompute(next);
+            if (nextCell.feature().equals(Feature.DIVIDE)) {
                 valid = false;
                 record.stop();
                 return;

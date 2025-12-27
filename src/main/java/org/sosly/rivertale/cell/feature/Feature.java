@@ -42,6 +42,7 @@ public enum Feature {
     RUN(CellType.COURSE, new Run(), new float[]{0.0f, 0.3f, 1.0f, 0.8f}),
 
     // Fallback
+    DIVIDE(CellType.NONE, new Divide(), new float[]{1.0f, 0.5f, 0.5f, 0.9f}),
     DEFAULT(CellType.NONE, new Default(), new float[]{0.8f, 0.8f, 0.8f, 0.9f});
 
     public final CellType type;
