@@ -1,5 +1,6 @@
 package org.sosly.rivertale.cell.feature;
 
+import net.minecraft.world.level.chunk.ChunkAccess;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
@@ -8,7 +9,9 @@ import org.sosly.rivertale.river.Watershed;
 public class Snowmelt implements FeatureHandler {
     private static final double THRESHOLD = 1.20;
 
-    public void carve() {}
+    public int[][] carve(Cell cell, Watershed watershed, ChunkAccess chunk) {
+        return null;
+    }
 
     public boolean classify(Cell cell, Watershed watershed) {
         if (cell.flowDirections().isEmpty()) {

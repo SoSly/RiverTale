@@ -5,10 +5,7 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
-import org.sosly.rivertale.core.Direction;
-import org.sosly.rivertale.core.RegionPos;
-import org.sosly.rivertale.density.SampleCache;
-import org.sosly.rivertale.region.RegionType;
+import org.sosly.rivertale.world.RiverBuilder;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -27,12 +24,7 @@ public abstract class ChunkGeneratorMixin {
             int cellCountY,
             CallbackInfoReturnable<ChunkAccess> cir) {
 
-        RegionPos center = new RegionPos(chunk.getPos().getMiddleBlockPosition(0));
-        SampleCache sampleCache = SampleCache.get();
-        RegionType.classify(center, sampleCache);
-
-        for (Direction dir : Direction.D8) {
-            RegionType.classify(center.relative(dir), sampleCache);
-        }
+        RiverBuilder.generateRiverMap(chunk);
+        RiverBuilder.carveFeature(chunk);
     }
 }

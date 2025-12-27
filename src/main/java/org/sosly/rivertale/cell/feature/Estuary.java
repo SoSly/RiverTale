@@ -1,12 +1,15 @@
 package org.sosly.rivertale.cell.feature;
 
 import java.util.Optional;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.river.Watershed;
 
 public class Estuary implements FeatureHandler {
-    public void carve() {}
+    public int[][] carve(Cell cell, Watershed watershed, ChunkAccess chunk) {
+        return null;
+    }
     public boolean classify(Cell cell, Watershed watershed) {
         if (watershed == null) {
             return false;

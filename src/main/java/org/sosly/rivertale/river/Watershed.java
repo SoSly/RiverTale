@@ -128,18 +128,26 @@ public class Watershed {
 
         CellCache cache = CellCache.get();
         int minSlope = CommonConfig.get().minSlope();
+        int seaLevel = CommonConfig.SEA_LEVEL;
         Set<CellPos> visited = new HashSet<>();
 
         for (CellPos cellPos : allCells()) {
             if (!upstream.containsKey(cellPos) || upstream.get(cellPos).isEmpty()) {
-                assignYLevelsFromSource(cellPos, cache, minSlope, visited);
+                assignYLevelsDownstream(cellPos, cache, minSlope, seaLevel, visited);
+            }
+        }
+
+        visited.clear();
+        for (CellPos cellPos : allCells()) {
+            if (downstream.get(cellPos) == null) {
+                assignYLevelsUpstream(cellPos, cache, minSlope, seaLevel, visited);
             }
         }
 
         record.stop();
     }
 
-    private void assignYLevelsFromSource(CellPos source, CellCache cache, int minSlope, Set<CellPos> visited) {
+    private void assignYLevelsDownstream(CellPos source, CellCache cache, int minSlope, int seaLevel, Set<CellPos> visited) {
         CellPos current = source;
 
         while (current != null && !visited.contains(current)) {
@@ -150,18 +158,44 @@ public class Watershed {
 
             Set<CellPos> upstreamCells = upstream.get(current);
             if (upstreamCells == null || upstreamCells.isEmpty()) {
-                cache.put(cell.withY(terrainY));
+                cache.put(cell.withY(Math.max(seaLevel, terrainY)));
             } else {
                 int maxAllowedY = Integer.MAX_VALUE;
                 for (CellPos upstreamPos : upstreamCells) {
                     Cell upstreamCell = cache.getOrCompute(upstreamPos);
                     maxAllowedY = Math.min(maxAllowedY, upstreamCell.y() - minSlope);
                 }
-                int constrainedY = Math.min(terrainY, maxAllowedY);
+                int constrainedY = Math.max(seaLevel, Math.min(terrainY, maxAllowedY));
                 cache.put(cell.withY(constrainedY));
             }
 
             current = downstream.get(current);
+        }
+    }
+
+    private void assignYLevelsUpstream(CellPos terminus, CellCache cache, int minSlope, int seaLevel, Set<CellPos> visited) {
+        CellPos current = terminus;
+
+        while (current != null && !visited.contains(current)) {
+            visited.add(current);
+
+            Cell cell = cache.getOrCompute(current);
+            CellPos downstreamPos = downstream.get(current);
+
+            if (downstreamPos != null) {
+                Cell downstreamCell = cache.getOrCompute(downstreamPos);
+                int minY = downstreamCell.y() + minSlope;
+                if (cell.y() < minY) {
+                    cache.put(cell.withY(minY));
+                }
+            }
+
+            Set<CellPos> upstreamCells = upstream.get(current);
+            if (upstreamCells != null) {
+                for (CellPos upstreamPos : upstreamCells) {
+                    assignYLevelsUpstream(upstreamPos, cache, minSlope, seaLevel, visited);
+                }
+            }
         }
     }
 
