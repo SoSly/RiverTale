@@ -12,7 +12,7 @@ public record CellPos(int x, int z) {
     }
 
     public CellPos(BlockPos pos) {
-        this(pos.getX() >> bits(), pos.getZ() >> bits());
+        this(Math.floorDiv(pos.getX(), size()), Math.floorDiv(pos.getZ(), size()));
     }
 
     public long toLong() {
@@ -20,7 +20,7 @@ public record CellPos(int x, int z) {
     }
 
     public static long asLong(BlockPos pos) {
-        return asLong(pos.getX() >> bits(), pos.getZ() >> bits());
+        return asLong(Math.floorDiv(pos.getX(), size()), Math.floorDiv(pos.getZ(), size()));
     }
 
     public static long asLong(int x, int z) {
@@ -81,15 +81,11 @@ public record CellPos(int x, int z) {
     }
 
     private static int cellToBlockCoord(int coord) {
-        return coord << bits();
+        return coord * size();
     }
 
     private static int cellToBlockCoord(int coord, int offset) {
         return cellToBlockCoord(coord) + offset;
-    }
-
-    private static int bits() {
-        return Integer.numberOfTrailingZeros(size());
     }
 
     private static int size() {

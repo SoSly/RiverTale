@@ -12,11 +12,11 @@ public record RegionPos(int x, int z) {
     }
 
     public RegionPos(BlockPos pos) {
-        this(pos.getX() >> bits(), pos.getZ() >> bits());
+        this(Math.floorDiv(pos.getX(), size()), Math.floorDiv(pos.getZ(), size()));
     }
 
     public RegionPos(CellPos pos) {
-        this(pos.x() >> cellsPerRegionBits(), pos.z() >> cellsPerRegionBits());
+        this(Math.floorDiv(pos.x(), cellsPerRegion()), Math.floorDiv(pos.z(), cellsPerRegion()));
     }
 
     public long toLong() {
@@ -24,7 +24,7 @@ public record RegionPos(int x, int z) {
     }
 
     public static long asLong(BlockPos pos) {
-        return asLong(pos.getX() >> bits(), pos.getZ() >> bits());
+        return asLong(Math.floorDiv(pos.getX(), size()), Math.floorDiv(pos.getZ(), size()));
     }
 
     public static long asLong(int x, int z) {
@@ -56,14 +56,13 @@ public record RegionPos(int x, int z) {
     }
 
     public CellPos getMinCell() {
-        int shift = cellsPerRegionBits();
-        return new CellPos(this.x << shift, this.z << shift);
+        int cells = cellsPerRegion();
+        return new CellPos(this.x * cells, this.z * cells);
     }
 
     public CellPos getMaxCell() {
-        int shift = cellsPerRegionBits();
         int cells = cellsPerRegion();
-        return new CellPos((this.x << shift) + cells - 1, (this.z << shift) + cells - 1);
+        return new CellPos(this.x * cells + cells - 1, this.z * cells + cells - 1);
     }
 
     public BlockPos getWorldPosition(int y) {
@@ -84,22 +83,14 @@ public record RegionPos(int x, int z) {
     }
 
     private static int regionToBlockCoord(int coord) {
-        return coord << bits();
+        return coord * size();
     }
 
     private static int size() {
         return CommonConfig.get().regionSize();
     }
 
-    private static int bits() {
-        return Integer.numberOfTrailingZeros(size());
-    }
-
     private static int cellsPerRegion() {
         return CommonConfig.get().cellsPerRegion();
-    }
-
-    private static int cellsPerRegionBits() {
-        return Integer.numberOfTrailingZeros(cellsPerRegion());
     }
 }

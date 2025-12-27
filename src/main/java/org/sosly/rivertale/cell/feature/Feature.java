@@ -12,14 +12,22 @@ public enum Feature {
     SNOWMELT(CellType.SOURCE, new Snowmelt(), new float[]{1.0f, 0.0f, 1.0f, 0.9f}),
     RESURGENCE(CellType.SOURCE, new Resurgence(), new float[]{0.0f, 1.0f, 0.0f, 0.9f}),
     SEEP(CellType.SOURCE, new Seep(), new float[]{1.0f, 1.0f, 0.0f, 0.9f}),
+    CRATER(CellType.SOURCE, new Crater(), new float[]{1.0f, 0.5f, 0.0f, 0.9f}),
     SPRING(CellType.SOURCE, new Spring(), new float[]{0.0f, 1.0f, 1.0f, 0.9f}),
 
     // Termini
     DELTA(CellType.TERMINUS, new Delta(), new float[]{0.5f, 0.0f, 0.7f, 0.9f}),
     ESTUARY(CellType.TERMINUS, new Estuary(), new float[]{0.6f, 0.1f, 0.8f, 0.9f}),
-    SINK(CellType.TERMINUS, new Sink(), new float[]{0.4f, 0.0f, 0.5f, 0.9f}),
     WETLAND(CellType.TERMINUS, new Wetland(), new float[]{0.3f, 0.5f, 0.4f, 0.9f}),
     MOUTH(CellType.TERMINUS, new Mouth(), new float[]{0.7f, 0.2f, 0.9f, 0.9f}),
+
+    // Lakes
+    ENDORHEIC(CellType.LAKE, new Endorheic(), new float[]{0.2f, 0.6f, 0.9f, 0.9f}),
+    KETTLE(CellType.LAKE, new Kettle(), new float[]{0.0f, 0.7f, 0.7f, 0.9f}),
+    SINKHOLE(CellType.LAKE, new Sinkhole(), new float[]{0.1f, 0.3f, 0.6f, 0.9f}),
+    LAGOON(CellType.LAKE, new Lagoon(), new float[]{0.3f, 0.8f, 0.9f, 0.9f}),
+    TECTONIC(CellType.LAKE, new Tectonic(), new float[]{0.4f, 0.5f, 0.8f, 0.9f}),
+
 
     // Junctions
     CONFLUENCE(CellType.JUNCTION, new Confluence(), new float[]{0.0f, 0.8f, 0.2f, 0.9f}),
@@ -29,6 +37,7 @@ public enum Feature {
     // Courses
     PLUNGE_POOL(CellType.COURSE, new PlungePool(), new float[]{0.2f, 0.4f, 0.9f, 0.9f}),
     RAPIDS(CellType.COURSE, new Rapids(), new float[]{0.3f, 0.5f, 1.0f, 0.9f}),
+    CASCADE(CellType.COURSE, new Cascade(), new float[]{0.0f, 0.5f, 0.7f, 0.9f}),
     WATERFALL(CellType.COURSE, new Waterfall(), new float[]{0.1f, 0.3f, 0.8f, 0.9f}),
     RUN(CellType.COURSE, new Run(), new float[]{0.0f, 0.3f, 1.0f, 0.8f}),
 
