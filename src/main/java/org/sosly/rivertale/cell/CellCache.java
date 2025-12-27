@@ -77,10 +77,14 @@ public class CellCache implements Cache<Cell> {
         }
 
         List<Direction> flowDirections = Cell.computeFlowDirections(pos, sample, sampleCache);
-        Cell value = Feature.classify(new Cell(pos, sample, Feature.DEFAULT, flowDirections));
+        Cell value = Feature.classify(new Cell(pos, sample, Feature.DEFAULT, flowDirections), null);
         cache.put(key, value);
 
         return value;
+    }
+
+    public void put(Cell cell) {
+        cache.put(cell.pos().toLong(), cell);
     }
 
     @Override

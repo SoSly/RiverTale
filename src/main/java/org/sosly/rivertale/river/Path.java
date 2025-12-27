@@ -20,15 +20,15 @@ import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.terrain.OceanBoundary;
 
 public class Path {
-    private final List<Cell> cells = new ArrayList<>();
+    private final List<CellPos> cells = new ArrayList<>();
     private final Set<RegionPos> allowedRegions = new HashSet<>();
     private final Set<CellPos> oceanCells = new HashSet<>();
     private final Set<CellPos> visited = new HashSet<>();
     private boolean valid = true;
 
-    public Path(Cell source, Set<Region> regions) {
+    public Path(CellPos source, Set<Region> regions) {
         this.cells.add(source);
-        this.visited.add(source.pos());
+        this.visited.add(source);
 
         for (Region region : regions) {
             this.allowedRegions.add(region.pos());
@@ -44,14 +44,14 @@ public class Path {
         Timer.Record record = Store.getTimer(Path.class, "trace").start();
 
         while (valid) {
-            Cell current = cells.get(cells.size() - 1);
+            CellPos current = cells.get(cells.size() - 1);
 
             if (isTerminus(current)) {
                 record.stop();
                 return;
             }
 
-            CellPos nearest = findNearestOceanCell(current.pos());
+            CellPos nearest = findNearestOceanCell(current);
             if (nearest == null) {
                 valid = false;
                 record.stop();
@@ -72,8 +72,7 @@ public class Path {
             }
             visited.add(next);
 
-            Cell nextCell = CellCache.get().getOrCompute(next);
-            cells.add(nextCell);
+            cells.add(next);
         }
 
         record.stop();
@@ -102,21 +101,22 @@ public class Path {
         return nearest;
     }
 
-    private CellPos followFlow(Cell current, CellPos nearestOcean) {
+    private CellPos followFlow(CellPos current, CellPos nearestOcean) {
         Timer.Record record = Store.getTimer(Path.class, "followFlow").start();
 
-        double currentDistance = distance(current.pos(), nearestOcean);
+        Cell cell = CellCache.get().getOrCompute(current);
+        double currentDistance = distance(current, nearestOcean);
         int mergeThreshold = CommonConfig.get().mergeThreshold();
 
         if (currentDistance <= mergeThreshold) {
-            CellPos aligned = followAlignedFlow(current, nearestOcean, currentDistance);
+            CellPos aligned = followAlignedFlow(current, cell.flowDirections(), nearestOcean, currentDistance);
             if (aligned != null) {
                 record.stop();
                 return aligned;
             }
         } else {
-            for (Direction dir : current.flowDirections()) {
-                CellPos next = current.pos().relative(dir);
+            for (Direction dir : cell.flowDirections()) {
+                CellPos next = current.relative(dir);
 
                 if (!allowedRegions.contains(next.getRegion())) {
                     continue;
@@ -129,20 +129,21 @@ public class Path {
             }
         }
 
-        CellPos forced = forceTowardOcean(current.pos(), nearestOcean, currentDistance);
+        CellPos forced = forceTowardOcean(current, nearestOcean, currentDistance);
         record.stop();
         return forced;
     }
 
-    private CellPos followAlignedFlow(Cell current, CellPos nearestOcean, double currentDistance) {
-        int dx = nearestOcean.x() - current.pos().x();
-        int dz = nearestOcean.z() - current.pos().z();
+    private CellPos followAlignedFlow(CellPos current, List<Direction> flowDirections,
+                                       CellPos nearestOcean, double currentDistance) {
+        int dx = nearestOcean.x() - current.x();
+        int dz = nearestOcean.z() - current.z();
 
         CellPos best = null;
         double bestAlignment = -Double.MAX_VALUE;
 
-        for (Direction dir : current.flowDirections()) {
-            CellPos next = current.pos().relative(dir);
+        for (Direction dir : flowDirections) {
+            CellPos next = current.relative(dir);
 
             if (!allowedRegions.contains(next.getRegion())) {
                 continue;
@@ -183,8 +184,8 @@ public class Path {
         return best;
     }
 
-    private boolean isTerminus(Cell cell) {
-        return oceanCells.contains(cell.pos());
+    private boolean isTerminus(CellPos pos) {
+        return oceanCells.contains(pos);
     }
 
     private static double distance(CellPos a, CellPos b) {
@@ -193,7 +194,7 @@ public class Path {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
-    public List<Cell> cells() {
+    public List<CellPos> cells() {
         return cells;
     }
 
@@ -204,9 +205,9 @@ public class Path {
     public CompoundTag encode() {
         CompoundTag tag = new CompoundTag();
         ListTag cellList = new ListTag();
-        for (Cell cell : cells) {
+        for (CellPos pos : cells) {
             CompoundTag cellTag = new CompoundTag();
-            cellTag.putLong("pos", cell.pos().toLong());
+            cellTag.putLong("pos", pos.toLong());
             cellList.add(cellTag);
         }
         tag.put("cells", cellList);

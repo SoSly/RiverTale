@@ -31,7 +31,7 @@ class FeatureTest {
         Sample sample = new Sample(new ChunkPos(0, 0), 0.7, 0.7, 0, 0, 0, 0);
         Cell original = new Cell(pos, sample, Feature.DEFAULT, List.of(Direction.SOUTH));
 
-        Cell cell = Feature.classify(original);
+        Cell cell = Feature.classify(original, null);
 
         assertEquals(Feature.SNOWMELT, cell.feature());
         assertEquals(pos, cell.pos());
@@ -44,7 +44,7 @@ class FeatureTest {
         Sample sample = new Sample(new ChunkPos(0, 0), 0.1, 0.1, 0, 0, 0, 0);
         Cell original = new Cell(pos, sample, Feature.DEFAULT, List.of(Direction.SOUTH));
 
-        Cell cell = Feature.classify(original);
+        Cell cell = Feature.classify(original, null);
 
         assertEquals(Feature.DEFAULT, cell.feature());
     }
@@ -55,7 +55,7 @@ class FeatureTest {
         Sample sample = new Sample(new ChunkPos(0, 0), 0.8, 0.8, 0, 0, 0, 0);
         Cell original = new Cell(pos, sample, Feature.DEFAULT, List.of(Direction.SOUTH));
 
-        Cell classified = Feature.classify(original);
+        Cell classified = Feature.classify(original, null);
 
         assertEquals(Feature.SNOWMELT, classified.feature());
         assertEquals(pos, classified.pos());

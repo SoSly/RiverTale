@@ -2,6 +2,7 @@ package org.sosly.rivertale.cell.feature;
 
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.river.Watershed;
 
 public class Resurgence implements FeatureHandler {
     private static final double EROSION_THRESHOLD = 0.5;
@@ -9,7 +10,7 @@ public class Resurgence implements FeatureHandler {
 
     public void carve() {}
 
-    public boolean classify(Cell cell) {
+    public boolean classify(Cell cell, Watershed watershed) {
         if (cell.flowDirections().isEmpty()) {
             return false;
         }

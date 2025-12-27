@@ -3,6 +3,7 @@ package org.sosly.rivertale.cell.feature;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
+import org.sosly.rivertale.river.Watershed;
 
 public class Seep implements FeatureHandler {
     private static final double VEGETATION_THRESHOLD = 0.4;
@@ -10,7 +11,7 @@ public class Seep implements FeatureHandler {
 
     public void carve() {}
 
-    public boolean classify(Cell cell) {
+    public boolean classify(Cell cell, Watershed watershed) {
         if (cell.flowDirections().isEmpty()) {
             return false;
         }

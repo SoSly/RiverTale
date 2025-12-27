@@ -7,26 +7,31 @@ import java.util.Map;
 import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import java.util.Optional;
 import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.CellCache;
+import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 
 public class Watershed {
-    private final RegionPos terminus;
+    private final RegionPos pos;
     private final Map<CellPos, CellPos> downstream = new HashMap<>();
     private final Map<CellPos, Set<CellPos>> upstream = new HashMap<>();
     private final Map<CellPos, Integer> upstreamCountCache = new HashMap<>();
 
-    public Watershed(RegionPos terminus, List<Path> paths) {
+    public Watershed(RegionPos pos, List<Path> paths) {
         Timer.Record record = Store.getTimer(Watershed.class, "constructor").start();
 
-        this.terminus = terminus;
+        this.pos = pos;
 
         for (Path path : paths) {
             addPath(path);
         }
+
+        reclassify();
 
         record.stop();
     }
@@ -34,29 +39,46 @@ public class Watershed {
     private void addPath(Path path) {
         Timer.Record record = Store.getTimer(Watershed.class, "addPath").start();
 
-        List<Cell> cells = path.cells();
+        List<CellPos> cells = path.cells();
 
         for (int i = 0; i < cells.size() - 1; i++) {
-            CellPos current = cells.get(i).pos();
-            CellPos next = cells.get(i + 1).pos();
+            CellPos current = cells.get(i);
+            CellPos next = cells.get(i + 1);
 
             downstream.put(current, next);
             upstream.computeIfAbsent(next, k -> new HashSet<>()).add(current);
         }
 
         if (!cells.isEmpty()) {
-            CellPos last = cells.get(cells.size() - 1).pos();
+            CellPos last = cells.get(cells.size() - 1);
             downstream.put(last, null);
         }
 
         record.stop();
     }
 
-    public Set<CellPos> tributaries(CellPos cell) {
+    private void reclassify() {
+        Timer.Record record = Store.getTimer(Watershed.class, "reclassify").start();
+
+        CellCache cache = CellCache.get();
+        for (CellPos pos : allCells()) {
+            Cell current = cache.getOrCompute(pos);
+            Cell reclassified = Feature.classify(current, this);
+            cache.put(reclassified);
+        }
+
+        record.stop();
+    }
+
+    public Set<CellPos> upstream(CellPos cell) {
         return upstream.getOrDefault(cell, Set.of());
     }
 
-    public int upstream(CellPos cell) {
+    public CellPos downstream(CellPos cell) {
+        return downstream.get(cell);
+    }
+
+    public int accumulation(CellPos cell) {
         if (!downstream.containsKey(cell)) {
             return 0;
         }
@@ -67,8 +89,8 @@ public class Watershed {
         }
 
         int count = 0;
-        for (CellPos tributary : tributaries(cell)) {
-            count += 1 + upstream(tributary);
+        for (CellPos tributary : upstream(cell)) {
+            count += 1 + accumulation(tributary);
         }
 
         upstreamCountCache.put(cell, count);
@@ -83,8 +105,20 @@ public class Watershed {
         return downstream.containsKey(cell);
     }
 
-    public RegionPos terminus() {
-        return terminus;
+    public RegionPos pos() {
+        return pos;
+    }
+
+    public Optional<CellPos> terminus(CellPos cell) {
+        if (!downstream.containsKey(cell)) {
+            return Optional.empty();
+        }
+
+        CellPos current = cell;
+        while (downstream.get(current) != null) {
+            current = downstream.get(current);
+        }
+        return Optional.of(current);
     }
 
     public ListTag encode() {

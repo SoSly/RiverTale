@@ -65,12 +65,13 @@ public class Region {
         }
 
         List<Path> paths = new ArrayList<>();
-        for (Cell cell : cells()) {
+        for (CellPos cellPos : cells()) {
+            Cell cell = cellCache.getOrCompute(cellPos);
             if (cell.feature().type != CellType.SOURCE) {
                 continue;
             }
 
-            Path path = new Path(cell, traceRegions);
+            Path path = new Path(cellPos, traceRegions);
             path.trace();
             if (path.isValid()) {
                 paths.add(path);
@@ -125,20 +126,16 @@ public class Region {
         return watershed;
     }
 
-    List<Cell> cells() {
-        List<Cell> result = new ArrayList<>();
+    List<CellPos> cells() {
+        List<CellPos> result = new ArrayList<>();
         CellPos min = pos.getMinCell();
-        int cells = CommonConfig.get().cellsPerRegion();
-        for (int x = 0; x < cells; x++) {
-            for (int z = 0; z < cells; z++) {
-                result.add(CellCache.get().getOrCompute(new CellPos(min.x() + x, min.z() + z)));
+        int count = CommonConfig.get().cellsPerRegion();
+        for (int x = 0; x < count; x++) {
+            for (int z = 0; z < count; z++) {
+                result.add(new CellPos(min.x() + x, min.z() + z));
             }
         }
         return result;
-    }
-
-    Cell getCell(CellPos cellPos) {
-        return CellCache.get().getOrCompute(cellPos);
     }
 
     public RegionPos pos() {
@@ -160,10 +157,12 @@ public class Region {
         }
         tag.put("boundaries", boundaryList);
 
+        CellCache cellCache = CellCache.get();
         ListTag cellList = new ListTag();
-        for (Cell cell : cells()) {
+        for (CellPos cellPos : cells()) {
+            Cell cell = cellCache.getOrCompute(cellPos);
             CompoundTag cellTag = new CompoundTag();
-            cellTag.putLong("pos", cell.pos().toLong());
+            cellTag.putLong("pos", cellPos.toLong());
             cellTag.putString("feature", cell.feature().name());
             cellTag.putString("flow", cell.flowDirections().isEmpty()
                 ? Direction.NONE.name()
