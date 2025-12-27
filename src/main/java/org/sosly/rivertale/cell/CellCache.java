@@ -12,6 +12,7 @@ import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.region.RegionType;
+import org.sosly.rivertale.region.RegionTypeCache;
 
 public class CellCache implements Cache<Cell> {
     private static final int DEFAULT_CAPACITY = 50_000;
@@ -68,7 +69,7 @@ public class CellCache implements Cache<Cell> {
         SampleCache sampleCache = SampleCache.get();
         Sample sample = sampleCache.getOrCompute(pos.getMiddleBlockX(), pos.getMiddleBlockZ());
 
-        RegionType regionType = RegionType.classify(pos.getRegion(), sampleCache);
+        RegionType regionType = RegionTypeCache.get().getOrCompute(pos.getRegion(), sampleCache);
         if (regionType == RegionType.OCEANIC || regionType == RegionType.INLAND) {
             Cell value = new Cell(pos, sample, Feature.DEFAULT, List.of());
             cache.put(key, value);

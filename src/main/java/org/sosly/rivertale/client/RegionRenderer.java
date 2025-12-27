@@ -14,7 +14,6 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import java.util.List;
 import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
@@ -197,21 +196,16 @@ public class RegionRenderer {
 
     private static void renderPaths(ClientRegionCache.Region region, PoseStack poseStack,
                                      BufferBuilder buffer, Vec3 camPos) {
-        for (List<CellPos> path : region.paths()) {
-            for (int i = 0; i < path.size() - 1; i++) {
-                CellPos current = path.get(i);
-                CellPos next = path.get(i + 1);
+        for (ClientRegionCache.Edge edge : region.edges()) {
+            double fromX = edge.from().getMiddleBlockX();
+            double fromZ = edge.from().getMiddleBlockZ();
+            double toX = edge.to().getMiddleBlockX();
+            double toZ = edge.to().getMiddleBlockZ();
 
-                double currentX = current.getMiddleBlockX();
-                double currentZ = current.getMiddleBlockZ();
-                double nextX = next.getMiddleBlockX();
-                double nextZ = next.getMiddleBlockZ();
+            Vec3 start = new Vec3(fromX, Y, fromZ);
+            Vec3 end = new Vec3(toX, Y, toZ);
 
-                Vec3 start = new Vec3(currentX, Y, currentZ);
-                Vec3 end = new Vec3(nextX, Y, nextZ);
-
-                drawLine(poseStack, buffer, start, end, camPos, COLOR_PATH);
-            }
+            drawLine(poseStack, buffer, start, end, camPos, COLOR_PATH);
         }
     }
 

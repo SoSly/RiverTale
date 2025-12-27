@@ -16,6 +16,7 @@ import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.density.NoiseBasedSampleProvider;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.region.RegionCache;
+import org.sosly.rivertale.region.RegionTypeCache;
 
 public class ServerLifecycleHandler {
     private static final int SAMPLE_Y = 63;
@@ -49,6 +50,7 @@ public class ServerLifecycleHandler {
 
         SampleCache.init(NoiseBasedSampleProvider.create(randomState, SAMPLE_Y));
         CellCache.init();
+        RegionTypeCache.init();
         RegionCache.init();
         RiverTale.LOGGER.info("Caches initialized on level load");
     }
@@ -56,6 +58,7 @@ public class ServerLifecycleHandler {
     @SubscribeEvent
     public void onServerStopped(ServerStoppedEvent event) {
         RegionCache.shutdown();
+        RegionTypeCache.shutdown();
         CellCache.shutdown();
         SampleCache.shutdown();
         RiverTale.LOGGER.info("Caches cleared");

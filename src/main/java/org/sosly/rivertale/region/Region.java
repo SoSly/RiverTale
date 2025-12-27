@@ -23,15 +23,16 @@ import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Path;
+import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.terrain.OceanBoundary;
 import org.sosly.rivertale.terrain.Oceans;
 
 public class Region {
 
     private final Set<OceanBoundary> boundaries = new HashSet<>();
-    private final List<Path> paths = new ArrayList<>();
     private final RegionPos pos;
     private final RegionType type;
+    private Watershed watershed;
 
     Region(RegionPos pos, RegionType type) {
         this.pos = pos;
@@ -39,7 +40,7 @@ public class Region {
     }
 
     static Region createSkeleton(RegionPos pos, CellCache cellCache, SampleCache sampleCache) {
-        RegionType type = RegionType.classify(pos, sampleCache);
+        RegionType type = RegionTypeCache.get().getOrCompute(pos, sampleCache);
         Region region = new Region(pos, type);
 
         if (type == RegionType.COASTAL && sampleCache != null) {
@@ -63,6 +64,7 @@ public class Region {
             return;
         }
 
+        List<Path> paths = new ArrayList<>();
         for (Cell cell : cells()) {
             if (cell.feature().type != CellType.SOURCE) {
                 continue;
@@ -73,6 +75,10 @@ public class Region {
             if (path.isValid()) {
                 paths.add(path);
             }
+        }
+
+        if (!paths.isEmpty()) {
+            watershed = new Watershed(pos, paths);
         }
     }
 
@@ -99,7 +105,7 @@ public class Region {
         if (regionType == RegionType.FLUVIAL) {
             for (Direction dir : Direction.D8) {
                 RegionPos neighborPos = regionPos.relative(dir);
-                RegionType neighborType = RegionType.classify(neighborPos, sampleCache);
+                RegionType neighborType = RegionTypeCache.get().getOrCompute(neighborPos, sampleCache);
                 if (neighborType == RegionType.COASTAL) {
                     addRegionChain(neighborPos, neighborType, regions, visited, cellCache, sampleCache);
                 }
@@ -115,8 +121,8 @@ public class Region {
         return Collections.unmodifiableSet(boundaries);
     }
 
-    public List<Path> paths() {
-        return Collections.unmodifiableList(paths);
+    public Watershed watershed() {
+        return watershed;
     }
 
     List<Cell> cells() {
@@ -166,11 +172,9 @@ public class Region {
         }
         tag.put("cells", cellList);
 
-        ListTag pathList = new ListTag();
-        for (Path path : paths) {
-            pathList.add(path.encode());
+        if (watershed != null) {
+            tag.put("watershed", watershed.encode());
         }
-        tag.put("paths", pathList);
 
         return tag;
     }

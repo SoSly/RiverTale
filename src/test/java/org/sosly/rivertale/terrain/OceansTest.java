@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
@@ -32,6 +33,7 @@ class OceansTest {
     @BeforeEach
     void setUp() {
         Store.clear();
+        CommonConfig.set(new CommonConfig(1024, 32, -0.17, 10));
     }
 
     @Test
@@ -155,10 +157,14 @@ class OceansTest {
 
     @Test
     void boundariesFindsBoundaryAtOceanLandTransition() {
-        Cache<Sample> sampleCache = mockSampleCache((x, z) -> x >= 1024);
+        int cellSize = CommonConfig.get().cellSize();
+        int boundaryCellX = 16;
+        int boundaryBlockX = boundaryCellX * cellSize;
+
+        Cache<Sample> sampleCache = mockSampleCache((x, z) -> x >= boundaryBlockX);
         RegionPos region = new RegionPos(0, 0);
 
-        mockCellCache((cellX, cellZ) -> cellX >= 16);
+        mockCellCache((cellX, cellZ) -> cellX >= boundaryCellX);
 
         Set<OceanBoundary> boundaries = Oceans.boundaries(region, cellCache, sampleCache);
 

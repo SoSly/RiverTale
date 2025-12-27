@@ -18,7 +18,6 @@ import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.region.RegionType;
-import org.sosly.rivertale.river.Path;
 import org.sosly.rivertale.terrain.OceanBoundary;
 
 @OnlyIn(Dist.CLIENT)
@@ -41,8 +40,17 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
         }
     }
 
+    public record Edge(CellPos from, CellPos to) {
+        public static Edge decode(CompoundTag tag) {
+            return new Edge(
+                new CellPos(tag.getLong("from")),
+                new CellPos(tag.getLong("to"))
+            );
+        }
+    }
+
     public record Region(RegionPos pos, RegionType type, Set<OceanBoundary> boundaries, List<Cell> cells,
-                         List<List<CellPos>> paths) {
+                         List<Edge> edges) {
         public static Region decode(CompoundTag tag) {
             RegionPos pos = new RegionPos(tag.getLong("pos"));
             RegionType type = RegionType.valueOf(tag.getString("type"));
@@ -59,13 +67,13 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
                 cells.add(Cell.decode(cellList.getCompound(i)));
             }
 
-            List<List<CellPos>> paths = new ArrayList<>();
-            ListTag pathList = tag.getList("paths", Tag.TAG_COMPOUND);
-            for (int i = 0; i < pathList.size(); i++) {
-                paths.add(Path.decode(pathList.getCompound(i)));
+            List<Edge> edges = new ArrayList<>();
+            ListTag edgeList = tag.getList("watershed", Tag.TAG_COMPOUND);
+            for (int i = 0; i < edgeList.size(); i++) {
+                edges.add(Edge.decode(edgeList.getCompound(i)));
             }
 
-            return new Region(pos, type, boundaries, cells, paths);
+            return new Region(pos, type, boundaries, cells, edges);
         }
     }
 
