@@ -1,8 +1,8 @@
 ---
-type: poc
+cellType: poc
 validates: "[[River Terrain System]]"
 assumption: "Water source blocks can fill carved river channels and remain stable"
-status: complete
+status: success
 ---
 
 ## Goal

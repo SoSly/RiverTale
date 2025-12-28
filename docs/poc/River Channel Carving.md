@@ -1,5 +1,5 @@
 ---
-type: poc
+cellType: poc
 validates: "[[River Terrain System]]"
 assumption: "The Default River feature can carve visually correct river channels given CBN-style inputs"
 status: success
@@ -184,7 +184,7 @@ Issues discovered and fixed during development:
 
 1. **Chunk loading required**: Heightmap queries on unloaded chunks return -64. Pre-load all chunks within search radius before carving.
 
-2. **Heightmap type choice**: Use `MOTION_BLOCKING_NO_LEAVES` for post-generation terrain queries (this PoC). This ignores tree canopy and returns actual ground level. During actual worldgen, use `WORLD_SURFACE_WG` instead—it's designed for that context and trees won't exist yet.
+2. **Heightmap cellType choice**: Use `MOTION_BLOCKING_NO_LEAVES` for post-generation terrain queries (this PoC). This ignores tree canopy and returns actual ground level. During actual worldgen, use `WORLD_SURFACE_WG` instead—it's designed for that context and trees won't exist yet.
 
 3. **Embankment clearing bug**: `getBlocksToClear()` was carving depressions into natural terrain where the embankment slope formula dipped below ground level. Fixed by only clearing above embankments we're actually building.
 
@@ -198,7 +198,7 @@ Key constants in `CarveConfig.java`:
 
 | Constant | Default | Effect |
 |----------|---------|--------|
-| `TERRAIN_HEIGHTMAP` | MOTION_BLOCKING_NO_LEAVES | Heightmap type for terrain queries |
+| `TERRAIN_HEIGHTMAP` | MOTION_BLOCKING_NO_LEAVES | Heightmap cellType for terrain queries |
 | `SEA_LEVEL` | 63 | Base elevation at ocean |
 | `ELEVATION_PER_CELL` | 4 | Y increase per cell of distance |
 | `MIN_WIDTH` / `MAX_WIDTH` | 2 / 40 | River width bounds |

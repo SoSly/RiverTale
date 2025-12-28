@@ -9,8 +9,8 @@ public record CommonConfig(
     int mergeThreshold,
     int minSlope
 ) {
-    private static final int DEFAULT_REGION_SIZE = 1024;
-    private static final int DEFAULT_CELL_SIZE = 32;
+    private static final int DEFAULT_REGION_SIZE = 1536;
+    private static final int DEFAULT_CELL_SIZE = 48;
     private static final double DEFAULT_OCEAN_THRESHOLD = -0.17;
     private static final int DEFAULT_MERGE_THRESHOLD = 10;
     private static final int DEFAULT_MIN_SLOPE = 1;
