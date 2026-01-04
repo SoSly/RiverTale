@@ -207,6 +207,13 @@ public class Path {
         return valid;
     }
 
+    public CellPos terminus() {
+        if (cells.isEmpty()) {
+            return null;
+        }
+        return cells.get(cells.size() - 1);
+    }
+
     public CompoundTag encode() {
         CompoundTag tag = new CompoundTag();
         ListTag cellList = new ListTag();

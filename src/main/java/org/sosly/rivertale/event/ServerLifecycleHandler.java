@@ -18,6 +18,7 @@ import org.sosly.rivertale.density.NoiseBasedSampleProvider;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionTypeCache;
+import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.world.RiverBuilder;
 import org.sosly.rivertale.world.WorldSettings;
 
@@ -56,6 +57,7 @@ public class ServerLifecycleHandler {
         CellCache.init();
         RegionTypeCache.init();
         RegionCache.init();
+        WatershedCache.init();
         RiverBuilder.init(serverLevel.registryAccess().registryOrThrow(Registries.BIOME).getHolderOrThrow(Biomes.RIVER));
         RiverTale.LOGGER.info("Caches initialized on level load");
     }
@@ -63,6 +65,7 @@ public class ServerLifecycleHandler {
     @SubscribeEvent
     public void onServerStopped(ServerStoppedEvent event) {
         RiverBuilder.shutdown();
+        WatershedCache.shutdown();
         RegionCache.shutdown();
         RegionTypeCache.shutdown();
         CellCache.shutdown();

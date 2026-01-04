@@ -23,7 +23,7 @@ import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Path;
-import org.sosly.rivertale.river.Watershed;
+import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.terrain.OceanBoundary;
 import org.sosly.rivertale.terrain.Oceans;
 
@@ -32,7 +32,6 @@ public class Region {
     private final Set<OceanBoundary> boundaries = new HashSet<>();
     private final RegionPos pos;
     private final RegionType type;
-    private Watershed watershed;
 
     Region(RegionPos pos, RegionType type) {
         this.pos = pos;
@@ -64,7 +63,7 @@ public class Region {
             return;
         }
 
-        List<Path> paths = new ArrayList<>();
+        WatershedCache watershedCache = WatershedCache.get();
         for (CellPos cellPos : cells()) {
             Cell cell = cellCache.getOrCompute(cellPos);
             if (cell.feature().type != CellType.SOURCE) {
@@ -74,12 +73,8 @@ public class Region {
             Path path = new Path(cellPos, traceRegions);
             path.trace();
             if (path.isValid()) {
-                paths.add(path);
+                watershedCache.addPath(path);
             }
-        }
-
-        if (!paths.isEmpty()) {
-            watershed = new Watershed(pos, paths);
         }
     }
 
@@ -120,10 +115,6 @@ public class Region {
 
     public Set<OceanBoundary> boundaries() {
         return Collections.unmodifiableSet(boundaries);
-    }
-
-    public Watershed watershed() {
-        return watershed;
     }
 
     List<CellPos> cells() {
@@ -171,10 +162,6 @@ public class Region {
             cellList.add(cellTag);
         }
         tag.put("cells", cellList);
-
-        if (watershed != null) {
-            tag.put("watershed", watershed.encode(cellCache));
-        }
 
         return tag;
     }

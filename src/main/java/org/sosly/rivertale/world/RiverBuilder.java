@@ -28,9 +28,9 @@ import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
-import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.river.Watershed;
+import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.terrain.Shape;
 
 public class RiverBuilder {
@@ -61,11 +61,18 @@ public class RiverBuilder {
         SampleCache sampleCache = SampleCache.get();
         RegionCache regionCache = RegionCache.get();
 
+        Set<RegionPos> loadedRegions = new HashSet<>();
+
         regionCache.getOrCompute(center, cellCache, sampleCache);
+        loadedRegions.add(center);
 
         for (Direction dir : Direction.D8) {
-            regionCache.getOrCompute(center.relative(dir), cellCache, sampleCache);
+            RegionPos neighbor = center.relative(dir);
+            regionCache.getOrCompute(neighbor, cellCache, sampleCache);
+            loadedRegions.add(neighbor);
         }
+
+        WatershedCache.get().finalizeReady(loadedRegions);
     }
 
     private record ColumnResult(int y, boolean isRiverbed, Integer waterY) {}
@@ -122,13 +129,10 @@ public class RiverBuilder {
 
     private static Map<Cell, Shape[][]> collectOpinions(Set<Cell> contributors, ChunkPos chunkPos) {
         Map<Cell, Shape[][]> opinions = new HashMap<>();
-        RegionCache regionCache = RegionCache.get();
-        CellCache cellCache = CellCache.get();
-        SampleCache sampleCache = SampleCache.get();
+        WatershedCache watershedCache = WatershedCache.get();
 
         for (Cell cell : contributors) {
-            Region region = regionCache.getOrCompute(cell.pos().getRegion(), cellCache, sampleCache);
-            Watershed watershed = region.watershed();
+            Watershed watershed = watershedCache.getWatershed(cell.pos());
             if (watershed == null) {
                 continue;
             }

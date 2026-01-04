@@ -2,6 +2,7 @@ package org.sosly.rivertale.river;
 
 import java.util.List;
 import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,10 +51,17 @@ class WatershedTest {
     @BeforeEach
     void setUp() {
         WorldSettings.init(63);
+        WatershedCache.init();
         when(cellCache.getOrCompute(any(CellPos.class))).thenAnswer(inv -> {
             CellPos pos = inv.getArgument(0);
             return dummyCell(pos);
         });
+    }
+
+    @AfterEach
+    void tearDown() {
+        WatershedCache.shutdown();
+        WorldSettings.shutdown();
     }
 
     @Test
