@@ -28,7 +28,7 @@ class OceansTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(1024, 32, -0.17, 10, 1));
+        CommonConfig.set(new CommonConfig(1024, 32, -0.17, 10, 1, 3));
     }
 
     @Test

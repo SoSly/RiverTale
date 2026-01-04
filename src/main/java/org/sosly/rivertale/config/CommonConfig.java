@@ -7,16 +7,18 @@ public record CommonConfig(
     int cellSize,
     double oceanThreshold,
     int mergeThreshold,
-    int minSlope
+    int minSlope,
+    int minPathLength
 ) {
     private static final int DEFAULT_REGION_SIZE = 1536;
     private static final int DEFAULT_CELL_SIZE = 48;
     private static final double DEFAULT_OCEAN_THRESHOLD = -0.17;
     private static final int DEFAULT_MERGE_THRESHOLD = 10;
     private static final int DEFAULT_MIN_SLOPE = 1;
+    private static final int DEFAULT_MIN_PATH_LENGTH = 3;
 
     private static CommonConfig instance = new CommonConfig(
-        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE);
+        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE, DEFAULT_MIN_PATH_LENGTH);
 
     public CommonConfig {
         if (regionSize % 16 != 0) {
@@ -49,6 +51,7 @@ public record CommonConfig(
         public static final ForgeConfigSpec.DoubleValue OCEAN_THRESHOLD;
         public static final ForgeConfigSpec.IntValue MERGE_THRESHOLD;
         public static final ForgeConfigSpec.IntValue MIN_SLOPE;
+        public static final ForgeConfigSpec.IntValue MIN_PATH_LENGTH;
 
         static {
             ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -73,6 +76,10 @@ public record CommonConfig(
                 .comment("Minimum drop in blocks between adjacent river cells. Rivers carve down when terrain rises.")
                 .defineInRange("minSlope", DEFAULT_MIN_SLOPE, 0, 10);
 
+            MIN_PATH_LENGTH = builder
+                .comment("Minimum number of cells a river path must have to be valid. Shorter paths are pruned.")
+                .defineInRange("minPathLength", DEFAULT_MIN_PATH_LENGTH, 1, 20);
+
             SPEC = builder.build();
         }
 
@@ -82,7 +89,8 @@ public record CommonConfig(
                 CELL_SIZE.get(),
                 OCEAN_THRESHOLD.get(),
                 MERGE_THRESHOLD.get(),
-                MIN_SLOPE.get()
+                MIN_SLOPE.get(),
+                MIN_PATH_LENGTH.get()
             ));
         }
     }

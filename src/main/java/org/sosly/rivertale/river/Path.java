@@ -204,7 +204,10 @@ public class Path {
     }
 
     public boolean isValid() {
-        return valid;
+        if (!valid) {
+            return false;
+        }
+        return cells.size() >= CommonConfig.get().minPathLength();
     }
 
     public CellPos terminus() {
