@@ -251,22 +251,13 @@ public class RiverBuilder {
             return (int) Math.round(vanillaY + (riverY - vanillaY) * t);
         }
 
-        // Embankments: asymmetric blending
-        // - Raising terrain (building embankment): use full blend out to 120 blocks
-        // - Lowering terrain: only lower when confidence is high (close to river)
         int blended = (int) Math.round(vanillaY + (riverY - vanillaY) * confidence);
 
         if (blended >= vanillaY) {
-            // Raising terrain - use full blend to build embankment
             return blended;
         } else {
-            // Lowering terrain - only do it when very confident (close to river)
-            if (confidence > 0.7) {
-                return blended;
-            }
-            // Otherwise, minimal lowering - mostly stay at vanilla
-            double reducedConfidence = confidence / 0.7 * 0.3;  // Scale 0-0.7 to 0-0.3
-            return (int) Math.round(vanillaY + (riverY - vanillaY) * reducedConfidence);
+            double smoothConfidence = confidence * confidence;
+            return (int) Math.round(vanillaY + (riverY - vanillaY) * smoothConfidence);
         }
     }
 
@@ -316,7 +307,7 @@ public class RiverBuilder {
 
         for (int y = maxY; y >= minY; y--) {
             BlockState state = chunk.getBlockState(new BlockPos(worldX, y, worldZ));
-            if (!state.isAir()) {
+            if (!state.isAir() && !state.is(Blocks.WATER)) {
                 return y;
             }
         }

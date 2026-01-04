@@ -16,6 +16,7 @@ import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.world.WorldSettings;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -48,6 +49,7 @@ class WatershedTest {
 
     @BeforeEach
     void setUp() {
+        WorldSettings.init(63);
         when(cellCache.getOrCompute(any(CellPos.class))).thenAnswer(inv -> {
             CellPos pos = inv.getArgument(0);
             return dummyCell(pos);

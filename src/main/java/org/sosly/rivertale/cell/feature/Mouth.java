@@ -4,15 +4,14 @@ import java.util.Optional;
 import java.util.Set;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.Cell;
-import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.terrain.Shape;
+import org.sosly.rivertale.world.WorldSettings;
 
 public class Mouth implements FeatureHandler {
-    private static final int SEA_LEVEL = 63;
     private static final int WIDTH = 12;
     private static final int DEPTH = 5;
     private static final int INFLUENCE_RADIUS = 120;
@@ -37,14 +36,7 @@ public class Mouth implements FeatureHandler {
         int[] entryPoint = getEdgePoint(entryDir, cellSize, center);
         int[] exitPoint = new int[]{center, center};
 
-        CellCache cache = CellCache.get();
-
-        CellPos upstreamPos = upstreamSet.iterator().next();
-        Cell upstreamCell = cache.getOrCompute(upstreamPos);
-        int entryY = (cell.y() + upstreamCell.y()) / 2;
-
-        int centerY = cell.y();
-        int exitY = SEA_LEVEL;
+        int waterY = WorldSettings.get().seaLevel() - 1;
 
         int cellMinX = cellPos.getMinBlockX();
         int cellMinZ = cellPos.getMinBlockZ();
@@ -65,12 +57,9 @@ public class Mouth implements FeatureHandler {
                     continue;
                 }
 
-                int waterY = interpolateY(pathInfo, entryY, centerY, exitY);
-
                 double weight = 1.0 - (pathInfo.distance() / INFLUENCE_RADIUS);
                 boolean isRiverbed = pathInfo.distance() <= WIDTH / 2.0;
 
-                // Mouth only shapes the riverbed, not surrounding terrain
                 if (!isRiverbed) {
                     continue;
                 }

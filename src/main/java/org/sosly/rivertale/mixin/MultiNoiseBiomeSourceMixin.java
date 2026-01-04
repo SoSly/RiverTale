@@ -46,10 +46,7 @@ public abstract class MultiNoiseBiomeSourceMixin {
         Thread progressThread = new Thread(() -> {
             try {
                 while (progressRunning.get()) {
-                    Thread.sleep(2000);
-                    if (progressRunning.get()) {
-                        System.out.print(".");
-                    }
+                    Thread.sleep(5);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

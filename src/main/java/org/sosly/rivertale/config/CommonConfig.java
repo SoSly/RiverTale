@@ -14,7 +14,6 @@ public record CommonConfig(
     private static final double DEFAULT_OCEAN_THRESHOLD = -0.17;
     private static final int DEFAULT_MERGE_THRESHOLD = 10;
     private static final int DEFAULT_MIN_SLOPE = 1;
-    public static final int SEA_LEVEL = 63;
 
     private static CommonConfig instance = new CommonConfig(
         DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE);

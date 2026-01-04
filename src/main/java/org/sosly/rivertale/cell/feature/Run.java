@@ -4,9 +4,11 @@ import java.util.Set;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
-import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.terrain.Shape;
 
@@ -118,11 +120,14 @@ public class Run extends AbstractCourseHandler {
                     isRiverbed = true;
                     weight = 1.0;
                 } else {
-                    // Embankment zone - gradual slope from water edge to 120 blocks
-                    // Linear weight falloff creates gradual rise from vanilla to water level
+                    Sample blockSample = SampleCache.get().getOrCompute(worldX, worldZ);
+                    if (blockSample.isOcean()) {
+                        continue;
+                    }
+
                     double progress = (distance - waterEdge) / (EMBANKMENT_RADIUS - waterEdge);
-                    weight = 1.0 - progress;  // 1.0 at water edge, 0 at embankment edge
-                    surfaceY = waterY;  // Target is water level, blending handles the slope
+                    weight = 1.0 - progress;
+                    surfaceY = waterY;
                     isRiverbed = false;
                 }
 

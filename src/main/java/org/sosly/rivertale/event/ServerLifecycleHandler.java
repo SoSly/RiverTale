@@ -19,9 +19,9 @@ import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionTypeCache;
 import org.sosly.rivertale.world.RiverBuilder;
+import org.sosly.rivertale.world.WorldSettings;
 
 public class ServerLifecycleHandler {
-    private static final int SAMPLE_Y = 63;
 
     @SubscribeEvent
     public void onLevelLoad(LevelEvent.Load event) {
@@ -44,13 +44,15 @@ public class ServerLifecycleHandler {
         }
 
         NoiseGeneratorSettings settings = generator.generatorSettings().value();
+        WorldSettings.init(settings.seaLevel());
+
         RandomState randomState = RandomState.create(
             settings,
             serverLevel.registryAccess().lookupOrThrow(Registries.NOISE),
             serverLevel.getSeed()
         );
 
-        SampleCache.init(NoiseBasedSampleProvider.create(randomState, SAMPLE_Y));
+        SampleCache.init(NoiseBasedSampleProvider.create(randomState, WorldSettings.get().seaLevel()));
         CellCache.init();
         RegionTypeCache.init();
         RegionCache.init();
@@ -65,6 +67,7 @@ public class ServerLifecycleHandler {
         RegionTypeCache.shutdown();
         CellCache.shutdown();
         SampleCache.shutdown();
+        WorldSettings.shutdown();
         RiverTale.LOGGER.info("Caches cleared");
     }
 }

@@ -33,7 +33,7 @@ public class Path {
         for (Region region : regions) {
             this.allowedRegions.add(region.pos());
             for (OceanBoundary boundary : region.boundaries()) {
-                this.oceanCells.add(boundary.land());
+                this.oceanCells.add(boundary.ocean());
             }
         }
     }

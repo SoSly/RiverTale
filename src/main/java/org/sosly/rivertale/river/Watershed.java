@@ -16,6 +16,7 @@ import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
+import org.sosly.rivertale.world.WorldSettings;
 
 public class Watershed {
     private final RegionPos pos;
@@ -128,7 +129,7 @@ public class Watershed {
 
         CellCache cache = CellCache.get();
         int minSlope = CommonConfig.get().minSlope();
-        int seaLevel = CommonConfig.SEA_LEVEL;
+        int seaLevel = WorldSettings.get().seaLevel();
         Set<CellPos> visited = new HashSet<>();
 
         for (CellPos cellPos : allCells()) {
