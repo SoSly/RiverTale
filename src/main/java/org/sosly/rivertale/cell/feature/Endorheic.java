@@ -1,11 +1,12 @@
 package org.sosly.rivertale.cell.feature;
 
-import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.river.Watershed;
+import org.sosly.rivertale.terrain.Shape;
 
 public class Endorheic implements FeatureHandler {
-    public int[][] carve(Cell cell, Watershed watershed, ChunkAccess chunk) {
+    public Shape[][] shape(Cell cell, Watershed watershed, ChunkPos pos) {
         return null;
     }
     public boolean classify(Cell cell, Watershed watershed) {

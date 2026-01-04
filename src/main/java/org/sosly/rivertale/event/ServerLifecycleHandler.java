@@ -3,6 +3,7 @@ package org.sosly.rivertale.event;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.chunk.ChunkSource;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
@@ -17,6 +18,7 @@ import org.sosly.rivertale.density.NoiseBasedSampleProvider;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionTypeCache;
+import org.sosly.rivertale.world.RiverBuilder;
 
 public class ServerLifecycleHandler {
     private static final int SAMPLE_Y = 63;
@@ -52,11 +54,13 @@ public class ServerLifecycleHandler {
         CellCache.init();
         RegionTypeCache.init();
         RegionCache.init();
+        RiverBuilder.init(serverLevel.registryAccess().registryOrThrow(Registries.BIOME).getHolderOrThrow(Biomes.RIVER));
         RiverTale.LOGGER.info("Caches initialized on level load");
     }
 
     @SubscribeEvent
     public void onServerStopped(ServerStoppedEvent event) {
+        RiverBuilder.shutdown();
         RegionCache.shutdown();
         RegionTypeCache.shutdown();
         CellCache.shutdown();

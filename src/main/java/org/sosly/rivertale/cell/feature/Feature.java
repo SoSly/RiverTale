@@ -1,10 +1,12 @@
 package org.sosly.rivertale.cell.feature;
 
 import javax.annotation.Nullable;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
@@ -50,7 +52,7 @@ public enum Feature {
     public final CellType type;
     public final float[] color;
 
-    private final FeatureHandler handler;
+    public final FeatureHandler handler;
     private static final Feature[] VALUES = values();
 
     Feature(CellType type, FeatureHandler handler, float[] color) {
@@ -71,62 +73,5 @@ public enum Feature {
 
         record.stop();
         return cell.withFeature(DEFAULT);
-    }
-
-    public static void carve(Cell cell, Watershed watershed, ChunkAccess chunk) {
-        Timer.Record carveTimer = Store.getTimer(Feature.class, "carve").start();
-
-        int[][] targetSurface = cell.feature().handler.carve(cell, watershed, chunk);
-
-        if (targetSurface == null) {
-            carveTimer.stop();
-            return;
-        }
-
-        applyCarve(chunk, targetSurface);
-        carveTimer.stop();
-    }
-
-    private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState STONE = Blocks.STONE.defaultBlockState();
-
-    private static void applyCarve(ChunkAccess chunk, int[][] targetSurface) {
-        int maxY = chunk.getMaxBuildHeight() - 1;
-        int minY = chunk.getMinBuildHeight();
-
-        for (int localX = 0; localX < 16; localX++) {
-            for (int localZ = 0; localZ < 16; localZ++) {
-                int targetY = targetSurface[localX][localZ];
-
-                if (targetY == Integer.MAX_VALUE) {
-                    continue;
-                }
-
-                int existingSurface = findSurfaceHeight(chunk, localX, localZ, minY, maxY);
-
-                if (existingSurface > targetY) {
-                    for (int y = targetY + 1; y <= existingSurface; y++) {
-                        int sectionIndex = chunk.getSectionIndex(y);
-                        chunk.getSection(sectionIndex).setBlockState(localX, y & 15, localZ, AIR, false);
-                    }
-                } else if (existingSurface < targetY) {
-                    for (int y = existingSurface + 1; y <= targetY; y++) {
-                        int sectionIndex = chunk.getSectionIndex(y);
-                        chunk.getSection(sectionIndex).setBlockState(localX, y & 15, localZ, STONE, false);
-                    }
-                }
-            }
-        }
-    }
-
-    private static int findSurfaceHeight(ChunkAccess chunk, int localX, int localZ, int minY, int maxY) {
-        for (int y = maxY; y >= minY; y--) {
-            int sectionIndex = chunk.getSectionIndex(y);
-            BlockState state = chunk.getSection(sectionIndex).getBlockState(localX, y & 15, localZ);
-            if (!state.isAir()) {
-                return y;
-            }
-        }
-        return minY;
     }
 }

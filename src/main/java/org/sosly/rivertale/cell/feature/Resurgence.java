@@ -1,15 +1,16 @@
 package org.sosly.rivertale.cell.feature;
 
-import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.river.Watershed;
+import org.sosly.rivertale.terrain.Shape;
 
 public class Resurgence implements FeatureHandler {
     private static final double EROSION_THRESHOLD = 0.5;
     private static final double DEPTH_THRESHOLD = 0.2;
 
-    public int[][] carve(Cell cell, Watershed watershed, ChunkAccess chunk) {
+    public Shape[][] shape(Cell cell, Watershed watershed, ChunkPos pos) {
         return null;
     }
 
