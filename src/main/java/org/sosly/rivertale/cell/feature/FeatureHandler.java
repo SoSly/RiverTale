@@ -12,13 +12,12 @@ import org.sosly.rivertale.terrain.Shape;
 public interface FeatureHandler {
     int DEFAULT_WIDTH = 16;
     int DEFAULT_DEPTH = 4;
-    int DEFAULT_EMBANKMENT_THRESHOLD = DEFAULT_DEPTH;
     double CURVE_K = 2 * Math.acos(-0.2);
     double BANK_PEAK_RATIO = Math.PI / CURVE_K;
     double BLEND_DOWN_RATE = 3.0;
     double BLEND_UP_RATE = 1.5;
-    int MAX_BLEND_DISTANCE = 64;
     double PARALLEL_DECAY_DISTANCE = 2.0;
+    double PARALLEL_GRACE_ZONE = 4.0;  // No attenuation within this distance of path endpoints
 
     @Nullable Shape[][] shape(Cell cell, Watershed watershed, ChunkPos pos);
     boolean classify(Cell cell, @Nullable Watershed watershed);
@@ -34,14 +33,6 @@ public interface FeatureHandler {
 
     default int bankPeakHeight(int depth) {
         return (int) Math.round(2.0 * depth / 3.0);
-    }
-
-    default int maxInfluenceDistance() {
-        return maxInfluenceDistance(DEFAULT_WIDTH, DEFAULT_DEPTH);
-    }
-
-    default int maxInfluenceDistance(int width, int depth) {
-        return bankPeakDistance(width) + MAX_BLEND_DISTANCE;
     }
 
     default int riverbedEdge() {
@@ -77,10 +68,6 @@ public interface FeatureHandler {
             }
 
             double blendDistance = distance - bankPeakDist;
-            if (blendDistance > MAX_BLEND_DISTANCE) {
-                return null;
-            }
-
             int targetY = (int) (bankPeakY - blendDistance / BLEND_DOWN_RATE);
             if (targetY <= vanillaY) {
                 return null;
@@ -105,37 +92,6 @@ public interface FeatureHandler {
         double totalCarveDist = (vanillaY - waterY) * BLEND_UP_RATE;
         double weight = Math.max(0.0, Math.min(1.0, 1.0 - (carveDistance / totalCarveDist)));
         return new ProfileResult(targetY, false, null, weight);
-    }
-
-    default boolean isInCellBounds(int cellLocalX, int cellLocalZ, int cellSize) {
-        return cellLocalX >= 0 && cellLocalX < cellSize
-            && cellLocalZ >= 0 && cellLocalZ < cellSize;
-    }
-
-    default boolean isInCornerNeighbor(int cellLocalX, int cellLocalZ, int cellSize, Direction dir) {
-        if (dir.dx == 0 || dir.dz == 0) {
-            return false;
-        }
-
-        boolean inXNeighbor;
-        if (dir.dx > 0) {
-            inXNeighbor = cellLocalX >= cellSize && cellLocalX < 2 * cellSize
-                && cellLocalZ >= 0 && cellLocalZ < cellSize;
-        } else {
-            inXNeighbor = cellLocalX >= -cellSize && cellLocalX < 0
-                && cellLocalZ >= 0 && cellLocalZ < cellSize;
-        }
-
-        boolean inZNeighbor;
-        if (dir.dz > 0) {
-            inZNeighbor = cellLocalZ >= cellSize && cellLocalZ < 2 * cellSize
-                && cellLocalX >= 0 && cellLocalX < cellSize;
-        } else {
-            inZNeighbor = cellLocalZ >= -cellSize && cellLocalZ < 0
-                && cellLocalX >= 0 && cellLocalX < cellSize;
-        }
-
-        return inXNeighbor || inZNeighbor;
     }
 
     default int[] getEdgePoint(Direction dir, int cellSize, int center) {

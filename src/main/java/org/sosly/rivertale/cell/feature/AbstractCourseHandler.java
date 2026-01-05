@@ -71,8 +71,6 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
         int cellMinX = cellPos.getMinBlockX();
         int cellMinZ = cellPos.getMinBlockZ();
 
-        int maxDistance = maxInfluenceDistance();
-
         Shape[][] result = new Shape[16][16];
 
         for (int localX = 0; localX < 16; localX++) {
@@ -85,10 +83,6 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
 
                 PathInfo pathInfo = getPathInfo(cellLocalX, cellLocalZ, entryPoint, exitPoint, center, center);
                 double distance = pathInfo.distance();
-
-                if (distance > maxDistance) {
-                    continue;
-                }
 
                 Sample blockSample = SampleCache.get().getOrCompute(worldX, worldZ);
                 if (blockSample.isOcean()) {
@@ -123,17 +117,8 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
                         overflow = (tUnclamped - 1) * exitSegmentLength;
                     }
                 }
-                double parallelAttenuation = 1.0 / (1.0 + overflow / PARALLEL_DECAY_DISTANCE);
-
-                if (profile.isRiverbed()) {
-                    boolean inCellBounds = isInCellBounds(cellLocalX, cellLocalZ, cellSize);
-                    boolean allowedForRiverbed = inCellBounds
-                        || isInCornerNeighbor(cellLocalX, cellLocalZ, cellSize, entryDir)
-                        || isInCornerNeighbor(cellLocalX, cellLocalZ, cellSize, exitDir);
-                    if (!allowedForRiverbed) {
-                        continue;
-                    }
-                }
+                double effectiveOverflow = Math.max(0, overflow - PARALLEL_GRACE_ZONE);
+                double parallelAttenuation = 1.0 / (1.0 + effectiveOverflow / PARALLEL_DECAY_DISTANCE);
 
                 Integer shapeFlowLevel = profile.isRiverbed() ? flowLevel : null;
                 Direction flowDirection = pathInfo.isEntrySegment()

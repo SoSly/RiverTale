@@ -59,8 +59,6 @@ public class Confluence implements FeatureHandler {
         int cellMinX = cellPos.getMinBlockX();
         int cellMinZ = cellPos.getMinBlockZ();
 
-        int maxDistance = maxInfluenceDistance();
-
         Shape[][] result = new Shape[16][16];
 
         for (int localX = 0; localX < 16; localX++) {
@@ -97,10 +95,6 @@ public class Confluence implements FeatureHandler {
                     flowDirection = exitDir;
                 }
 
-                if (minDistance > maxDistance) {
-                    continue;
-                }
-
                 Sample blockSample = SampleCache.get().getOrCompute(worldX, worldZ);
                 if (blockSample.isOcean()) {
                     continue;
@@ -111,23 +105,6 @@ public class Confluence implements FeatureHandler {
                 ProfileResult profile = calculateProfile(minDistance, waterY, vanillaY);
                 if (profile == null) {
                     continue;
-                }
-
-                if (profile.isRiverbed()) {
-                    boolean inCellBounds = isInCellBounds(cellLocalX, cellLocalZ, cellSize);
-                    boolean allowedForRiverbed = inCellBounds
-                        || isInCornerNeighbor(cellLocalX, cellLocalZ, cellSize, exitDir);
-                    if (!allowedForRiverbed) {
-                        for (EntryInfo entry : entries) {
-                            if (isInCornerNeighbor(cellLocalX, cellLocalZ, cellSize, entry.dir())) {
-                                allowedForRiverbed = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!allowedForRiverbed) {
-                        continue;
-                    }
                 }
 
                 result[localX][localZ] = new Shape(

@@ -59,13 +59,6 @@ public class Mouth implements FeatureHandler {
                 int cellLocalX = worldX - cellMinX;
                 int cellLocalZ = worldZ - cellMinZ;
 
-                boolean allowedForRiverbed = isInCellBounds(cellLocalX, cellLocalZ, cellSize)
-                    || isInCornerNeighbor(cellLocalX, cellLocalZ, cellSize, entryDir);
-
-                if (!allowedForRiverbed) {
-                    continue;
-                }
-
                 PathInfo pathInfo = getPathInfo(cellLocalX, cellLocalZ, entryPoint, exitPoint, center, center);
                 double distance = pathInfo.distance();
 
