@@ -237,12 +237,14 @@ public interface FeatureHandler {
             blocksFromDrop = (info.t() - tDrop) * segmentLength;
         }
 
-        if (blocksFromDrop < 0.5 || blocksFromDrop > 7.5) {
+        if (blocksFromDrop > -0.5 || blocksFromDrop < -7.5) {
             return new FlowInfo(waterY, null);
         }
 
-        int flowLevel = (int) Math.round(blocksFromDrop);
-        return new FlowInfo(waterY, flowLevel);
+        int flowLevel = (int) Math.round(8 + blocksFromDrop);
+        flowLevel = Math.max(1, Math.min(7, flowLevel));
+        int flowWaterY = waterY + 1;
+        return new FlowInfo(flowWaterY, flowLevel);
     }
 
     default double distanceToSegment(int px, int pz, int x1, int z1, int x2, int z2) {
