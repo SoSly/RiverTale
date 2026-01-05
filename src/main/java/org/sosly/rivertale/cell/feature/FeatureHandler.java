@@ -18,6 +18,7 @@ public interface FeatureHandler {
     double BLEND_DOWN_RATE = 3.0;
     double BLEND_UP_RATE = 1.5;
     int MAX_BLEND_DISTANCE = 64;
+    double PARALLEL_DECAY_DISTANCE = 2.0;
 
     @Nullable Shape[][] shape(Cell cell, Watershed watershed, ChunkPos pos);
     boolean classify(Cell cell, @Nullable Watershed watershed);
@@ -197,6 +198,18 @@ public interface FeatureHandler {
         }
 
         return Math.max(0, Math.min(1, ((px - x1) * dx + (pz - z1) * dz) / lengthSq));
+    }
+
+    default double projectOntoSegmentUnclamped(int px, int pz, int x1, int z1, int x2, int z2) {
+        double dx = x2 - x1;
+        double dz = z2 - z1;
+        double lengthSq = dx * dx + dz * dz;
+
+        if (lengthSq == 0) {
+            return 0;
+        }
+
+        return ((px - x1) * dx + (pz - z1) * dz) / lengthSq;
     }
 
     default int interpolateY(PathInfo info, int entryY, int centerY, int exitY) {

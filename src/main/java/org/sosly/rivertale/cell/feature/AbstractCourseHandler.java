@@ -107,6 +107,24 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
                     continue;
                 }
 
+                double overflow = 0;
+                if (pathInfo.isEntrySegment()) {
+                    double tUnclamped = projectOntoSegmentUnclamped(
+                        cellLocalX, cellLocalZ, entryPoint[0], entryPoint[1], center, center
+                    );
+                    if (tUnclamped < 0) {
+                        overflow = -tUnclamped * entrySegmentLength;
+                    }
+                } else {
+                    double tUnclamped = projectOntoSegmentUnclamped(
+                        cellLocalX, cellLocalZ, center, center, exitPoint[0], exitPoint[1]
+                    );
+                    if (tUnclamped > 1) {
+                        overflow = (tUnclamped - 1) * exitSegmentLength;
+                    }
+                }
+                double parallelAttenuation = 1.0 / (1.0 + overflow / PARALLEL_DECAY_DISTANCE);
+
                 if (profile.isRiverbed()) {
                     boolean inCellBounds = isInCellBounds(cellLocalX, cellLocalZ, cellSize);
                     boolean allowedForRiverbed = inCellBounds
@@ -121,9 +139,10 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
                 Direction flowDirection = pathInfo.isEntrySegment()
                     ? entryDir.opposite()
                     : exitDir;
+                double attenuatedWeight = profile.weight() * parallelAttenuation;
                 result[localX][localZ] = new Shape(
                     profile.surfaceY(),
-                    profile.weight(),
+                    attenuatedWeight,
                     profile.isRiverbed(),
                     profile.waterY(),
                     shapeFlowLevel,
