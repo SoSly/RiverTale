@@ -26,7 +26,7 @@ public class DebugCommand {
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         return Commands.literal("debug")
-                .then(Commands.literal("river").executes(DebugCommand::river));
+                .executes(DebugCommand::river);
     }
 
     private static int river(CommandContext<CommandSourceStack> context) {
@@ -92,6 +92,13 @@ public class DebugCommand {
         int[] entryPoint = helper.getEdgePoint(entryDir, cellSize, center);
         int[] exitPoint = helper.getEdgePoint(exitDir, cellSize, center);
 
+        double entrySegmentLength = Math.sqrt(
+            Math.pow(center - entryPoint[0], 2) + Math.pow(center - entryPoint[1], 2)
+        );
+        double exitSegmentLength = Math.sqrt(
+            Math.pow(exitPoint[0] - center, 2) + Math.pow(exitPoint[1] - center, 2)
+        );
+
         CellCache cache = CellCache.get();
 
         int entryY;
@@ -119,7 +126,11 @@ public class DebugCommand {
         int cellLocalZ = pos.getZ() - cellMinZ;
 
         FeatureHandler.PathInfo pathInfo = helper.getPathInfo(cellLocalX, cellLocalZ, entryPoint, exitPoint, center, center);
-        int interpolatedWaterY = helper.interpolateY(pathInfo, entryY, centerY, exitY);
+
+        double segmentLength = pathInfo.isEntrySegment() ? entrySegmentLength : exitSegmentLength;
+        FeatureHandler.FlowInfo flowInfo = helper.computeFlowInfo(pathInfo, entryY, centerY, exitY, segmentLength);
+        int interpolatedWaterY = flowInfo.waterY();
+        Integer flowLevel = flowInfo.flowLevel();
 
         FeatureHandler.ProfileResult profile = helper.calculateProfile(pathInfo.distance(), interpolatedWaterY, vanillaY);
 
@@ -128,7 +139,7 @@ public class DebugCommand {
         player.sendSystemMessage(Component.literal("cellLocal: [" + cellLocalX + ", " + cellLocalZ + "]"));
         player.sendSystemMessage(Component.literal("distance: " + format(pathInfo.distance())));
         player.sendSystemMessage(Component.literal("segment: " + (pathInfo.isEntrySegment() ? "ENTRY" : "EXIT") + ", t: " + format(pathInfo.t())));
-        player.sendSystemMessage(Component.literal("interpolatedWaterY: " + interpolatedWaterY));
+        player.sendSystemMessage(Component.literal("waterY: " + interpolatedWaterY + ", flowLevel: " + (flowLevel != null ? flowLevel : "source")));
         if (profile != null) {
             player.sendSystemMessage(Component.literal("profile: surfaceY=" + profile.surfaceY() + ", isRiverbed=" + profile.isRiverbed() + ", weight=" + format(profile.weight())));
         } else {

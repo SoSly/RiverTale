@@ -45,6 +45,13 @@ public class Run extends AbstractCourseHandler {
         int[] entryPoint = getEdgePoint(entryDir, cellSize, center);
         int[] exitPoint = getEdgePoint(exitDir, cellSize, center);
 
+        double entrySegmentLength = Math.sqrt(
+            Math.pow(center - entryPoint[0], 2) + Math.pow(center - entryPoint[1], 2)
+        );
+        double exitSegmentLength = Math.sqrt(
+            Math.pow(exitPoint[0] - center, 2) + Math.pow(exitPoint[1] - center, 2)
+        );
+
         CellCache cache = CellCache.get();
 
         int entryY;
@@ -93,7 +100,11 @@ public class Run extends AbstractCourseHandler {
                     continue;
                 }
 
-                int waterY = interpolateY(pathInfo, entryY, centerY, exitY);
+                double segmentLength = pathInfo.isEntrySegment() ? entrySegmentLength : exitSegmentLength;
+                FlowInfo flowInfo = computeFlowInfo(pathInfo, entryY, centerY, exitY, segmentLength);
+                int waterY = flowInfo.waterY();
+                Integer flowLevel = flowInfo.flowLevel();
+
                 int vanillaY = blockSample.estimatedHeight();
 
                 ProfileResult profile = calculateProfile(distance, waterY, vanillaY);
@@ -111,11 +122,13 @@ public class Run extends AbstractCourseHandler {
                     }
                 }
 
+                Integer shapeFlowLevel = profile.isRiverbed() ? flowLevel : null;
                 result[localX][localZ] = new Shape(
                     profile.surfaceY(),
                     profile.weight(),
                     profile.isRiverbed(),
-                    profile.waterY()
+                    profile.waterY(),
+                    shapeFlowLevel
                 );
             }
         }

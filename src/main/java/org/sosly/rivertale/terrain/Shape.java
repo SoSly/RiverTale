@@ -6,5 +6,6 @@ public record Shape(
     int y,
     double weight,
     boolean isRiverbed,
-    @Nullable Integer waterY
+    @Nullable Integer waterY,
+    @Nullable Integer flowLevel
 ) {}

@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -78,7 +79,7 @@ public class RiverBuilder {
         WatershedCache.get().finalizeReady(loadedRegions);
     }
 
-    private record ColumnResult(int y, boolean isRiverbed, Integer waterY) {}
+    private record ColumnResult(int y, boolean isRiverbed, Integer waterY, Integer flowLevel) {}
 
     public static void shape(ChunkAccess chunk) {
         Timer.Record shapeTimer = Store.getTimer(RiverBuilder.class, "shape").start();
@@ -190,12 +191,14 @@ public class RiverBuilder {
         double confidence;
         boolean isRiverbed = !riverbeds.isEmpty();
         Integer waterY = null;
+        Integer flowLevel = null;
 
         if (isRiverbed) {
             double[] result = powerWeightedAverage(riverbeds);
             y = (int) result[0];
             confidence = result[1];
             waterY = combineWaterY(riverbeds);
+            flowLevel = combineFlowLevel(riverbeds);
         } else {
             double[] result = weightedAverage(embankments);
             y = (int) result[0];
@@ -203,7 +206,7 @@ public class RiverBuilder {
         }
 
         int blendedY = blendTowardVanilla(y, vanillaY, confidence, isRiverbed);
-        return new ColumnResult(blendedY, isRiverbed, waterY);
+        return new ColumnResult(blendedY, isRiverbed, waterY, flowLevel);
     }
 
     private static Integer combineWaterY(List<Shape> riverbeds) {
@@ -216,6 +219,18 @@ public class RiverBuilder {
             }
         }
         return maxWaterY;
+    }
+
+    private static Integer combineFlowLevel(List<Shape> riverbeds) {
+        Integer minFlowLevel = null;
+        for (Shape shape : riverbeds) {
+            if (shape.flowLevel() != null) {
+                if (minFlowLevel == null || shape.flowLevel() < minFlowLevel) {
+                    minFlowLevel = shape.flowLevel();
+                }
+            }
+        }
+        return minFlowLevel;
     }
 
     private static double[] powerWeightedAverage(List<Shape> shapes) {
@@ -284,17 +299,18 @@ public class RiverBuilder {
                 int vanillaY = findSurfaceHeight(chunk, x, z);
                 int targetY = results[x][z].y();
                 Integer waterY = results[x][z].waterY();
+                Integer flowLevel = results[x][z].flowLevel();
                 boolean isRiverbed = results[x][z].isRiverbed();
 
                 if (debug && isRiverbed) {
                     int worldX = pos.getMinBlockX() + x;
                     int worldZ = pos.getMinBlockZ() + z;
                     int depth = waterY != null ? waterY - targetY : 0;
-                    LOGGER.info("RIVERBED ({},{}) vanillaY={} targetY={} waterY={} depth={}",
-                        worldX, worldZ, vanillaY, targetY, waterY, depth);
+                    LOGGER.info("RIVERBED ({},{}) vanillaY={} targetY={} waterY={} depth={} flowLevel={}",
+                        worldX, worldZ, vanillaY, targetY, waterY, depth, flowLevel);
                 }
 
-                applyColumn(chunk, x, z, targetY, waterY);
+                applyColumn(chunk, x, z, targetY, waterY, flowLevel);
 
                 if (isRiverbed && riverBiome != null) {
                     applyRiverBiome(chunk, x, z, waterY != null ? waterY : targetY);
@@ -318,7 +334,7 @@ public class RiverBuilder {
         return minY;
     }
 
-    private static void applyColumn(ChunkAccess chunk, int localX, int localZ, int targetY, Integer waterY) {
+    private static void applyColumn(ChunkAccess chunk, int localX, int localZ, int targetY, Integer waterY, Integer flowLevel) {
         int minY = chunk.getMinBuildHeight();
         int maxY = chunk.getMaxBuildHeight() - 1;
 
@@ -333,12 +349,19 @@ public class RiverBuilder {
 
         int airStart = targetY + 1;
         if (waterY != null && waterY > targetY) {
-            for (int y = targetY + 1; y <= waterY; y++) {
-                setBlockDirect(chunk, localX, y, localZ, WATER);
-                oceanFloor.update(localX, y, localZ, WATER);
-                worldSurface.update(localX, y, localZ, WATER);
+            int waterEnd = (flowLevel != null) ? waterY + 1 : waterY;
+            for (int y = targetY + 1; y <= waterEnd; y++) {
+                BlockState waterState;
+                if (flowLevel != null && y == waterY + 1) {
+                    waterState = Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, flowLevel);
+                } else {
+                    waterState = WATER;
+                }
+                setBlockDirect(chunk, localX, y, localZ, waterState);
+                oceanFloor.update(localX, y, localZ, waterState);
+                worldSurface.update(localX, y, localZ, waterState);
             }
-            airStart = waterY + 1;
+            airStart = waterEnd + 1;
         }
 
         for (int y = airStart; y <= maxY; y++) {

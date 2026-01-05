@@ -131,7 +131,8 @@ public class Confluence implements FeatureHandler {
                     profile.surfaceY(),
                     profile.weight(),
                     profile.isRiverbed(),
-                    profile.waterY()
+                    profile.waterY(),
+                    null
                 );
             }
         }

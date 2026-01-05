@@ -55,6 +55,10 @@ public class CellCache implements Cache<Cell> {
         return getOrCompute(new CellPos(x, z));
     }
 
+    public Cell getIfPresent(CellPos pos) {
+        return cache.get(pos.toLong());
+    }
+
     public Cell getOrCompute(CellPos pos) {
         long key = pos.toLong();
         Cell cached = cache.get(key);

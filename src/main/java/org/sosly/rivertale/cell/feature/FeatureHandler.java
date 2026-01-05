@@ -200,11 +200,50 @@ public interface FeatureHandler {
     }
 
     default int interpolateY(PathInfo info, int entryY, int centerY, int exitY) {
+        return (int) Math.round(interpolateYExact(info, entryY, centerY, exitY));
+    }
+
+    default double interpolateYExact(PathInfo info, int entryY, int centerY, int exitY) {
         if (info.isEntrySegment) {
-            return (int) Math.round(entryY + (centerY - entryY) * info.t);
+            return entryY + (centerY - entryY) * info.t;
         } else {
-            return (int) Math.round(centerY + (exitY - centerY) * info.t);
+            return centerY + (exitY - centerY) * info.t;
         }
+    }
+
+    record FlowInfo(int waterY, Integer flowLevel) {}
+
+    default FlowInfo computeFlowInfo(PathInfo info, int entryY, int centerY, int exitY, double segmentLength) {
+        double exactY = interpolateYExact(info, entryY, centerY, exitY);
+        int waterY = (int) Math.floor(exactY);
+
+        int segmentStartY, segmentEndY;
+        if (info.isEntrySegment()) {
+            segmentStartY = entryY;
+            segmentEndY = centerY;
+        } else {
+            segmentStartY = centerY;
+            segmentEndY = exitY;
+        }
+
+        if (segmentEndY >= segmentStartY) {
+            return new FlowInfo(waterY, null);
+        }
+
+        double dropY = waterY + 1.0;
+        if (dropY > segmentStartY || dropY <= segmentEndY) {
+            return new FlowInfo(waterY, null);
+        }
+
+        double tDrop = (dropY - segmentStartY) / (segmentEndY - segmentStartY);
+        double blocksFromDrop = (info.t() - tDrop) * segmentLength;
+
+        if (blocksFromDrop < 0.5 || blocksFromDrop > 7.5) {
+            return new FlowInfo(waterY, null);
+        }
+
+        int flowLevel = (int) Math.round(blocksFromDrop);
+        return new FlowInfo(waterY, flowLevel);
     }
 
     default double distanceToSegment(int px, int pz, int x1, int z1, int x2, int z2) {

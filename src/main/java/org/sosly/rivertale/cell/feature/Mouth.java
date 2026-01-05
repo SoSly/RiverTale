@@ -4,6 +4,7 @@ import java.util.Optional;
 import java.util.Set;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
@@ -32,7 +33,16 @@ public class Mouth implements FeatureHandler {
         int[] entryPoint = getEdgePoint(entryDir, cellSize, center);
         int[] exitPoint = new int[]{center, center};
 
-        int waterY = WorldSettings.get().seaLevel() - 1;
+        double entrySegmentLength = Math.sqrt(
+            Math.pow(center - entryPoint[0], 2) + Math.pow(center - entryPoint[1], 2)
+        );
+
+        int centerY = WorldSettings.get().seaLevel() - 1;
+
+        CellCache cache = CellCache.get();
+        CellPos upstreamPos = upstreamSet.iterator().next();
+        Cell upstreamCell = cache.getOrCompute(upstreamPos);
+        int entryY = (centerY + upstreamCell.y()) / 2;
 
         int cellMinX = cellPos.getMinBlockX();
         int cellMinZ = cellPos.getMinBlockZ();
@@ -63,16 +73,22 @@ public class Mouth implements FeatureHandler {
                     continue;
                 }
 
+                FlowInfo flowInfo = computeFlowInfo(pathInfo, entryY, centerY, centerY, entrySegmentLength);
+                int waterY = flowInfo.waterY();
+                Integer flowLevel = flowInfo.flowLevel();
+
                 ProfileResult profile = calculateProfile(distance, waterY, waterY);
                 if (profile == null || !profile.isRiverbed()) {
                     continue;
                 }
 
+                Integer shapeFlowLevel = profile.isRiverbed() ? flowLevel : null;
                 result[localX][localZ] = new Shape(
                     profile.surfaceY(),
                     profile.weight(),
                     profile.isRiverbed(),
-                    profile.waterY()
+                    profile.waterY(),
+                    shapeFlowLevel
                 );
             }
         }
