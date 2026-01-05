@@ -232,10 +232,7 @@ public class Path {
     }
 
     public boolean isValid() {
-        if (!valid) {
-            return false;
-        }
-        return cells.size() >= CommonConfig.get().minPathLength();
+        return valid;
     }
 
     public CellPos terminus() {

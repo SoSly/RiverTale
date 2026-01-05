@@ -1,5 +1,6 @@
 package org.sosly.rivertale.river;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -33,6 +34,7 @@ public class Watershed {
             addPath(path);
         }
 
+        pruneShortTributaries();
         assignYLevels();
         reclassify();
 
@@ -121,6 +123,81 @@ public class Watershed {
 
             start = current;
             current = next;
+        }
+    }
+
+    private void pruneShortTributaries() {
+        int minLength = CommonConfig.get().minPathLength();
+        boolean pruned;
+
+        do {
+            pruned = false;
+            Set<CellPos> sources = findSources();
+
+            for (CellPos source : sources) {
+                List<CellPos> segment = traceToConfluenceOrTerminus(source);
+                if (segment.size() < minLength) {
+                    pruneSegment(segment);
+                    pruned = true;
+                }
+            }
+        } while (pruned);
+
+        upstreamCountCache.clear();
+    }
+
+    private Set<CellPos> findSources() {
+        Set<CellPos> sources = new HashSet<>();
+        for (CellPos cell : downstream.keySet()) {
+            Set<CellPos> up = upstream.get(cell);
+            if (up == null || up.isEmpty()) {
+                sources.add(cell);
+            }
+        }
+        return sources;
+    }
+
+    private List<CellPos> traceToConfluenceOrTerminus(CellPos source) {
+        List<CellPos> segment = new ArrayList<>();
+        CellPos current = source;
+
+        while (current != null) {
+            segment.add(current);
+
+            CellPos next = downstream.get(current);
+            if (next == null) {
+                break;
+            }
+
+            Set<CellPos> nextUpstream = upstream.get(next);
+            if (nextUpstream != null && nextUpstream.size() > 1) {
+                break;
+            }
+
+            current = next;
+        }
+
+        return segment;
+    }
+
+    private void pruneSegment(List<CellPos> segment) {
+        if (segment.isEmpty()) {
+            return;
+        }
+
+        CellPos lastInSegment = segment.get(segment.size() - 1);
+        CellPos afterSegment = downstream.get(lastInSegment);
+
+        if (afterSegment != null) {
+            Set<CellPos> upstreamSet = upstream.get(afterSegment);
+            if (upstreamSet != null) {
+                upstreamSet.remove(lastInSegment);
+            }
+        }
+
+        for (CellPos cell : segment) {
+            downstream.remove(cell);
+            upstream.remove(cell);
         }
     }
 
