@@ -10,11 +10,126 @@ import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.terrain.Shape;
 
 public interface FeatureHandler {
+    int DEFAULT_WIDTH = 16;
+    int DEFAULT_DEPTH = 4;
+    double CURVE_K = 2 * Math.acos(-0.2);
+    double BANK_PEAK_RATIO = Math.PI / CURVE_K;
+    double BLEND_DOWN_RATE = 3.0;
+    double BLEND_UP_RATE = 1.5;
+    int MAX_BLEND_DISTANCE = 64;
+
     @Nullable Shape[][] shape(Cell cell, Watershed watershed, ChunkPos pos);
     boolean classify(Cell cell, @Nullable Watershed watershed);
     void fill();
 
     record PathInfo(double distance, boolean isEntrySegment, double t) {}
+
+    record ProfileResult(int surfaceY, boolean isRiverbed, Integer waterY, double weight) {}
+
+    default int bankPeakDistance(int width) {
+        return (int) Math.ceil(BANK_PEAK_RATIO * width);
+    }
+
+    default int bankPeakHeight(int depth) {
+        return (int) Math.round(2.0 * depth / 3.0);
+    }
+
+    default int maxInfluenceDistance() {
+        return maxInfluenceDistance(DEFAULT_WIDTH, DEFAULT_DEPTH);
+    }
+
+    default int maxInfluenceDistance(int width, int depth) {
+        return bankPeakDistance(width) + MAX_BLEND_DISTANCE;
+    }
+
+    default int riverbedEdge() {
+        return riverbedEdge(DEFAULT_WIDTH, DEFAULT_DEPTH);
+    }
+
+    default int riverbedEdge(int width, int depth) {
+        return bankPeakDistance(width);
+    }
+
+    default ProfileResult calculateProfile(double distance, int waterY, int vanillaY) {
+        return calculateProfile(distance, waterY, vanillaY, DEFAULT_WIDTH, DEFAULT_DEPTH);
+    }
+
+    default ProfileResult calculateProfile(double distance, int waterY, int vanillaY, int width, int depth) {
+        int halfWidth = width / 2;
+        int bankPeakDist = bankPeakDistance(width);
+        int bankPeakY = waterY + bankPeakHeight(depth);
+        boolean needsBank = vanillaY <= waterY;
+
+        if (needsBank) {
+            if (distance <= bankPeakDist) {
+                double y = -(5.0 * depth / 6.0) * Math.cos(CURVE_K * distance / width) - (depth / 6.0);
+                int roundedY = y > 0 ? (int) Math.ceil(y) : (int) Math.round(y);
+                int surfaceY = waterY + roundedY;
+                boolean isRiverbed = surfaceY < waterY;
+                Integer fillWaterY = isRiverbed ? waterY : null;
+                return new ProfileResult(surfaceY, isRiverbed, fillWaterY, 1.0);
+            }
+
+            double blendDistance = distance - bankPeakDist;
+            if (blendDistance > MAX_BLEND_DISTANCE) {
+                return null;
+            }
+
+            int targetY = (int) (bankPeakY - blendDistance / BLEND_DOWN_RATE);
+            if (targetY <= vanillaY) {
+                return null;
+            }
+            double totalBlendDist = (bankPeakY - vanillaY) * BLEND_DOWN_RATE;
+            double weight = Math.max(0.0, Math.min(1.0, 1.0 - (blendDistance / totalBlendDist)));
+            return new ProfileResult(targetY, false, null, weight);
+        }
+
+        if (distance <= halfWidth) {
+            double y = -(5.0 * depth / 6.0) * Math.cos(CURVE_K * distance / width) - (depth / 6.0);
+            int surfaceY = waterY + (int) Math.round(y);
+            return new ProfileResult(surfaceY, true, waterY, 1.0);
+        }
+
+        double carveDistance = distance - halfWidth;
+        int targetY = waterY + (int) (carveDistance / BLEND_UP_RATE);
+        if (targetY >= vanillaY) {
+            return null;
+        }
+        double totalCarveDist = (vanillaY - waterY) * BLEND_UP_RATE;
+        double weight = Math.max(0.0, Math.min(1.0, 1.0 - (carveDistance / totalCarveDist)));
+        return new ProfileResult(targetY, false, null, weight);
+    }
+
+    default boolean isInCellBounds(int cellLocalX, int cellLocalZ, int cellSize) {
+        return cellLocalX >= 0 && cellLocalX < cellSize
+            && cellLocalZ >= 0 && cellLocalZ < cellSize;
+    }
+
+    default boolean isInCornerNeighbor(int cellLocalX, int cellLocalZ, int cellSize, Direction dir) {
+        if (dir.dx == 0 || dir.dz == 0) {
+            return false;
+        }
+
+        boolean inXNeighbor;
+        if (dir.dx > 0) {
+            inXNeighbor = cellLocalX >= cellSize && cellLocalX < 2 * cellSize
+                && cellLocalZ >= 0 && cellLocalZ < cellSize;
+        } else {
+            inXNeighbor = cellLocalX >= -cellSize && cellLocalX < 0
+                && cellLocalZ >= 0 && cellLocalZ < cellSize;
+        }
+
+        boolean inZNeighbor;
+        if (dir.dz > 0) {
+            inZNeighbor = cellLocalZ >= cellSize && cellLocalZ < 2 * cellSize
+                && cellLocalX >= 0 && cellLocalX < cellSize;
+        } else {
+            inZNeighbor = cellLocalZ >= -cellSize && cellLocalZ < 0
+                && cellLocalX >= 0 && cellLocalX < cellSize;
+        }
+
+        return inXNeighbor || inZNeighbor;
+    }
 
     default int[] getEdgePoint(Direction dir, int cellSize, int center) {
         return switch (dir) {

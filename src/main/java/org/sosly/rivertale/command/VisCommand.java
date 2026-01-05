@@ -31,6 +31,7 @@ import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.networking.Network;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
+import org.sosly.rivertale.river.WatershedCache;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID)
 public class VisCommand {
@@ -85,16 +86,26 @@ public class VisCommand {
 
     private static void sendRegions(ServerPlayer player, RegionPos center) {
         CellCache cellCache = CellCache.get();
+        SampleCache sampleCache = SampleCache.get();
+        RegionCache regionCache = RegionCache.get();
 
-        sendRegion(player, center, cellCache);
+        Set<RegionPos> loadedRegions = new HashSet<>();
+
+        regionCache.getOrCompute(center, cellCache, sampleCache);
+        loadedRegions.add(center);
+
         for (Direction dir : Direction.D8) {
-            sendRegion(player, center.relative(dir), cellCache);
+            RegionPos neighbor = center.relative(dir);
+            regionCache.getOrCompute(neighbor, cellCache, sampleCache);
+            loadedRegions.add(neighbor);
         }
-    }
 
-    private static void sendRegion(ServerPlayer player, RegionPos pos, CellCache cellCache) {
-        Region region = RegionCache.get().getOrCompute(pos, cellCache, SampleCache.get());
-        Network.sendToPlayer(new Region.Packet(region), player);
+        WatershedCache.get().finalizeReady(loadedRegions);
+
+        for (RegionPos pos : loadedRegions) {
+            Region region = regionCache.getOrCompute(pos, cellCache, sampleCache);
+            Network.sendToPlayer(new Region.Packet(region), player);
+        }
     }
 
     public static boolean isEnabled(ServerPlayer player) {

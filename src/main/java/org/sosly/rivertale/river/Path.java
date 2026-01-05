@@ -18,6 +18,7 @@ import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.terrain.OceanBoundary;
+import org.sosly.rivertale.world.WorldSettings;
 
 public class Path {
     private final List<CellPos> cells = new ArrayList<>();
@@ -45,6 +46,11 @@ public class Path {
             CellPos current = cells.get(cells.size() - 1);
 
             if (isTerminus(current)) {
+                record.stop();
+                return;
+            }
+
+            if (isBasinTerminus(current)) {
                 record.stop();
                 return;
             }
@@ -191,6 +197,28 @@ public class Path {
 
     private boolean isTerminus(CellPos pos) {
         return oceanCells.contains(pos);
+    }
+
+    private boolean isBasinTerminus(CellPos pos) {
+        Cell cell = CellCache.get().getOrCompute(pos);
+        int y = cell.y();
+
+        if (y > WorldSettings.get().seaLevel()) {
+            return false;
+        }
+
+        for (Direction dir : Direction.D8) {
+            CellPos neighbor = pos.relative(dir);
+            if (!allowedRegions.contains(neighbor.getRegion())) {
+                continue;
+            }
+            Cell neighborCell = CellCache.get().getOrCompute(neighbor);
+            if (neighborCell.y() < y) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static double distance(CellPos a, CellPos b) {

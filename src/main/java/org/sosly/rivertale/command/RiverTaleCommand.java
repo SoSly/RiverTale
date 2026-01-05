@@ -17,6 +17,7 @@ public class RiverTaleCommand {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
 
         dispatcher.register(Commands.literal("rivertale")
+            .then(DebugCommand.register())
             .then(MetricsCommand.register())
             .then(SampleCommand.register())
             .then(VisCommand.register())

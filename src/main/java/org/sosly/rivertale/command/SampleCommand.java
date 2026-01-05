@@ -104,10 +104,18 @@ public class SampleCommand {
         Sample sample = cell.sample();
         int y = pos.getY();
 
+        Sample blockSample = SampleCache.get().getOrCompute(pos.getX(), pos.getZ());
+        int vanillaY = blockSample.estimatedHeight();
+        int waterY = cell.y();
+        boolean needsBank = vanillaY <= waterY;
+
         player.sendSystemMessage(withTeleport("Cell " + cellPos, cellPos.getMiddleBlockX(), y, cellPos.getMiddleBlockZ()));
         player.sendSystemMessage(Component.literal("  feature: " + cell.feature().name()));
         player.sendSystemMessage(Component.literal("  type: " + cell.feature().type.name()));
         player.sendSystemMessage(Component.literal("  flows: " + cell.flowDirections()));
+        player.sendSystemMessage(Component.literal("  waterY: " + waterY));
+        player.sendSystemMessage(Component.literal("  vanillaY: " + vanillaY + " (at player pos)"));
+        player.sendSystemMessage(Component.literal("  needsBank: " + needsBank));
         player.sendSystemMessage(Component.literal("  continents: " + format(sample.continents())));
         player.sendSystemMessage(Component.literal("  depth: " + format(sample.depth())));
         player.sendSystemMessage(Component.literal("  erosion: " + format(sample.erosion())));

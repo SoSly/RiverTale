@@ -23,6 +23,7 @@ import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Path;
+import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.terrain.OceanBoundary;
 import org.sosly.rivertale.terrain.Oceans;
@@ -162,6 +163,22 @@ public class Region {
             cellList.add(cellTag);
         }
         tag.put("cells", cellList);
+
+        ListTag watershedList = new ListTag();
+        WatershedCache watershedCache = WatershedCache.get();
+        if (watershedCache != null) {
+            Set<Watershed> seen = new HashSet<>();
+            for (CellPos cellPos : cells()) {
+                Watershed watershed = watershedCache.getWatershed(cellPos);
+                if (watershed != null && seen.add(watershed)) {
+                    ListTag edges = watershed.encode(cellCache);
+                    for (int i = 0; i < edges.size(); i++) {
+                        watershedList.add(edges.getCompound(i));
+                    }
+                }
+            }
+        }
+        tag.put("watershed", watershedList);
 
         return tag;
     }

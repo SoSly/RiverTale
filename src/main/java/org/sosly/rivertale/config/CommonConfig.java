@@ -8,7 +8,8 @@ public record CommonConfig(
     double oceanThreshold,
     int mergeThreshold,
     int minSlope,
-    int minPathLength
+    int minPathLength,
+    int embankmentRadius
 ) {
     private static final int DEFAULT_REGION_SIZE = 1536;
     private static final int DEFAULT_CELL_SIZE = 48;
@@ -16,9 +17,10 @@ public record CommonConfig(
     private static final int DEFAULT_MERGE_THRESHOLD = 10;
     private static final int DEFAULT_MIN_SLOPE = 1;
     private static final int DEFAULT_MIN_PATH_LENGTH = 3;
+    private static final int DEFAULT_EMBANKMENT_RADIUS = 288;
 
     private static CommonConfig instance = new CommonConfig(
-        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE, DEFAULT_MIN_PATH_LENGTH);
+        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE, DEFAULT_MIN_PATH_LENGTH, DEFAULT_EMBANKMENT_RADIUS);
 
     public CommonConfig {
         if (regionSize % 16 != 0) {
@@ -52,6 +54,7 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue MERGE_THRESHOLD;
         public static final ForgeConfigSpec.IntValue MIN_SLOPE;
         public static final ForgeConfigSpec.IntValue MIN_PATH_LENGTH;
+        public static final ForgeConfigSpec.IntValue EMBANKMENT_RADIUS;
 
         static {
             ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -80,6 +83,10 @@ public record CommonConfig(
                 .comment("Minimum number of cells a river path must have to be valid. Shorter paths are pruned.")
                 .defineInRange("minPathLength", DEFAULT_MIN_PATH_LENGTH, 1, 20);
 
+            EMBANKMENT_RADIUS = builder
+                .comment("Distance in blocks from river channel center where terrain is pulled toward river level.")
+                .defineInRange("embankmentRadius", DEFAULT_EMBANKMENT_RADIUS, 16, 512);
+
             SPEC = builder.build();
         }
 
@@ -90,7 +97,8 @@ public record CommonConfig(
                 OCEAN_THRESHOLD.get(),
                 MERGE_THRESHOLD.get(),
                 MIN_SLOPE.get(),
-                MIN_PATH_LENGTH.get()
+                MIN_PATH_LENGTH.get(),
+                EMBANKMENT_RADIUS.get()
             ));
         }
     }

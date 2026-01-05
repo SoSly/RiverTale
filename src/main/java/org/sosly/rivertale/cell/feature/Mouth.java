@@ -12,10 +12,6 @@ import org.sosly.rivertale.terrain.Shape;
 import org.sosly.rivertale.world.WorldSettings;
 
 public class Mouth implements FeatureHandler {
-    private static final int WIDTH = 12;
-    private static final int DEPTH = 5;
-    private static final int INFLUENCE_RADIUS = 120;
-
     @Override
     public Shape[][] shape(Cell cell, Watershed watershed, ChunkPos chunk) {
         CellPos cellPos = cell.pos();
@@ -41,6 +37,8 @@ public class Mouth implements FeatureHandler {
         int cellMinX = cellPos.getMinBlockX();
         int cellMinZ = cellPos.getMinBlockZ();
 
+        int maxDistance = DEFAULT_WIDTH / 2;
+
         Shape[][] result = new Shape[16][16];
 
         for (int localX = 0; localX < 16; localX++) {
@@ -51,21 +49,31 @@ public class Mouth implements FeatureHandler {
                 int cellLocalX = worldX - cellMinX;
                 int cellLocalZ = worldZ - cellMinZ;
 
+                boolean allowedForRiverbed = isInCellBounds(cellLocalX, cellLocalZ, cellSize)
+                    || isInCornerNeighbor(cellLocalX, cellLocalZ, cellSize, entryDir);
+
+                if (!allowedForRiverbed) {
+                    continue;
+                }
+
                 PathInfo pathInfo = getPathInfo(cellLocalX, cellLocalZ, entryPoint, exitPoint, center, center);
+                double distance = pathInfo.distance();
 
-                if (pathInfo.distance() > INFLUENCE_RADIUS) {
+                if (distance > maxDistance) {
                     continue;
                 }
 
-                double weight = 1.0 - (pathInfo.distance() / INFLUENCE_RADIUS);
-                boolean isRiverbed = pathInfo.distance() <= WIDTH / 2.0;
-
-                if (!isRiverbed) {
+                ProfileResult profile = calculateProfile(distance, waterY, waterY);
+                if (profile == null || !profile.isRiverbed()) {
                     continue;
                 }
 
-                int surfaceY = waterY - DEPTH;
-                result[localX][localZ] = new Shape(surfaceY, weight, true, waterY);
+                result[localX][localZ] = new Shape(
+                    profile.surfaceY(),
+                    profile.weight(),
+                    profile.isRiverbed(),
+                    profile.waterY()
+                );
             }
         }
 

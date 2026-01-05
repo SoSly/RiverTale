@@ -15,11 +15,7 @@ import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.terrain.Shape;
 
 public class Confluence implements FeatureHandler {
-    private static final int FLAT_RADIUS = 3;
-    private static final int DEPTH = 5;
-    private static final int EMBANKMENT_RADIUS = 120;
-
-    private record EntryInfo(int[] point, int y) {}
+    private record EntryInfo(int[] point, int y, Direction dir) {}
 
     @Override
     public Shape[][] shape(Cell cell, Watershed watershed, ChunkPos chunk) {
@@ -43,7 +39,7 @@ public class Confluence implements FeatureHandler {
             int[] point = getEdgePoint(dir, cellSize, center);
             Cell upstreamCell = cache.getOrCompute(upstreamPos);
             int entryY = (centerY + upstreamCell.y()) / 2;
-            entries.add(new EntryInfo(point, entryY));
+            entries.add(new EntryInfo(point, entryY, dir));
         }
 
         Direction exitDir = getDirection(cellPos, downstreamPos);
@@ -63,6 +59,8 @@ public class Confluence implements FeatureHandler {
         int cellMinX = cellPos.getMinBlockX();
         int cellMinZ = cellPos.getMinBlockZ();
 
+        int maxDistance = maxInfluenceDistance();
+
         Shape[][] result = new Shape[16][16];
 
         for (int localX = 0; localX < 16; localX++) {
@@ -75,7 +73,6 @@ public class Confluence implements FeatureHandler {
 
                 double minDistance = Double.MAX_VALUE;
                 int waterY = centerY;
-                boolean isEntrySegment = true;
 
                 for (EntryInfo entry : entries) {
                     double d = distanceToSegment(cellLocalX, cellLocalZ,
@@ -85,7 +82,6 @@ public class Confluence implements FeatureHandler {
                         double t = projectOntoSegment(cellLocalX, cellLocalZ,
                             entry.point[0], entry.point[1], center, center);
                         waterY = (int) Math.round(entry.y + (centerY - entry.y) * t);
-                        isEntrySegment = true;
                     }
                 }
 
@@ -96,49 +92,47 @@ public class Confluence implements FeatureHandler {
                     double t = projectOntoSegment(cellLocalX, cellLocalZ,
                         center, center, exitPoint[0], exitPoint[1]);
                     waterY = (int) Math.round(centerY + (exitY - centerY) * t);
-                    isEntrySegment = false;
                 }
 
-                int slopeWidth = DEPTH - 1;
-                double waterEdge = FLAT_RADIUS + slopeWidth;
-
-                if (minDistance > EMBANKMENT_RADIUS) {
+                if (minDistance > maxDistance) {
                     continue;
                 }
 
-                int surfaceY;
-                double weight;
-                Integer fillWaterY = null;
-                boolean isRiverbed;
-
-                if (minDistance <= FLAT_RADIUS) {
-                    surfaceY = waterY - DEPTH;
-                    fillWaterY = waterY;
-                    isRiverbed = true;
-                    weight = 1.0;
-                } else if (minDistance <= waterEdge) {
-                    int stepsFromFlat = (int) Math.ceil(minDistance - FLAT_RADIUS);
-                    if (stepsFromFlat == 1) {
-                        surfaceY = waterY - DEPTH + 2;
-                    } else {
-                        surfaceY = waterY - DEPTH + 2 + (stepsFromFlat - 1);
-                    }
-                    fillWaterY = waterY;
-                    isRiverbed = true;
-                    weight = 1.0;
-                } else {
-                    Sample blockSample = SampleCache.get().getOrCompute(worldX, worldZ);
-                    if (blockSample.isOcean()) {
-                        continue;
-                    }
-
-                    double progress = (minDistance - waterEdge) / (EMBANKMENT_RADIUS - waterEdge);
-                    weight = 1.0 - progress;
-                    surfaceY = waterY;
-                    isRiverbed = false;
+                Sample blockSample = SampleCache.get().getOrCompute(worldX, worldZ);
+                if (blockSample.isOcean()) {
+                    continue;
                 }
 
-                result[localX][localZ] = new Shape(surfaceY, weight, isRiverbed, fillWaterY);
+                int vanillaY = blockSample.estimatedHeight();
+
+                ProfileResult profile = calculateProfile(minDistance, waterY, vanillaY);
+                if (profile == null) {
+                    continue;
+                }
+
+                if (profile.isRiverbed()) {
+                    boolean inCellBounds = isInCellBounds(cellLocalX, cellLocalZ, cellSize);
+                    boolean allowedForRiverbed = inCellBounds
+                        || isInCornerNeighbor(cellLocalX, cellLocalZ, cellSize, exitDir);
+                    if (!allowedForRiverbed) {
+                        for (EntryInfo entry : entries) {
+                            if (isInCornerNeighbor(cellLocalX, cellLocalZ, cellSize, entry.dir())) {
+                                allowedForRiverbed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!allowedForRiverbed) {
+                        continue;
+                    }
+                }
+
+                result[localX][localZ] = new Shape(
+                    profile.surfaceY(),
+                    profile.weight(),
+                    profile.isRiverbed(),
+                    profile.waterY()
+                );
             }
         }
 

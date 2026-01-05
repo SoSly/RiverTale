@@ -21,6 +21,7 @@ import net.minecraft.world.level.chunk.PalettedContainerRO;
 import net.minecraft.world.level.levelgen.Heightmap;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
@@ -37,7 +38,9 @@ public class RiverBuilder {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int SHARPNESS = 3;
     private static final double BLEND_THRESHOLD = 0.3;
-    private static final int INFLUENCE_RADIUS = 120;
+    private static int influenceRadius() {
+        return CommonConfig.get().embankmentRadius();
+    }
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
     private static final BlockState STONE = Blocks.STONE.defaultBlockState();
@@ -100,15 +103,16 @@ public class RiverBuilder {
     }
 
     private static Set<Cell> findContributingCells(ChunkPos chunkPos) {
+        int radius = influenceRadius();
         CellPos minCell = new CellPos(new BlockPos(
-            chunkPos.getMinBlockX() - INFLUENCE_RADIUS,
+            chunkPos.getMinBlockX() - radius,
             0,
-            chunkPos.getMinBlockZ() - INFLUENCE_RADIUS
+            chunkPos.getMinBlockZ() - radius
         ));
         CellPos maxCell = new CellPos(new BlockPos(
-            chunkPos.getMaxBlockX() + INFLUENCE_RADIUS,
+            chunkPos.getMaxBlockX() + radius,
             0,
-            chunkPos.getMaxBlockZ() + INFLUENCE_RADIUS
+            chunkPos.getMaxBlockZ() + radius
         ));
 
         Set<Cell> contributors = new HashSet<>();
@@ -290,11 +294,7 @@ public class RiverBuilder {
                         worldX, worldZ, vanillaY, targetY, waterY, depth);
                 }
 
-                applySurface(chunk, x, z, vanillaY, targetY);
-
-                if (waterY != null) {
-                    fillWater(chunk, x, z, targetY, waterY);
-                }
+                applyColumn(chunk, x, z, targetY, waterY);
 
                 if (isRiverbed && riverBiome != null) {
                     applyRiverBiome(chunk, x, z, waterY != null ? waterY : targetY);
@@ -318,37 +318,33 @@ public class RiverBuilder {
         return minY;
     }
 
-    private static void applySurface(ChunkAccess chunk, int localX, int localZ, int vanillaY, int targetY) {
-        if (targetY == vanillaY) {
-            return;
-        }
+    private static void applyColumn(ChunkAccess chunk, int localX, int localZ, int targetY, Integer waterY) {
+        int minY = chunk.getMinBuildHeight();
+        int maxY = chunk.getMaxBuildHeight() - 1;
 
         Heightmap oceanFloor = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.OCEAN_FLOOR_WG);
         Heightmap worldSurface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
 
-        if (targetY < vanillaY) {
-            for (int y = vanillaY; y > targetY; y--) {
-                setBlockDirect(chunk, localX, y, localZ, AIR);
-                oceanFloor.update(localX, y, localZ, AIR);
-                worldSurface.update(localX, y, localZ, AIR);
-            }
-        } else {
-            for (int y = vanillaY + 1; y <= targetY; y++) {
-                setBlockDirect(chunk, localX, y, localZ, STONE);
-                oceanFloor.update(localX, y, localZ, STONE);
-                worldSurface.update(localX, y, localZ, STONE);
-            }
+        for (int y = minY; y <= targetY; y++) {
+            setBlockDirect(chunk, localX, y, localZ, STONE);
+            oceanFloor.update(localX, y, localZ, STONE);
+            worldSurface.update(localX, y, localZ, STONE);
         }
-    }
 
-    private static void fillWater(ChunkAccess chunk, int localX, int localZ, int surfaceY, int waterY) {
-        Heightmap oceanFloor = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.OCEAN_FLOOR_WG);
-        Heightmap worldSurface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
+        int airStart = targetY + 1;
+        if (waterY != null && waterY > targetY) {
+            for (int y = targetY + 1; y <= waterY; y++) {
+                setBlockDirect(chunk, localX, y, localZ, WATER);
+                oceanFloor.update(localX, y, localZ, WATER);
+                worldSurface.update(localX, y, localZ, WATER);
+            }
+            airStart = waterY + 1;
+        }
 
-        for (int y = surfaceY + 1; y <= waterY; y++) {
-            setBlockDirect(chunk, localX, y, localZ, WATER);
-            oceanFloor.update(localX, y, localZ, WATER);
-            worldSurface.update(localX, y, localZ, WATER);
+        for (int y = airStart; y <= maxY; y++) {
+            setBlockDirect(chunk, localX, y, localZ, AIR);
+            oceanFloor.update(localX, y, localZ, AIR);
+            worldSurface.update(localX, y, localZ, AIR);
         }
     }
 
