@@ -16,10 +16,12 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 import net.minecraft.world.level.levelgen.Heightmap;
+import org.sosly.rivertale.capability.FlowDirectionCapability;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
@@ -79,7 +81,7 @@ public class RiverBuilder {
         WatershedCache.get().finalizeReady(loadedRegions);
     }
 
-    private record ColumnResult(int y, boolean isRiverbed, Integer waterY, Integer flowLevel) {}
+    private record ColumnResult(int y, boolean isRiverbed, Integer waterY, Integer flowLevel, Direction flowDirection) {}
 
     public static void shape(ChunkAccess chunk) {
         Timer.Record shapeTimer = Store.getTimer(RiverBuilder.class, "shape").start();
@@ -192,6 +194,7 @@ public class RiverBuilder {
         boolean isRiverbed = !riverbeds.isEmpty();
         Integer waterY = null;
         Integer flowLevel = null;
+        Direction flowDirection = null;
 
         if (isRiverbed) {
             double[] result = powerWeightedAverage(riverbeds);
@@ -199,6 +202,7 @@ public class RiverBuilder {
             confidence = result[1];
             waterY = combineWaterY(riverbeds);
             flowLevel = combineFlowLevel(riverbeds);
+            flowDirection = combineFlowDirection(riverbeds);
         } else {
             double[] result = weightedAverage(embankments);
             y = (int) result[0];
@@ -206,7 +210,7 @@ public class RiverBuilder {
         }
 
         int blendedY = blendTowardVanilla(y, vanillaY, confidence, isRiverbed);
-        return new ColumnResult(blendedY, isRiverbed, waterY, flowLevel);
+        return new ColumnResult(blendedY, isRiverbed, waterY, flowLevel, flowDirection);
     }
 
     private static Integer combineWaterY(List<Shape> riverbeds) {
@@ -231,6 +235,18 @@ public class RiverBuilder {
             }
         }
         return minFlowLevel;
+    }
+
+    private static Direction combineFlowDirection(List<Shape> riverbeds) {
+        Direction best = null;
+        double bestWeight = 0;
+        for (Shape shape : riverbeds) {
+            if (shape.flowDirection() != null && shape.weight() > bestWeight) {
+                best = shape.flowDirection();
+                bestWeight = shape.weight();
+            }
+        }
+        return best;
     }
 
     private static double[] powerWeightedAverage(List<Shape> shapes) {
@@ -291,6 +307,9 @@ public class RiverBuilder {
         ChunkPos pos = chunk.getPos();
         boolean debug = pos.x == DEBUG_CHUNK_X && pos.z == DEBUG_CHUNK_Z;
 
+        Direction[][] flowDirections = new Direction[16][16];
+        boolean hasFlowData = false;
+
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 if (results[x][z] == null) {
@@ -301,6 +320,7 @@ public class RiverBuilder {
                 Integer waterY = results[x][z].waterY();
                 Integer flowLevel = results[x][z].flowLevel();
                 boolean isRiverbed = results[x][z].isRiverbed();
+                Direction flowDirection = results[x][z].flowDirection();
 
                 if (debug && isRiverbed) {
                     int worldX = pos.getMinBlockX() + x;
@@ -315,6 +335,19 @@ public class RiverBuilder {
                 if (isRiverbed && riverBiome != null) {
                     applyRiverBiome(chunk, x, z, waterY != null ? waterY : targetY);
                 }
+
+                if (isRiverbed && flowDirection != null) {
+                    flowDirections[x][z] = flowDirection;
+                    hasFlowData = true;
+                }
+            }
+        }
+
+        if (hasFlowData) {
+            FlowDirectionCapability.storePending(pos, flowDirections);
+            if (chunk instanceof LevelChunk levelChunk) {
+                FlowDirectionCapability.get(levelChunk);
+                levelChunk.setUnsaved(true);
             }
         }
     }

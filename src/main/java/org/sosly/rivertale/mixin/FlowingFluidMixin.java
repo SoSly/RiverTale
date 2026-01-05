@@ -2,15 +2,17 @@ package org.sosly.rivertale.mixin;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.material.FlowingFluid;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
-import org.sosly.rivertale.cell.Cell;
-import org.sosly.rivertale.cell.CellCache;
-import org.sosly.rivertale.cell.feature.Feature;
-import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.river.Watershed;
-import org.sosly.rivertale.river.WatershedCache;
+import org.sosly.rivertale.capability.FlowDirectionCapability;
+import org.sosly.rivertale.capability.FlowDirectionData;
+import org.sosly.rivertale.client.FlowDirectionClientCache;
+import org.sosly.rivertale.core.Direction;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -26,41 +28,45 @@ public abstract class FlowingFluidMixin {
             FluidState fluidState,
             CallbackInfoReturnable<Vec3> cir) {
 
-        CellCache cellCache = CellCache.get();
-        if (cellCache == null) {
+        ChunkPos chunkPos = new ChunkPos(pos);
+        int localX = pos.getX() & 15;
+        int localZ = pos.getZ() & 15;
+
+        Direction direction = getFromPending(chunkPos, localX, localZ);
+
+        if (direction == null && level instanceof Level world) {
+            direction = world.isClientSide
+                ? FlowDirectionClientCache.get(chunkPos, localX, localZ)
+                : getFromCapability(world, chunkPos, localX, localZ);
+        }
+
+        if (direction == null || direction == Direction.NONE) {
             return;
         }
 
-        CellPos cellPos = new CellPos(pos);
-        Cell cell = cellCache.getIfPresent(cellPos);
-        if (cell == null) {
-            return;
-        }
-
-        Feature feature = cell.feature();
-        if (feature == Feature.DEFAULT || feature == Feature.DIVIDE) {
-            return;
-        }
-
-        WatershedCache watershedCache = WatershedCache.get();
-        if (watershedCache == null) {
-            return;
-        }
-
-        Watershed watershed = watershedCache.getWatershed(cellPos);
-        if (watershed == null) {
-            return;
-        }
-
-        CellPos downstream = watershed.downstream(cellPos);
-        if (downstream == null) {
-            return;
-        }
-
-        int dx = downstream.x() - cellPos.x();
-        int dz = downstream.z() - cellPos.z();
-
-        Vec3 flowVec = new Vec3(dx, 0.0, dz).normalize();
+        Vec3 flowVec = new Vec3(direction.dx, 0.0, direction.dz).normalize();
         cir.setReturnValue(flowVec);
+    }
+
+    private Direction getFromCapability(Level world, ChunkPos chunkPos, int localX, int localZ) {
+        ChunkAccess chunk = world.getChunk(chunkPos.x, chunkPos.z);
+        if (!(chunk instanceof LevelChunk levelChunk)) {
+            return null;
+        }
+
+        FlowDirectionData flowData = FlowDirectionCapability.get(levelChunk);
+        if (flowData == null) {
+            return null;
+        }
+
+        return flowData.get(localX, localZ);
+    }
+
+    private Direction getFromPending(ChunkPos chunkPos, int localX, int localZ) {
+        Direction[][] pending = FlowDirectionCapability.getPending(chunkPos);
+        if (pending == null) {
+            return null;
+        }
+        return pending[localX][localZ];
     }
 }

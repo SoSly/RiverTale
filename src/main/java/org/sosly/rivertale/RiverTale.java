@@ -10,6 +10,7 @@ import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
+import org.sosly.rivertale.capability.FlowDirectionCapability;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.event.ServerLifecycleHandler;
 import org.sosly.rivertale.networking.Network;
@@ -28,8 +29,10 @@ public class RiverTale {
 
         modEventBus.addListener(this::setup);
         modEventBus.addListener(this::onLoadComplete);
+        modEventBus.addListener(FlowDirectionCapability::register);
 
         MinecraftForge.EVENT_BUS.register(new ServerLifecycleHandler());
+        MinecraftForge.EVENT_BUS.register(new FlowDirectionCapability.EventHandler());
     }
 
     private void setup(final FMLCommonSetupEvent event) {

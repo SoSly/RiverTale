@@ -32,6 +32,12 @@ public class Network {
             VisCommand.TogglePacket::encode,
             VisCommand.TogglePacket::decode,
             VisCommand.TogglePacket::handle);
+
+        CHANNEL.registerMessage(packetId++,
+            FlowDirectionSyncPacket.class,
+            FlowDirectionSyncPacket::encode,
+            FlowDirectionSyncPacket::decode,
+            FlowDirectionSyncPacket::handle);
     }
 
     public static void sendToPlayer(Message message, ServerPlayer player) {

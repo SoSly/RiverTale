@@ -88,7 +88,8 @@ public class Mouth implements FeatureHandler {
                     profile.weight(),
                     profile.isRiverbed(),
                     profile.waterY(),
-                    shapeFlowLevel
+                    shapeFlowLevel,
+                    entryDir.opposite()
                 );
             }
         }

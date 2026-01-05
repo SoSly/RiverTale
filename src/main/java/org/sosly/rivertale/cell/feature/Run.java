@@ -123,12 +123,16 @@ public class Run extends AbstractCourseHandler {
                 }
 
                 Integer shapeFlowLevel = profile.isRiverbed() ? flowLevel : null;
+                Direction flowDirection = pathInfo.isEntrySegment()
+                    ? entryDir.opposite()
+                    : exitDir;
                 result[localX][localZ] = new Shape(
                     profile.surfaceY(),
                     profile.weight(),
                     profile.isRiverbed(),
                     profile.waterY(),
-                    shapeFlowLevel
+                    shapeFlowLevel,
+                    flowDirection
                 );
             }
         }

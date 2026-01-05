@@ -73,6 +73,7 @@ public class Confluence implements FeatureHandler {
 
                 double minDistance = Double.MAX_VALUE;
                 int waterY = centerY;
+                Direction flowDirection = exitDir;
 
                 for (EntryInfo entry : entries) {
                     double d = distanceToSegment(cellLocalX, cellLocalZ,
@@ -82,6 +83,7 @@ public class Confluence implements FeatureHandler {
                         double t = projectOntoSegment(cellLocalX, cellLocalZ,
                             entry.point[0], entry.point[1], center, center);
                         waterY = (int) Math.round(entry.y + (centerY - entry.y) * t);
+                        flowDirection = entry.dir().opposite();
                     }
                 }
 
@@ -92,6 +94,7 @@ public class Confluence implements FeatureHandler {
                     double t = projectOntoSegment(cellLocalX, cellLocalZ,
                         center, center, exitPoint[0], exitPoint[1]);
                     waterY = (int) Math.round(centerY + (exitY - centerY) * t);
+                    flowDirection = exitDir;
                 }
 
                 if (minDistance > maxDistance) {
@@ -132,7 +135,8 @@ public class Confluence implements FeatureHandler {
                     profile.weight(),
                     profile.isRiverbed(),
                     profile.waterY(),
-                    null
+                    null,
+                    flowDirection
                 );
             }
         }
