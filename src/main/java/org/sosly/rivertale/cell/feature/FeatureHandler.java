@@ -12,6 +12,7 @@ import org.sosly.rivertale.terrain.Shape;
 public interface FeatureHandler {
     int DEFAULT_WIDTH = 16;
     int DEFAULT_DEPTH = 4;
+    int DEFAULT_EMBANKMENT_THRESHOLD = DEFAULT_DEPTH;
     double CURVE_K = 2 * Math.acos(-0.2);
     double BANK_PEAK_RATIO = Math.PI / CURVE_K;
     double BLEND_DOWN_RATE = 3.0;
@@ -55,15 +56,19 @@ public interface FeatureHandler {
     }
 
     default ProfileResult calculateProfile(double distance, int waterY, int vanillaY, int width, int depth) {
+        return calculateProfile(distance, waterY, vanillaY, width, depth, depth);
+    }
+
+    default ProfileResult calculateProfile(double distance, int waterY, int vanillaY, int width, int depth, int embankmentThreshold) {
         int halfWidth = width / 2;
         int bankPeakDist = bankPeakDistance(width);
         int bankPeakY = waterY + bankPeakHeight(depth);
-        boolean needsBank = vanillaY <= waterY;
+        boolean needsBank = vanillaY <= waterY + embankmentThreshold;
 
         if (needsBank) {
             if (distance <= bankPeakDist) {
                 double y = -(5.0 * depth / 6.0) * Math.cos(CURVE_K * distance / width) - (depth / 6.0);
-                int roundedY = y > 0 ? (int) Math.ceil(y) : (int) Math.round(y);
+                int roundedY = y > 0 ? (int) Math.ceil(y) : (int) Math.floor(y);
                 int surfaceY = waterY + roundedY;
                 boolean isRiverbed = surfaceY < waterY;
                 Integer fillWaterY = isRiverbed ? waterY : null;
@@ -86,7 +91,8 @@ public interface FeatureHandler {
 
         if (distance <= halfWidth) {
             double y = -(5.0 * depth / 6.0) * Math.cos(CURVE_K * distance / width) - (depth / 6.0);
-            int surfaceY = waterY + (int) Math.round(y);
+            int roundedY = y > 0 ? (int) Math.ceil(y) : (int) Math.floor(y);
+            int surfaceY = waterY + roundedY;
             return new ProfileResult(surfaceY, true, waterY, 1.0);
         }
 
