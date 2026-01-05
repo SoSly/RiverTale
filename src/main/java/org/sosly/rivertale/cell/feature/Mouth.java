@@ -66,7 +66,11 @@ public class Mouth implements FeatureHandler {
                     continue;
                 }
 
-                FlowInfo flowInfo = computeFlowInfo(pathInfo, entryY, centerY, centerY, entrySegmentLength);
+                Direction flowDir = entryDir.opposite();
+                FlowInfo flowInfo = computeFlowInfo(
+                    pathInfo, entryY, centerY, centerY, entrySegmentLength,
+                    flowDir, cellLocalX, cellLocalZ, entryPoint, exitPoint
+                );
                 int waterY = flowInfo.waterY();
                 Integer flowLevel = flowInfo.flowLevel();
 

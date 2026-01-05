@@ -183,10 +183,26 @@ public interface FeatureHandler {
     record FlowInfo(int waterY, Integer flowLevel) {}
 
     default FlowInfo computeFlowInfo(PathInfo info, int entryY, int centerY, int exitY, double segmentLength) {
+        return computeFlowInfo(info, entryY, centerY, exitY, segmentLength, Direction.NONE, 0, 0, null, null);
+    }
+
+    default FlowInfo computeFlowInfo(
+            PathInfo info,
+            int entryY,
+            int centerY,
+            int exitY,
+            double segmentLength,
+            Direction flowDir,
+            int blockX,
+            int blockZ,
+            int[] segmentStart,
+            int[] segmentEnd) {
+
         double exactY = interpolateYExact(info, entryY, centerY, exitY);
         int waterY = (int) Math.floor(exactY);
 
-        int segmentStartY, segmentEndY;
+        int segmentStartY;
+        int segmentEndY;
         if (info.isEntrySegment()) {
             segmentStartY = entryY;
             segmentEndY = centerY;
@@ -205,7 +221,21 @@ public interface FeatureHandler {
         }
 
         double tDrop = (dropY - segmentStartY) / (segmentEndY - segmentStartY);
-        double blocksFromDrop = (info.t() - tDrop) * segmentLength;
+
+        double blocksFromDrop;
+        boolean isDiagonal = flowDir != Direction.NONE && flowDir.dx != 0 && flowDir.dz != 0;
+
+        if (isDiagonal && segmentStart != null && segmentEnd != null) {
+            double dropX = segmentStart[0] + tDrop * (segmentEnd[0] - segmentStart[0]);
+            double dropZ = segmentStart[1] + tDrop * (segmentEnd[1] - segmentStart[1]);
+
+            double deltaX = (blockX - dropX) * flowDir.dx;
+            double deltaZ = (blockZ - dropZ) * flowDir.dz;
+
+            blocksFromDrop = Math.max(deltaX, deltaZ);
+        } else {
+            blocksFromDrop = (info.t() - tDrop) * segmentLength;
+        }
 
         if (blocksFromDrop < 0.5 || blocksFromDrop > 7.5) {
             return new FlowInfo(waterY, null);

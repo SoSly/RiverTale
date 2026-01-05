@@ -90,7 +90,20 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
                 }
 
                 double segmentLength = pathInfo.isEntrySegment() ? entrySegmentLength : exitSegmentLength;
-                FlowInfo flowInfo = computeFlowInfo(pathInfo, entryY, centerY, exitY, segmentLength);
+                Direction flowDir = pathInfo.isEntrySegment() ? entryDir.opposite() : exitDir;
+                int[] segmentStart;
+                int[] segmentEnd;
+                if (pathInfo.isEntrySegment()) {
+                    segmentStart = entryPoint;
+                    segmentEnd = new int[]{center, center};
+                } else {
+                    segmentStart = new int[]{center, center};
+                    segmentEnd = exitPoint;
+                }
+                FlowInfo flowInfo = computeFlowInfo(
+                    pathInfo, entryY, centerY, exitY, segmentLength,
+                    flowDir, cellLocalX, cellLocalZ, segmentStart, segmentEnd
+                );
                 int waterY = flowInfo.waterY();
                 Integer flowLevel = flowInfo.flowLevel();
 
