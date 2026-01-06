@@ -21,17 +21,17 @@ public enum Feature {
     WETLAND(CellType.TERMINUS, new Wetland(), new float[]{0f, 0f, 1f, 1f}),
     MOUTH(CellType.TERMINUS, new Mouth(), new float[]{1f, 1f, 0f, 1f}),
 
+    // Junctions
+    CONFLUENCE(CellType.JUNCTION, new Confluence(), new float[]{1f, 0f, 0f, 1f}),
+    BIFURCATION(CellType.JUNCTION, new Bifurcation(), new float[]{0f, 1f, 0f, 1f}),
+    BRAID(CellType.JUNCTION, new Braid(), new float[]{0f, 0f, 1f, 1f}),
+
     // Lakes
     ENDORHEIC(CellType.LAKE, new Endorheic(), new float[]{1f, 0f, 0f, 1f}),
     KETTLE(CellType.LAKE, new Kettle(), new float[]{0f, 1f, 0f, 1f}),
     SINKHOLE(CellType.LAKE, new Sinkhole(), new float[]{0f, 0f, 1f, 1f}),
     LAGOON(CellType.LAKE, new Lagoon(), new float[]{1f, 1f, 0f, 1f}),
     TECTONIC(CellType.LAKE, new Tectonic(), new float[]{0f, 1f, 1f, 1f}),
-
-    // Junctions
-    CONFLUENCE(CellType.JUNCTION, new Confluence(), new float[]{1f, 0f, 0f, 1f}),
-    BIFURCATION(CellType.JUNCTION, new Bifurcation(), new float[]{0f, 1f, 0f, 1f}),
-    BRAID(CellType.JUNCTION, new Braid(), new float[]{0f, 0f, 1f, 1f}),
 
     // Courses (ordered by drop size: largest first, then fallback)
     PLUNGE_POOL(CellType.COURSE, new PlungePool(), new float[]{1f, 0f, 0f, 1f}),
