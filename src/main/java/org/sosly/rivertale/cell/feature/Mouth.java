@@ -7,7 +7,7 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Watershed;
@@ -27,8 +27,8 @@ public class Mouth implements FeatureHandler {
         int cellSize = CommonConfig.get().cellSize();
         int center = cellSize / 2;
 
-        Direction entryDir = getEntryDirection(cellPos, upstreamSet);
-        if (entryDir == Direction.NONE) {
+        FlowDirection entryDir = getEntryDirection(cellPos, upstreamSet);
+        if (entryDir == FlowDirection.NONE) {
             return null;
         }
 
@@ -65,7 +65,7 @@ public class Mouth implements FeatureHandler {
 
                 PathInfo pathInfo = getPathInfo(cellLocalX, cellLocalZ, entryPoint, exitPoint, center, center);
                 double distance = pathInfo.distance();
-                Direction flowDir = entryDir.opposite();
+                FlowDirection flowDir = entryDir.opposite();
 
                 double tUnclamped = projectOntoSegmentUnclamped(
                     cellLocalX, cellLocalZ, entryPoint[0], entryPoint[1], center, center
@@ -122,7 +122,7 @@ public class Mouth implements FeatureHandler {
 
                 boolean inChannel = perpDistance <= DEFAULT_WIDTH / 2 && tUnclamped <= 1.0;
                 Integer shapeFlowLevel = isRiverbed && inChannel ? flowLevel : null;
-                Direction shapeFlowDir = shapeFlowLevel != null ? entryDir.opposite() : null;
+                FlowDirection shapeFlowDir = shapeFlowLevel != null ? entryDir.opposite() : null;
                 result[localX][localZ] = new Shape(
                     surfaceY,
                     weight,

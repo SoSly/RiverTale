@@ -9,16 +9,16 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 
-public record Cell(CellPos pos, Sample sample, Feature feature, List<Direction> flowDirections, int y) {
+public record Cell(CellPos pos, Sample sample, Feature feature, List<FlowDirection> flowDirections, int y) {
     private static final double SQRT2 = Math.sqrt(2.0);
 
-    private record SlopeEntry(Direction dir, double slope) {}
+    private record SlopeEntry(FlowDirection dir, double slope) {}
 
-    public static List<Direction> computeFlowDirections(CellPos pos, Sample sample, SampleCache cache) {
+    public static List<FlowDirection> computeFlowDirections(CellPos pos, Sample sample, SampleCache cache) {
         if (cache == null) {
             return List.of();
         }
@@ -26,7 +26,7 @@ public record Cell(CellPos pos, Sample sample, Feature feature, List<Direction> 
         double currentDensity = sample.continents() + sample.depth();
         List<SlopeEntry> downhill = new ArrayList<>();
 
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighbor = pos.relative(dir);
             Sample neighborSample = cache.getOrCompute(neighbor.getMiddleBlockX(), neighbor.getMiddleBlockZ());
             double neighborDensity = neighborSample.continents() + neighborSample.depth();
@@ -50,10 +50,10 @@ public record Cell(CellPos pos, Sample sample, Feature feature, List<Direction> 
             return false;
         }
 
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighbor = pos.relative(dir);
             Sample neighborSample = cache.getOrCompute(neighbor.getMiddleBlockX(), neighbor.getMiddleBlockZ());
-            List<Direction> neighborFlows = computeFlowDirections(neighbor, neighborSample, cache);
+            List<FlowDirection> neighborFlows = computeFlowDirections(neighbor, neighborSample, cache);
             if (neighborFlows.contains(dir.opposite())) {
                 return true;
             }
@@ -78,7 +78,7 @@ public record Cell(CellPos pos, Sample sample, Feature feature, List<Direction> 
         tag.putInt("y", y);
 
         ListTag flowList = new ListTag();
-        for (Direction dir : flowDirections) {
+        for (FlowDirection dir : flowDirections) {
             flowList.add(StringTag.valueOf(dir.name()));
         }
         tag.put("flowDirections", flowList);
@@ -87,10 +87,10 @@ public record Cell(CellPos pos, Sample sample, Feature feature, List<Direction> 
     }
 
     public static Cell decode(CompoundTag tag) {
-        List<Direction> flows = new ArrayList<>();
+        List<FlowDirection> flows = new ArrayList<>();
         ListTag flowList = tag.getList("flowDirections", Tag.TAG_STRING);
         for (int i = 0; i < flowList.size(); i++) {
-            flows.add(Direction.valueOf(flowList.getString(i)));
+            flows.add(FlowDirection.valueOf(flowList.getString(i)));
         }
 
         return new Cell(

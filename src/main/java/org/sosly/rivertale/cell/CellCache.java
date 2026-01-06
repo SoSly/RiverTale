@@ -7,7 +7,7 @@ import java.util.Map;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
@@ -82,7 +82,7 @@ public class CellCache implements Cache<Cell> {
             return value;
         }
 
-        List<Direction> flowDirections = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flowDirections = Cell.computeFlowDirections(pos, sample, sampleCache);
         Cell value = Feature.classify(new Cell(pos, sample, Feature.DEFAULT, flowDirections, y), null);
         cache.put(key, value);
 

@@ -4,18 +4,18 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 import net.minecraft.world.level.ChunkPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 
 public class FlowDirectionClientCache {
-    private static final Map<ChunkPos, Direction[][]> CACHE = new ConcurrentHashMap<>();
+    private static final Map<ChunkPos, FlowDirection[][]> CACHE = new ConcurrentHashMap<>();
 
-    public static void put(ChunkPos pos, Direction[][] directions) {
+    public static void put(ChunkPos pos, FlowDirection[][] directions) {
         CACHE.put(pos, directions);
     }
 
     @Nullable
-    public static Direction get(ChunkPos pos, int localX, int localZ) {
-        Direction[][] directions = CACHE.get(pos);
+    public static FlowDirection get(ChunkPos pos, int localX, int localZ) {
+        FlowDirection[][] directions = CACHE.get(pos);
         if (directions == null) {
             return null;
         }

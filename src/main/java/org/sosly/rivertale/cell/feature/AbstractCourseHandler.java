@@ -6,7 +6,7 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Watershed;
@@ -27,13 +27,13 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
         int cellSize = CommonConfig.get().cellSize();
         int center = cellSize / 2;
 
-        Direction exitDir = getDirection(cellPos, downstreamPos);
-        Direction entryDir = getEntryDirection(cellPos, upstreamSet);
+        FlowDirection exitDir = getDirection(cellPos, downstreamPos);
+        FlowDirection entryDir = getEntryDirection(cellPos, upstreamSet);
 
-        if (entryDir == Direction.NONE) {
+        if (entryDir == FlowDirection.NONE) {
             entryDir = exitDir.opposite();
         }
-        if (exitDir == Direction.NONE) {
+        if (exitDir == FlowDirection.NONE) {
             exitDir = entryDir.opposite();
         }
 
@@ -90,7 +90,7 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
                 }
 
                 double segmentLength = pathInfo.isEntrySegment() ? entrySegmentLength : exitSegmentLength;
-                Direction flowDir = pathInfo.isEntrySegment() ? entryDir.opposite() : exitDir;
+                FlowDirection flowDir = pathInfo.isEntrySegment() ? entryDir.opposite() : exitDir;
                 int[] segmentStart;
                 int[] segmentEnd;
                 if (pathInfo.isEntrySegment()) {
@@ -135,7 +135,7 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
 
                 boolean inChannel = distance <= DEFAULT_WIDTH / 2;
                 Integer shapeFlowLevel = profile.isRiverbed() && inChannel ? flowLevel : null;
-                Direction flowDirection = profile.isRiverbed() && inChannel
+                FlowDirection flowDirection = profile.isRiverbed() && inChannel
                     ? (pathInfo.isEntrySegment() ? entryDir.opposite() : exitDir)
                     : null;
                 double attenuatedWeight = profile.weight() * parallelAttenuation;

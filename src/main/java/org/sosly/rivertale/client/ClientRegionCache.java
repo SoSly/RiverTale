@@ -15,7 +15,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.terrain.OceanBoundary;
@@ -30,12 +30,12 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
     private final Map<Long, Region> cache;
     private final int capacity;
 
-    public record Cell(CellPos pos, Feature feature, Direction flow, int y) {
+    public record Cell(CellPos pos, Feature feature, FlowDirection flow, int y) {
         public static Cell decode(CompoundTag tag) {
             return new Cell(
                 new CellPos(tag.getLong("pos")),
                 Feature.valueOf(tag.getString("feature")),
-                Direction.valueOf(tag.getString("flow")),
+                FlowDirection.valueOf(tag.getString("flow")),
                 tag.getInt("y")
             );
         }

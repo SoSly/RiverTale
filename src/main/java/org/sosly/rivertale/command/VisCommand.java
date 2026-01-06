@@ -25,7 +25,7 @@ import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.density.SampleCache;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.networking.Network;
@@ -94,7 +94,7 @@ public class VisCommand {
         regionCache.getOrCompute(center, cellCache, sampleCache);
         loadedRegions.add(center);
 
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             RegionPos neighbor = center.relative(dir);
             regionCache.getOrCompute(neighbor, cellCache, sampleCache);
             loadedRegions.add(neighbor);

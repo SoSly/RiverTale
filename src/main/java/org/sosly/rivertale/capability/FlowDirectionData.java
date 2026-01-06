@@ -2,20 +2,20 @@ package org.sosly.rivertale.capability;
 
 import javax.annotation.Nullable;
 import net.minecraft.nbt.CompoundTag;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 
 public class FlowDirectionData {
-    private final Direction[][] directions = new Direction[16][16];
+    private final FlowDirection[][] directions = new FlowDirection[16][16];
 
     @Nullable
-    public Direction get(int x, int z) {
+    public FlowDirection get(int x, int z) {
         if (x < 0 || x >= 16 || z < 0 || z >= 16) {
             return null;
         }
         return directions[x][z];
     }
 
-    public void set(int x, int z, @Nullable Direction direction) {
+    public void set(int x, int z, @Nullable FlowDirection direction) {
         if (x < 0 || x >= 16 || z < 0 || z >= 16) {
             return;
         }
@@ -27,7 +27,7 @@ public class FlowDirectionData {
         byte[] data = new byte[256];
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                Direction dir = directions[x][z];
+                FlowDirection dir = directions[x][z];
                 data[x * 16 + z] = dir == null ? -1 : (byte) dir.ordinal();
             }
         }
@@ -43,7 +43,7 @@ public class FlowDirectionData {
         if (data.length != 256) {
             return;
         }
-        Direction[] values = Direction.values();
+        FlowDirection[] values = FlowDirection.values();
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 byte b = data[x * 16 + z];

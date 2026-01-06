@@ -12,7 +12,7 @@ import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
@@ -126,7 +126,7 @@ public class Path {
                 return aligned;
             }
         } else {
-            for (Direction dir : cell.flowDirections()) {
+            for (FlowDirection dir : cell.flowDirections()) {
                 CellPos next = current.relative(dir);
 
                 if (!allowedRegions.contains(next.getRegion())) {
@@ -145,7 +145,7 @@ public class Path {
         return forced;
     }
 
-    private CellPos followAlignedFlow(CellPos current, List<Direction> flowDirections,
+    private CellPos followAlignedFlow(CellPos current, List<FlowDirection> flowDirections,
                                        CellPos nearestOcean, double currentDistance) {
         int dx = nearestOcean.x() - current.x();
         int dz = nearestOcean.z() - current.z();
@@ -153,7 +153,7 @@ public class Path {
         CellPos best = null;
         double bestAlignment = -Double.MAX_VALUE;
 
-        for (Direction dir : flowDirections) {
+        for (FlowDirection dir : flowDirections) {
             CellPos next = current.relative(dir);
 
             if (!allowedRegions.contains(next.getRegion())) {
@@ -178,7 +178,7 @@ public class Path {
         CellPos best = null;
         double bestDistance = currentDistance;
 
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos next = current.relative(dir);
 
             if (!allowedRegions.contains(next.getRegion())) {
@@ -207,7 +207,7 @@ public class Path {
             return false;
         }
 
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighbor = pos.relative(dir);
             if (!allowedRegions.contains(neighbor.getRegion())) {
                 continue;

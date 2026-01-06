@@ -17,7 +17,7 @@ import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.terrain.OceanBoundary;
 
 @OnlyIn(Dist.CLIENT)
@@ -98,7 +98,7 @@ public class RegionRenderer {
                                               BufferBuilder buffer, Vec3 camPos) {
         for (OceanBoundary boundary : region.boundaries()) {
             CellPos land = boundary.land();
-            Direction bearing = boundary.bearing();
+            FlowDirection bearing = boundary.bearing();
 
             Vec3 start;
             Vec3 end;
@@ -171,8 +171,8 @@ public class RegionRenderer {
         double cellSize = (double) regionSize / cellsPerRegion;
 
         for (ClientRegionCache.Cell cell : region.cells()) {
-            Direction dir = cell.flow();
-            if (dir == Direction.NONE) {
+            FlowDirection dir = cell.flow();
+            if (dir == FlowDirection.NONE) {
                 continue;
             }
 
@@ -209,7 +209,7 @@ public class RegionRenderer {
         }
     }
 
-    private static Vec3 calculateArrowEnd(Vec3 center, Direction dir) {
+    private static Vec3 calculateArrowEnd(Vec3 center, FlowDirection dir) {
         return switch (dir) {
             case NORTH -> new Vec3(center.x, center.y, center.z - ARROW_LENGTH);
             case SOUTH -> new Vec3(center.x, center.y, center.z + ARROW_LENGTH);
@@ -223,7 +223,7 @@ public class RegionRenderer {
         };
     }
 
-    private static Vec3[] calculateArrowhead(Vec3 tip, Direction dir) {
+    private static Vec3[] calculateArrowhead(Vec3 tip, FlowDirection dir) {
         return switch (dir) {
             case NORTH -> new Vec3[]{
                 new Vec3(tip.x - ARROWHEAD_SIZE, tip.y, tip.z + ARROWHEAD_SIZE),

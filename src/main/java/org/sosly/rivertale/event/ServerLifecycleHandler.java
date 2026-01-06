@@ -22,7 +22,7 @@ import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.capability.FlowDirectionCapability;
 import org.sosly.rivertale.capability.FlowDirectionData;
 import org.sosly.rivertale.cell.CellCache;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.NoiseBasedSampleProvider;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.networking.FlowDirectionSyncPacket;
@@ -93,15 +93,15 @@ public class ServerLifecycleHandler {
         LevelChunk chunk = event.getLevel().getChunk(event.getPos().x, event.getPos().z);
         ChunkPos chunkPos = chunk.getPos();
 
-        Direction[][] directions = null;
+        FlowDirection[][] directions = null;
 
         FlowDirectionData flowData = FlowDirectionCapability.get(chunk);
         if (flowData != null) {
-            directions = new Direction[16][16];
+            directions = new FlowDirection[16][16];
             boolean hasData = false;
             for (int x = 0; x < 16; x++) {
                 for (int z = 0; z < 16; z++) {
-                    Direction dir = flowData.get(x, z);
+                    FlowDirection dir = flowData.get(x, z);
                     if (dir != null) {
                         directions[x][z] = dir;
                         hasData = true;

@@ -10,30 +10,30 @@ class OceanBoundaryTest {
     @Test
     void bearingEastWhenOceanIsEastOfLand() {
         OceanBoundary boundary = new OceanBoundary(new CellPos(0, 0), new CellPos(1, 0));
-        assertEquals(Direction.EAST, boundary.bearing());
+        assertEquals(FlowDirection.EAST, boundary.bearing());
     }
 
     @Test
     void bearingWestWhenOceanIsWestOfLand() {
         OceanBoundary boundary = new OceanBoundary(new CellPos(1, 0), new CellPos(0, 0));
-        assertEquals(Direction.WEST, boundary.bearing());
+        assertEquals(FlowDirection.WEST, boundary.bearing());
     }
 
     @Test
     void bearingSouthWhenOceanIsSouthOfLand() {
         OceanBoundary boundary = new OceanBoundary(new CellPos(0, 0), new CellPos(0, 1));
-        assertEquals(Direction.SOUTH, boundary.bearing());
+        assertEquals(FlowDirection.SOUTH, boundary.bearing());
     }
 
     @Test
     void bearingNorthWhenOceanIsNorthOfLand() {
         OceanBoundary boundary = new OceanBoundary(new CellPos(0, 1), new CellPos(0, 0));
-        assertEquals(Direction.NORTH, boundary.bearing());
+        assertEquals(FlowDirection.NORTH, boundary.bearing());
     }
 
     @Test
     void bearingNoneWhenLandAndOceanAreSamePosition() {
         OceanBoundary boundary = new OceanBoundary(new CellPos(5, 5), new CellPos(5, 5));
-        assertEquals(Direction.NONE, boundary.bearing());
+        assertEquals(FlowDirection.NONE, boundary.bearing());
     }
 }

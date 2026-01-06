@@ -14,10 +14,8 @@ import net.minecraftforge.common.capabilities.CapabilityToken;
 import net.minecraftforge.common.capabilities.ICapabilitySerializable;
 import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
 import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.event.AttachCapabilitiesEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.sosly.rivertale.RiverTale;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 
 public class FlowDirectionCapability {
     public static final Capability<FlowDirectionData> CAPABILITY =
@@ -25,7 +23,7 @@ public class FlowDirectionCapability {
 
     public static final ResourceLocation ID = new ResourceLocation(RiverTale.MOD_ID, "flow_direction");
 
-    private static final Map<ChunkPos, Direction[][]> PENDING = new ConcurrentHashMap<>();
+    private static final Map<ChunkPos, FlowDirection[][]> PENDING = new ConcurrentHashMap<>();
 
     public static void register(RegisterCapabilitiesEvent event) {
         event.register(FlowDirectionData.class);
@@ -36,12 +34,12 @@ public class FlowDirectionCapability {
         return chunk.getCapability(CAPABILITY).orElse(null);
     }
 
-    public static void storePending(ChunkPos pos, Direction[][] directions) {
+    public static void storePending(ChunkPos pos, FlowDirection[][] directions) {
         PENDING.put(pos, directions);
     }
 
     @Nullable
-    public static Direction[][] getPending(ChunkPos pos) {
+    public static FlowDirection[][] getPending(ChunkPos pos) {
         return PENDING.get(pos);
     }
 
@@ -56,7 +54,7 @@ public class FlowDirectionCapability {
 
         public Provider(ChunkPos chunkPos) {
             this.chunkPos = chunkPos;
-            Direction[][] pending = PENDING.get(chunkPos);
+            FlowDirection[][] pending = PENDING.get(chunkPos);
             if (pending != null) {
                 for (int x = 0; x < 16; x++) {
                     for (int z = 0; z < 16; z++) {
@@ -87,14 +85,6 @@ public class FlowDirectionCapability {
 
         public void invalidate() {
             optional.invalidate();
-        }
-    }
-
-    public static class EventHandler {
-        @SubscribeEvent
-        public void onAttachCapabilities(AttachCapabilitiesEvent<LevelChunk> event) {
-            LevelChunk chunk = event.getObject();
-            event.addCapability(ID, new Provider(chunk.getPos()));
         }
     }
 }

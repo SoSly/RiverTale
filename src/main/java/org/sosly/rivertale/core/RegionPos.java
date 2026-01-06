@@ -69,7 +69,7 @@ public record RegionPos(int x, int z) {
         return new BlockPos(this.getMinBlockX(), y, this.getMinBlockZ());
     }
 
-    public RegionPos relative(Direction dir) {
+    public RegionPos relative(FlowDirection dir) {
         return new RegionPos(x + dir.dx, z + dir.dz);
     }
 

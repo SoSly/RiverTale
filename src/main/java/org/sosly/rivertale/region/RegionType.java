@@ -2,7 +2,7 @@ package org.sosly.rivertale.region;
 
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
@@ -48,7 +48,7 @@ public enum RegionType {
             return COASTAL;
         }
 
-        for (Direction dir : Direction.D4) {
+        for (FlowDirection dir : FlowDirection.D4) {
             if (isCoastal(pos.relative(dir), sampleCache)) {
                 record.stop();
                 return FLUVIAL;

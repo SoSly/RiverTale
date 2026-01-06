@@ -14,7 +14,7 @@ import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.FeatureHandler;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Watershed;
@@ -79,13 +79,13 @@ public class DebugCommand {
         int center = cellSize / 2;
 
         PathHelper helper = new PathHelper();
-        Direction exitDir = helper.getDirection(cellPos, downstreamPos);
-        Direction entryDir = helper.getEntryDirection(cellPos, upstreamSet);
+        FlowDirection exitDir = helper.getDirection(cellPos, downstreamPos);
+        FlowDirection entryDir = helper.getEntryDirection(cellPos, upstreamSet);
 
-        if (entryDir == Direction.NONE) {
+        if (entryDir == FlowDirection.NONE) {
             entryDir = exitDir.opposite();
         }
-        if (exitDir == Direction.NONE) {
+        if (exitDir == FlowDirection.NONE) {
             exitDir = entryDir.opposite();
         }
 

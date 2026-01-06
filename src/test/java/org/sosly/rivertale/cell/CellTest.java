@@ -9,7 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 
@@ -31,7 +31,7 @@ class CellTest {
         Sample sample = sampleAt(pos, 0.5);
         mockNeighbors(pos, 0.5);
 
-        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
         assertTrue(flow.isEmpty());
     }
@@ -40,55 +40,55 @@ class CellTest {
     void computeFlowDirectionsReturnsNorthFirstWhenNorthIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, Direction.NORTH, 0.2);
+        mockNeighborsExcept(pos, 0.5, FlowDirection.NORTH, 0.2);
 
-        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.NORTH, flow.get(0));
+        assertEquals(FlowDirection.NORTH, flow.get(0));
     }
 
     @Test
     void computeFlowDirectionsReturnsSouthFirstWhenSouthIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, Direction.SOUTH, 0.2);
+        mockNeighborsExcept(pos, 0.5, FlowDirection.SOUTH, 0.2);
 
-        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.SOUTH, flow.get(0));
+        assertEquals(FlowDirection.SOUTH, flow.get(0));
     }
 
     @Test
     void computeFlowDirectionsReturnsEastFirstWhenEastIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, Direction.EAST, 0.2);
+        mockNeighborsExcept(pos, 0.5, FlowDirection.EAST, 0.2);
 
-        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.EAST, flow.get(0));
+        assertEquals(FlowDirection.EAST, flow.get(0));
     }
 
     @Test
     void computeFlowDirectionsReturnsWestFirstWhenWestIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, Direction.WEST, 0.2);
+        mockNeighborsExcept(pos, 0.5, FlowDirection.WEST, 0.2);
 
-        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.WEST, flow.get(0));
+        assertEquals(FlowDirection.WEST, flow.get(0));
     }
 
     @Test
     void computeFlowDirectionsReturnsDiagonalFirstWhenDiagonalIsLowest() {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, Direction.NORTHEAST, 0.0);
+        mockNeighborsExcept(pos, 0.5, FlowDirection.NORTHEAST, 0.0);
 
-        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
-        assertEquals(Direction.NORTHEAST, flow.get(0));
+        assertEquals(FlowDirection.NORTHEAST, flow.get(0));
     }
 
     @Test
@@ -96,13 +96,13 @@ class CellTest {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 1.0);
 
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighborPos = pos.relative(dir);
             double depth = (dir.dx != 0 && dir.dz != 0) ? 1.0 - 0.3 * Math.sqrt(2) : 0.7;
             mockSampleAt(neighborPos, depth);
         }
 
-        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
         assertTrue(flow.get(0).dx == 0 || flow.get(0).dz == 0);
     }
@@ -113,7 +113,7 @@ class CellTest {
         Sample sample = sampleAt(pos, 0.2);
         mockNeighbors(pos, 0.5);
 
-        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
         assertTrue(flow.isEmpty());
     }
@@ -123,19 +123,19 @@ class CellTest {
         CellPos pos = new CellPos(0, 0);
         Sample sample = sampleAt(pos, 1.0);
 
-        mockSampleAt(pos.relative(Direction.NORTH), 0.8);
-        mockSampleAt(pos.relative(Direction.SOUTH), 0.3);
-        mockSampleAt(pos.relative(Direction.EAST), 0.9);
-        mockSampleAt(pos.relative(Direction.WEST), 0.9);
-        for (Direction dir : new Direction[]{Direction.NORTHEAST, Direction.NORTHWEST, Direction.SOUTHEAST, Direction.SOUTHWEST}) {
+        mockSampleAt(pos.relative(FlowDirection.NORTH), 0.8);
+        mockSampleAt(pos.relative(FlowDirection.SOUTH), 0.3);
+        mockSampleAt(pos.relative(FlowDirection.EAST), 0.9);
+        mockSampleAt(pos.relative(FlowDirection.WEST), 0.9);
+        for (FlowDirection dir : new FlowDirection[]{FlowDirection.NORTHEAST, FlowDirection.NORTHWEST, FlowDirection.SOUTHEAST, FlowDirection.SOUTHWEST}) {
             mockSampleAt(pos.relative(dir), 0.9);
         }
 
-        List<Direction> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
 
         assertEquals(8, flow.size());
-        assertEquals(Direction.SOUTH, flow.get(0));
-        assertEquals(Direction.NORTH, flow.get(1));
+        assertEquals(FlowDirection.SOUTH, flow.get(0));
+        assertEquals(FlowDirection.NORTH, flow.get(1));
     }
 
     @Test
@@ -151,7 +151,7 @@ class CellTest {
     void hasUpstreamNeighborReturnsFalseWhenNoNeighborFlowsIn() {
         CellPos pos = new CellPos(0, 0);
         mockSampleAt(pos, 0.0);
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighbor = pos.relative(dir);
             mockSampleAt(neighbor, 1.0);
             mockNeighborsOf(neighbor, 1.0);
@@ -165,22 +165,22 @@ class CellTest {
     @Test
     void hasUpstreamNeighborReturnsTrueWhenOneNeighborFlowsIn() {
         CellPos pos = new CellPos(0, 0);
-        CellPos north = pos.relative(Direction.NORTH);
+        CellPos north = pos.relative(FlowDirection.NORTH);
 
         mockSampleAt(pos, 0.0);
         mockSampleAt(north, 1.0);
 
-        for (Direction dir : Direction.D8) {
-            mockSampleAt(north.relative(dir), dir == Direction.SOUTH ? 0.0 : 1.0);
+        for (FlowDirection dir : FlowDirection.D8) {
+            mockSampleAt(north.relative(dir), dir == FlowDirection.SOUTH ? 0.0 : 1.0);
         }
 
-        for (Direction dir : Direction.D8) {
-            if (dir == Direction.NORTH) {
+        for (FlowDirection dir : FlowDirection.D8) {
+            if (dir == FlowDirection.NORTH) {
                 continue;
             }
             CellPos neighbor = pos.relative(dir);
             mockSampleAt(neighbor, 1.0);
-            for (Direction neighborDir : Direction.D8) {
+            for (FlowDirection neighborDir : FlowDirection.D8) {
                 CellPos nn = neighbor.relative(neighborDir);
                 if (!nn.equals(pos) && !nn.equals(north)) {
                     mockSampleAt(nn, 1.0);
@@ -197,7 +197,7 @@ class CellTest {
     void hasUpstreamNeighborReturnsFalseWhenAllNeighborsFlat() {
         CellPos pos = new CellPos(0, 0);
         mockSampleAt(pos, 0.5);
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighbor = pos.relative(dir);
             mockSampleAt(neighbor, 0.5);
             mockNeighborsOf(neighbor, 0.5);
@@ -220,14 +220,14 @@ class CellTest {
     }
 
     private void mockNeighbors(CellPos center, double depth) {
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighborPos = center.relative(dir);
             mockSampleAt(neighborPos, depth);
         }
     }
 
-    private void mockNeighborsExcept(CellPos center, double defaultDepth, Direction exception, double exceptionDepth) {
-        for (Direction dir : Direction.D8) {
+    private void mockNeighborsExcept(CellPos center, double defaultDepth, FlowDirection exception, double exceptionDepth) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighborPos = center.relative(dir);
             double depth = (dir == exception) ? exceptionDepth : defaultDepth;
             mockSampleAt(neighborPos, depth);
@@ -235,7 +235,7 @@ class CellTest {
     }
 
     private void mockNeighborsOf(CellPos center, double depth) {
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighborPos = center.relative(dir);
             mockSampleAt(neighborPos, depth);
         }

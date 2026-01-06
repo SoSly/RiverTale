@@ -5,7 +5,7 @@ import javax.annotation.Nullable;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.terrain.Shape;
 
@@ -107,7 +107,7 @@ public interface FeatureHandler {
         return new ProfileResult(targetY, false, null, weight);
     }
 
-    default int[] getEdgePoint(Direction dir, int cellSize, int center) {
+    default int[] getEdgePoint(FlowDirection dir, int cellSize, int center) {
         return switch (dir) {
             case NORTH -> new int[]{center, 0};
             case SOUTH -> new int[]{center, cellSize - 1};
@@ -121,24 +121,24 @@ public interface FeatureHandler {
         };
     }
 
-    default Direction getDirection(CellPos from, CellPos to) {
+    default FlowDirection getDirection(CellPos from, CellPos to) {
         if (to == null) {
-            return Direction.NONE;
+            return FlowDirection.NONE;
         }
         int dx = to.x() - from.x();
         int dz = to.z() - from.z();
 
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             if (dir.dx == dx && dir.dz == dz) {
                 return dir;
             }
         }
-        return Direction.NONE;
+        return FlowDirection.NONE;
     }
 
-    default Direction getEntryDirection(CellPos cellPos, Set<CellPos> upstreamSet) {
+    default FlowDirection getEntryDirection(CellPos cellPos, Set<CellPos> upstreamSet) {
         if (upstreamSet.isEmpty()) {
-            return Direction.NONE;
+            return FlowDirection.NONE;
         }
         CellPos upstream = upstreamSet.iterator().next();
         return getDirection(cellPos, upstream);
@@ -196,7 +196,7 @@ public interface FeatureHandler {
     record FlowInfo(int waterY, Integer flowLevel) {}
 
     default FlowInfo computeFlowInfo(PathInfo info, int entryY, int centerY, int exitY, double segmentLength) {
-        return computeFlowInfo(info, entryY, centerY, exitY, segmentLength, Direction.NONE, 0, 0, null, null);
+        return computeFlowInfo(info, entryY, centerY, exitY, segmentLength, FlowDirection.NONE, 0, 0, null, null);
     }
 
     default FlowInfo computeFlowInfo(
@@ -205,7 +205,7 @@ public interface FeatureHandler {
             int centerY,
             int exitY,
             double segmentLength,
-            Direction flowDir,
+            FlowDirection flowDir,
             int blockX,
             int blockZ,
             int[] segmentStart,
@@ -236,7 +236,7 @@ public interface FeatureHandler {
         double tDrop = (dropY - segmentStartY) / (segmentEndY - segmentStartY);
 
         double blocksFromDrop;
-        boolean isDiagonal = flowDir != Direction.NONE && flowDir.dx != 0 && flowDir.dz != 0;
+        boolean isDiagonal = flowDir != FlowDirection.NONE && flowDir.dx != 0 && flowDir.dz != 0;
 
         if (isDiagonal && segmentStart != null && segmentEnd != null) {
             double dropX = segmentStart[0] + tDrop * (segmentEnd[0] - segmentStart[0]);

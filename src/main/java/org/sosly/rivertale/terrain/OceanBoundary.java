@@ -2,23 +2,23 @@ package org.sosly.rivertale.terrain;
 
 import net.minecraft.nbt.CompoundTag;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 
 public record OceanBoundary(CellPos land, CellPos ocean) {
-    public Direction bearing() {
+    public FlowDirection bearing() {
         if (ocean.x() > land.x()) {
-            return Direction.EAST;
+            return FlowDirection.EAST;
         }
         if (ocean.x() < land.x()) {
-            return Direction.WEST;
+            return FlowDirection.WEST;
         }
         if (ocean.z() > land.z()) {
-            return Direction.SOUTH;
+            return FlowDirection.SOUTH;
         }
         if (ocean.z() < land.z()) {
-            return Direction.NORTH;
+            return FlowDirection.NORTH;
         }
-        return Direction.NONE;
+        return FlowDirection.NONE;
     }
 
     public CompoundTag encode() {

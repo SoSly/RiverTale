@@ -6,13 +6,13 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkEvent;
 import org.sosly.rivertale.client.FlowDirectionClientCache;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 
 public class FlowDirectionSyncPacket extends Message {
     private final ChunkPos chunkPos;
     private final byte[] data;
 
-    public FlowDirectionSyncPacket(ChunkPos chunkPos, Direction[][] directions) {
+    public FlowDirectionSyncPacket(ChunkPos chunkPos, FlowDirection[][] directions) {
         this.chunkPos = chunkPos;
         this.data = encode(directions);
     }
@@ -22,20 +22,20 @@ public class FlowDirectionSyncPacket extends Message {
         this.data = data;
     }
 
-    private static byte[] encode(Direction[][] directions) {
+    private static byte[] encode(FlowDirection[][] directions) {
         byte[] result = new byte[256];
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                Direction dir = directions[x][z];
+                FlowDirection dir = directions[x][z];
                 result[x * 16 + z] = dir == null ? -1 : (byte) dir.ordinal();
             }
         }
         return result;
     }
 
-    private static Direction[][] decode(byte[] data) {
-        Direction[][] result = new Direction[16][16];
-        Direction[] values = Direction.values();
+    private static FlowDirection[][] decode(byte[] data) {
+        FlowDirection[][] result = new FlowDirection[16][16];
+        FlowDirection[] values = FlowDirection.values();
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 byte b = data[x * 16 + z];
@@ -67,7 +67,7 @@ public class FlowDirectionSyncPacket extends Message {
     }
 
     private static void handleClient(FlowDirectionSyncPacket msg) {
-        Direction[][] directions = decode(msg.data);
+        FlowDirection[][] directions = decode(msg.data);
         FlowDirectionClientCache.put(msg.chunkPos, directions);
     }
 }

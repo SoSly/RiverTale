@@ -1,6 +1,6 @@
 package org.sosly.rivertale.core;
 
-public enum Direction {
+public enum FlowDirection {
     NORTH(0, -1),
     SOUTH(0, 1),
     EAST(1, 0),
@@ -14,16 +14,16 @@ public enum Direction {
     public final int dx;
     public final int dz;
 
-    public static final Direction[] D4 = {NORTH, SOUTH, EAST, WEST};
-    public static final Direction[] D8 = {NORTH, SOUTH, EAST, WEST, NORTHEAST, NORTHWEST, SOUTHEAST, SOUTHWEST};
-    private static final Direction[] COMPASS = {NORTH, NORTHEAST, EAST, SOUTHEAST, SOUTH, SOUTHWEST, WEST, NORTHWEST};
+    public static final FlowDirection[] D4 = {NORTH, SOUTH, EAST, WEST};
+    public static final FlowDirection[] D8 = {NORTH, SOUTH, EAST, WEST, NORTHEAST, NORTHWEST, SOUTHEAST, SOUTHWEST};
+    private static final FlowDirection[] COMPASS = {NORTH, NORTHEAST, EAST, SOUTHEAST, SOUTH, SOUTHWEST, WEST, NORTHWEST};
 
-    Direction(int dx, int dz) {
+    FlowDirection(int dx, int dz) {
         this.dx = dx;
         this.dz = dz;
     }
 
-    public Direction opposite() {
+    public FlowDirection opposite() {
         return switch (this) {
             case NORTH -> SOUTH;
             case SOUTH -> NORTH;
@@ -37,7 +37,7 @@ public enum Direction {
         };
     }
 
-    public Direction rotateToward(Direction target) {
+    public FlowDirection rotateToward(FlowDirection target) {
         if (this == NONE || target == NONE || this == target) {
             return this;
         }
@@ -58,7 +58,7 @@ public enum Direction {
         return COMPASS[(currentIdx + 6) % 8];
     }
 
-    private static int compassIndex(Direction dir) {
+    private static int compassIndex(FlowDirection dir) {
         for (int i = 0; i < COMPASS.length; i++) {
             if (COMPASS[i] == dir) {
                 return i;

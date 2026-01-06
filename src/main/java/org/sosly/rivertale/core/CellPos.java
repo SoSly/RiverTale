@@ -67,7 +67,7 @@ public record CellPos(int x, int z) {
         return new BlockPos(this.getMinBlockX(), y, this.getMinBlockZ());
     }
 
-    public CellPos relative(Direction dir) {
+    public CellPos relative(FlowDirection dir) {
         return new CellPos(x + dir.dx, z + dir.dz);
     }
 

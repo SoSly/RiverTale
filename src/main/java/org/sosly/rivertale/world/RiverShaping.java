@@ -27,7 +27,7 @@ import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
@@ -73,7 +73,7 @@ public class RiverShaping {
         regionCache.getOrCompute(center, cellCache, sampleCache);
         loadedRegions.add(center);
 
-        for (Direction dir : Direction.D8) {
+        for (FlowDirection dir : FlowDirection.D8) {
             RegionPos neighbor = center.relative(dir);
             regionCache.getOrCompute(neighbor, cellCache, sampleCache);
             loadedRegions.add(neighbor);
@@ -83,7 +83,7 @@ public class RiverShaping {
         timer.stop();
     }
 
-    private record ColumnResult(int y, boolean isRiverbed, Integer waterY, Integer flowLevel, Direction flowDirection, boolean preserveBiome) {}
+    private record ColumnResult(int y, boolean isRiverbed, Integer waterY, Integer flowLevel, FlowDirection flowDirection, boolean preserveBiome) {}
 
     public static void shape(ChunkAccess chunk) {
         Timer.Record timer = Store.getTimer(RiverShaping.class, "shape").start();
@@ -200,7 +200,7 @@ public class RiverShaping {
         boolean isRiverbed = !riverbeds.isEmpty();
         Integer waterY = null;
         Integer flowLevel = null;
-        Direction flowDirection = null;
+        FlowDirection flowDirection = null;
 
         if (isRiverbed) {
             double[] result = powerWeightedAverage(riverbeds);
@@ -243,8 +243,8 @@ public class RiverShaping {
         return minFlowLevel;
     }
 
-    private static Direction combineFlowDirection(List<Shape> riverbeds) {
-        Direction best = null;
+    private static FlowDirection combineFlowDirection(List<Shape> riverbeds) {
+        FlowDirection best = null;
         double bestWeight = 0;
         for (Shape shape : riverbeds) {
             if (shape.flowDirection() != null && shape.weight() > bestWeight) {
@@ -313,7 +313,7 @@ public class RiverShaping {
         ChunkPos pos = chunk.getPos();
         boolean debug = pos.x == DEBUG_CHUNK_X && pos.z == DEBUG_CHUNK_Z;
 
-        Direction[][] flowDirections = new Direction[16][16];
+        FlowDirection[][] flowDirections = new FlowDirection[16][16];
         boolean hasFlowData = false;
 
         for (int x = 0; x < 16; x++) {
@@ -326,7 +326,7 @@ public class RiverShaping {
                 Integer waterY = results[x][z].waterY();
                 Integer flowLevel = results[x][z].flowLevel();
                 boolean isRiverbed = results[x][z].isRiverbed();
-                Direction flowDirection = results[x][z].flowDirection();
+                FlowDirection flowDirection = results[x][z].flowDirection();
 
                 if (debug && isRiverbed) {
                     int worldX = pos.getMinBlockX() + x;

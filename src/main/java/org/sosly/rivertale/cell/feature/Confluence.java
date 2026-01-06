@@ -8,14 +8,14 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.terrain.Shape;
 
 public class Confluence implements FeatureHandler {
-    private record EntryInfo(int[] point, int y, Direction dir) {}
+    private record EntryInfo(int[] point, int y, FlowDirection dir) {}
 
     @Override
     public Shape[][] shape(Cell cell, Watershed watershed, ChunkPos chunk) {
@@ -35,16 +35,16 @@ public class Confluence implements FeatureHandler {
 
         List<EntryInfo> entries = new ArrayList<>();
         for (CellPos upstreamPos : upstreamSet) {
-            Direction dir = getDirection(cellPos, upstreamPos);
+            FlowDirection dir = getDirection(cellPos, upstreamPos);
             int[] point = getEdgePoint(dir, cellSize, center);
             Cell upstreamCell = cache.getOrCompute(upstreamPos);
             int entryY = (centerY + upstreamCell.y()) / 2;
             entries.add(new EntryInfo(point, entryY, dir));
         }
 
-        Direction exitDir = getDirection(cellPos, downstreamPos);
-        if (exitDir == Direction.NONE) {
-            exitDir = Direction.SOUTH;
+        FlowDirection exitDir = getDirection(cellPos, downstreamPos);
+        if (exitDir == FlowDirection.NONE) {
+            exitDir = FlowDirection.SOUTH;
         }
         int[] exitPoint = getEdgePoint(exitDir, cellSize, center);
 
@@ -71,7 +71,7 @@ public class Confluence implements FeatureHandler {
 
                 double minDistance = Double.MAX_VALUE;
                 int waterY = centerY;
-                Direction flowDirection = exitDir;
+                FlowDirection flowDirection = exitDir;
 
                 for (EntryInfo entry : entries) {
                     double d = distanceToSegment(cellLocalX, cellLocalZ,
@@ -108,7 +108,7 @@ public class Confluence implements FeatureHandler {
                 }
 
                 boolean inChannel = minDistance <= DEFAULT_WIDTH / 2;
-                Direction shapeFlowDir = profile.isRiverbed() && inChannel ? flowDirection : null;
+                FlowDirection shapeFlowDir = profile.isRiverbed() && inChannel ? flowDirection : null;
                 result[localX][localZ] = new Shape(
                     profile.surfaceY(),
                     profile.weight(),

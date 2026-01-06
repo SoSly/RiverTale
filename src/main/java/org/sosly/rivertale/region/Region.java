@@ -18,7 +18,7 @@ import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.density.SampleCache;
@@ -100,7 +100,7 @@ public class Region {
         regions.add(region);
 
         if (regionType == RegionType.FLUVIAL) {
-            for (Direction dir : Direction.D8) {
+            for (FlowDirection dir : FlowDirection.D8) {
                 RegionPos neighborPos = regionPos.relative(dir);
                 RegionType neighborType = RegionTypeCache.get().getOrCompute(neighborPos, sampleCache);
                 if (neighborType == RegionType.COASTAL) {
@@ -157,7 +157,7 @@ public class Region {
             cellTag.putLong("pos", cellPos.toLong());
             cellTag.putString("feature", cell.feature().name());
             cellTag.putString("flow", cell.flowDirections().isEmpty()
-                ? Direction.NONE.name()
+                ? FlowDirection.NONE.name()
                 : cell.flowDirections().get(0).name());
             cellTag.putInt("y", cell.y());
             cellList.add(cellTag);

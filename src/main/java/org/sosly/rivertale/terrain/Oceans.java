@@ -4,7 +4,7 @@ import java.util.HashSet;
 import java.util.Set;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
@@ -31,7 +31,7 @@ public final class Oceans {
                     continue;
                 }
 
-                for (Direction dir : Direction.D4) {
+                for (FlowDirection dir : FlowDirection.D4) {
                     CellPos neighborPos = cellPos.relative(dir);
                     Sample neighborSample = sampleCache.getOrCompute(neighborPos.getMiddleBlockX(), neighborPos.getMiddleBlockZ());
 
