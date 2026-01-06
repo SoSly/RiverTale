@@ -61,6 +61,7 @@ public class FlowDirectionCapability {
                         data.set(x, z, pending[x][z]);
                     }
                 }
+                clearPending(chunkPos);
             }
         }
 

@@ -1,6 +1,7 @@
 package org.sosly.rivertale.physics;
 
-import java.util.Set;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -21,7 +22,8 @@ import org.sosly.rivertale.client.FlowDirectionClientCache;
 import org.sosly.rivertale.core.FlowDirection;
 
 public class FluidFlow {
-    private static final Set<BlockPos> PLAYER_UNLOCKED = ConcurrentHashMap.newKeySet();
+    private static final long UNLOCK_EXPIRY_MS = 5000;
+    private static final Map<BlockPos, Long> PLAYER_UNLOCKED = new ConcurrentHashMap<>();
 
     public static boolean allowSpread(LevelAccessor level,
                                       BlockPos targetPos,
@@ -36,7 +38,8 @@ public class FluidFlow {
         }
         FlowDirection sourceFlow = getFlowDirection(sourceChunk, sourcePos);
 
-        if (PLAYER_UNLOCKED.remove(targetPos)) {
+        Long unlockTime = PLAYER_UNLOCKED.remove(targetPos);
+        if (unlockTime != null && System.currentTimeMillis() - unlockTime < UNLOCK_EXPIRY_MS) {
             return true;
         }
 
@@ -97,6 +100,8 @@ public class FluidFlow {
     }
 
     public static void unlock(BlockPos pos) {
-        PLAYER_UNLOCKED.add(pos.immutable());
+        long now = System.currentTimeMillis();
+        PLAYER_UNLOCKED.put(pos.immutable(), now);
+        PLAYER_UNLOCKED.entrySet().removeIf(e -> now - e.getValue() > UNLOCK_EXPIRY_MS);
     }
 }

@@ -328,14 +328,6 @@ public class RiverShaping {
                 boolean isRiverbed = results[x][z].isRiverbed();
                 FlowDirection flowDirection = results[x][z].flowDirection();
 
-                if (debug && isRiverbed) {
-                    int worldX = pos.getMinBlockX() + x;
-                    int worldZ = pos.getMinBlockZ() + z;
-                    int depth = waterY != null ? waterY - targetY : 0;
-                    LOGGER.info("RIVERBED ({},{}) vanillaY={} targetY={} waterY={} depth={} flowLevel={}",
-                        worldX, worldZ, vanillaY, targetY, waterY, depth, flowLevel);
-                }
-
                 applyColumn(chunk, x, z, targetY, waterY, flowLevel);
 
                 if (isRiverbed && riverBiome != null && !results[x][z].preserveBiome()) {

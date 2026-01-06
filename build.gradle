@@ -61,7 +61,7 @@ minecraft {
     runs {
         configureEach {
             workingDirectory project.file("run/${it.name}")
-            jvmArgs '-Xmx2G', '-Xms1G'
+            jvmArgs "-Xmx${run_xmx}", "-Xms${run_xms}"
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
             property 'mixin.env.remapRefMap', 'true'
@@ -120,8 +120,18 @@ dependencies {
     testImplementation 'org.mockito:mockito-junit-jupiter:5.8.0'
 
     // Optional runtime dependencies for development and testing
-    runtimeOnly files("libs/lithosphere-1.6.jar")
-    runtimeOnly fg.deobf("curse.maven:journeymap-32274:5789363")
+    if (lithosphere_enabled.toBoolean()) {
+        runtimeOnly files("libs/lithosphere-1.6.jar")
+    }
+    if (journeymap_enabled.toBoolean()) {
+        runtimeOnly fg.deobf("curse.maven:journeymap-${journeymap_projectId}:${journeymap_fileId}")
+    }
+    if (spark_enabled.toBoolean()) {
+        runtimeOnly fg.deobf("curse.maven:spark-${spark_projectId}:${spark_fileId}")
+    }
+    if (jei_enabled.toBoolean()) {
+        runtimeOnly fg.deobf("curse.maven:jei-${jei_projectId}:${jei_fileId}")
+    }
 }
 
 tasks.withType(ProcessResources).configureEach {

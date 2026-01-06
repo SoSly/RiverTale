@@ -9,7 +9,8 @@ public record CommonConfig(
     int mergeThreshold,
     int minSlope,
     int minPathLength,
-    int embankmentRadius
+    int embankmentRadius,
+    boolean enableMetrics
 ) {
     private static final int DEFAULT_REGION_SIZE = 1536;
     private static final int DEFAULT_CELL_SIZE = 48;
@@ -18,9 +19,10 @@ public record CommonConfig(
     private static final int DEFAULT_MIN_SLOPE = 1;
     private static final int DEFAULT_MIN_PATH_LENGTH = 3;
     private static final int DEFAULT_EMBANKMENT_RADIUS = 288;
+    private static final boolean DEFAULT_ENABLE_METRICS = false;
 
     private static CommonConfig instance = new CommonConfig(
-        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE, DEFAULT_MIN_PATH_LENGTH, DEFAULT_EMBANKMENT_RADIUS);
+        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE, DEFAULT_MIN_PATH_LENGTH, DEFAULT_EMBANKMENT_RADIUS, DEFAULT_ENABLE_METRICS);
 
     public CommonConfig {
         if (regionSize % 16 != 0) {
@@ -55,6 +57,7 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue MIN_SLOPE;
         public static final ForgeConfigSpec.IntValue MIN_PATH_LENGTH;
         public static final ForgeConfigSpec.IntValue EMBANKMENT_RADIUS;
+        public static final ForgeConfigSpec.BooleanValue ENABLE_METRICS;
 
         static {
             ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -87,6 +90,10 @@ public record CommonConfig(
                 .comment("Distance in blocks from river channel center where terrain is pulled toward river level.")
                 .defineInRange("embankmentRadius", DEFAULT_EMBANKMENT_RADIUS, 16, 512);
 
+            ENABLE_METRICS = builder
+                .comment("Enable performance metrics collection. Useful for debugging but consumes memory.")
+                .define("enableMetrics", DEFAULT_ENABLE_METRICS);
+
             SPEC = builder.build();
         }
 
@@ -98,7 +105,8 @@ public record CommonConfig(
                 MERGE_THRESHOLD.get(),
                 MIN_SLOPE.get(),
                 MIN_PATH_LENGTH.get(),
-                EMBANKMENT_RADIUS.get()
+                EMBANKMENT_RADIUS.get(),
+                ENABLE_METRICS.get()
             ));
         }
     }

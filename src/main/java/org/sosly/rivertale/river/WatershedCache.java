@@ -2,6 +2,7 @@ package org.sosly.rivertale.river;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -14,11 +15,13 @@ public class WatershedCache {
     private final Map<CellPos, PendingWatershed> pending;
     private final Map<CellPos, Watershed> finalized;
     private final Map<CellPos, CellPos> cellToTerminus;
+    private final Map<RegionPos, Set<CellPos>> regionToTermini;
 
     private WatershedCache() {
         this.pending = Collections.synchronizedMap(new HashMap<>());
         this.finalized = Collections.synchronizedMap(new HashMap<>());
         this.cellToTerminus = Collections.synchronizedMap(new HashMap<>());
+        this.regionToTermini = Collections.synchronizedMap(new HashMap<>());
     }
 
     public static synchronized void init() {
@@ -73,6 +76,7 @@ public class WatershedCache {
         Watershed watershed = new Watershed(regionPos, pw.paths());
 
         finalized.put(terminus, watershed);
+        regionToTermini.computeIfAbsent(regionPos, k -> new HashSet<>()).add(terminus);
 
         for (CellPos cell : watershed.allCells()) {
             cellToTerminus.put(cell, terminus);
@@ -87,9 +91,27 @@ public class WatershedCache {
         return finalized.get(terminus);
     }
 
+    public void evictForRegion(RegionPos region) {
+        Set<CellPos> termini = regionToTermini.remove(region);
+        if (termini == null) {
+            return;
+        }
+
+        for (CellPos terminus : termini) {
+            pending.remove(terminus);
+            Watershed watershed = finalized.remove(terminus);
+            if (watershed != null) {
+                for (CellPos cell : watershed.allCells()) {
+                    cellToTerminus.remove(cell);
+                }
+            }
+        }
+    }
+
     private void clear() {
         pending.clear();
         finalized.clear();
         cellToTerminus.clear();
+        regionToTermini.clear();
     }
 }

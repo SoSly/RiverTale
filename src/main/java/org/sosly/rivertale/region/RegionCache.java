@@ -8,6 +8,7 @@ import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
+import org.sosly.rivertale.river.WatershedCache;
 
 public class RegionCache implements Cache<Region> {
     private static final int DEFAULT_CAPACITY = 100;
@@ -22,7 +23,14 @@ public class RegionCache implements Cache<Region> {
         this.cache = Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<Long, Region> eldest) {
-                return size() > RegionCache.this.capacity;
+                if (size() > RegionCache.this.capacity) {
+                    WatershedCache watershedCache = WatershedCache.get();
+                    if (watershedCache != null) {
+                        watershedCache.evictForRegion(new RegionPos(eldest.getKey()));
+                    }
+                    return true;
+                }
+                return false;
             }
         });
     }
