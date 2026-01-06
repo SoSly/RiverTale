@@ -10,7 +10,8 @@
     "ChunkMapMixin",
     "FlowingFluidMixin",
     "HolderHolderMixin",
-    "MultiNoiseBiomeSourceMixin"
+    "MultiNoiseBiomeSourceMixin",
+    "NaturalSpawnerMixin"
   ],
   "client": [
   ],
