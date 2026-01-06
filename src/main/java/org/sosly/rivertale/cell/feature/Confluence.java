@@ -107,13 +107,16 @@ public class Confluence implements FeatureHandler {
                     continue;
                 }
 
+                boolean inChannel = minDistance <= DEFAULT_WIDTH / 2;
+                Direction shapeFlowDir = profile.isRiverbed() && inChannel ? flowDirection : null;
                 result[localX][localZ] = new Shape(
                     profile.surfaceY(),
                     profile.weight(),
                     profile.isRiverbed(),
                     profile.waterY(),
                     null,
-                    flowDirection
+                    shapeFlowDir,
+                    false
                 );
             }
         }

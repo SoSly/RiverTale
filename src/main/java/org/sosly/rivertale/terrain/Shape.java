@@ -9,5 +9,6 @@ public record Shape(
     boolean isRiverbed,
     @Nullable Integer waterY,
     @Nullable Integer flowLevel,
-    @Nullable Direction flowDirection
+    @Nullable Direction flowDirection,
+    boolean preserveBiome
 ) {}

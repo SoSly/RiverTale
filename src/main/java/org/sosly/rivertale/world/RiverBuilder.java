@@ -81,7 +81,7 @@ public class RiverBuilder {
         WatershedCache.get().finalizeReady(loadedRegions);
     }
 
-    private record ColumnResult(int y, boolean isRiverbed, Integer waterY, Integer flowLevel, Direction flowDirection) {}
+    private record ColumnResult(int y, boolean isRiverbed, Integer waterY, Integer flowLevel, Direction flowDirection, boolean preserveBiome) {}
 
     public static void shape(ChunkAccess chunk) {
         Timer.Record shapeTimer = Store.getTimer(RiverBuilder.class, "shape").start();
@@ -180,12 +180,16 @@ public class RiverBuilder {
     private static ColumnResult combineShapes(List<Shape> shapes, int vanillaY) {
         List<Shape> riverbeds = new ArrayList<>();
         List<Shape> embankments = new ArrayList<>();
+        boolean preserveBiome = false;
 
         for (Shape shape : shapes) {
             if (shape.isRiverbed()) {
                 riverbeds.add(shape);
             } else {
                 embankments.add(shape);
+            }
+            if (shape.preserveBiome()) {
+                preserveBiome = true;
             }
         }
 
@@ -210,7 +214,7 @@ public class RiverBuilder {
         }
 
         int blendedY = blendTowardVanilla(y, vanillaY, confidence, isRiverbed);
-        return new ColumnResult(blendedY, isRiverbed, waterY, flowLevel, flowDirection);
+        return new ColumnResult(blendedY, isRiverbed, waterY, flowLevel, flowDirection, preserveBiome);
     }
 
     private static Integer combineWaterY(List<Shape> riverbeds) {
@@ -332,7 +336,7 @@ public class RiverBuilder {
 
                 applyColumn(chunk, x, z, targetY, waterY, flowLevel);
 
-                if (isRiverbed && riverBiome != null) {
+                if (isRiverbed && riverBiome != null && !results[x][z].preserveBiome()) {
                     applyRiverBiome(chunk, x, z, waterY != null ? waterY : targetY);
                 }
 
@@ -395,6 +399,13 @@ public class RiverBuilder {
                 worldSurface.update(localX, y, localZ, waterState);
             }
             airStart = waterEnd + 1;
+        } else if (targetY < WorldSettings.get().seaLevel() - 1) {
+            for (int y = targetY + 1; y < WorldSettings.get().seaLevel(); y++) {
+                setBlockDirect(chunk, localX, y, localZ, WATER);
+                oceanFloor.update(localX, y, localZ, WATER);
+                worldSurface.update(localX, y, localZ, WATER);
+            }
+            airStart = WorldSettings.get().seaLevel();
         }
 
         for (int y = airStart; y <= maxY; y++) {

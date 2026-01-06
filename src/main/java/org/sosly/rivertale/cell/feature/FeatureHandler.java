@@ -52,14 +52,22 @@ public interface FeatureHandler {
     }
 
     default ProfileResult calculateProfile(double distance, int waterY, int vanillaY, int width, int depth, int embankmentThreshold) {
+        return calculateProfile(distance, waterY, vanillaY, width, depth, embankmentThreshold, 1.0);
+    }
+
+    default ProfileResult calculateProfile(double distance, int waterY, int vanillaY, int width, int depth, int embankmentThreshold, double embankmentScale) {
         int halfWidth = width / 2;
         int bankPeakDist = bankPeakDistance(width);
-        int bankPeakY = waterY + bankPeakHeight(depth);
+        int scaledBankPeakHeight = (int) Math.round(bankPeakHeight(depth) * embankmentScale);
+        int bankPeakY = waterY + scaledBankPeakHeight;
         boolean needsBank = vanillaY <= waterY + embankmentThreshold;
 
         if (needsBank) {
             if (distance <= bankPeakDist) {
                 double y = -(5.0 * depth / 6.0) * Math.cos(CURVE_K * distance / width) - (depth / 6.0);
+                if (y > 0) {
+                    y = y * embankmentScale;
+                }
                 int roundedY = y > 0 ? (int) Math.ceil(y) : (int) Math.floor(y);
                 int surfaceY = waterY + roundedY;
                 boolean isRiverbed = surfaceY < waterY;
@@ -79,9 +87,14 @@ public interface FeatureHandler {
 
         if (distance <= halfWidth) {
             double y = -(5.0 * depth / 6.0) * Math.cos(CURVE_K * distance / width) - (depth / 6.0);
+            if (y > 0) {
+                y = y * embankmentScale;
+            }
             int roundedY = y > 0 ? (int) Math.ceil(y) : (int) Math.floor(y);
             int surfaceY = waterY + roundedY;
-            return new ProfileResult(surfaceY, true, waterY, 1.0);
+            boolean isRiverbed = surfaceY < waterY;
+            Integer fillWaterY = isRiverbed ? waterY : null;
+            return new ProfileResult(surfaceY, isRiverbed, fillWaterY, 1.0);
         }
 
         double carveDistance = distance - halfWidth;

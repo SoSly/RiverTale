@@ -8,6 +8,8 @@ import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.Direction;
+import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.terrain.Shape;
 import org.sosly.rivertale.world.WorldSettings;
@@ -37,7 +39,8 @@ public class Mouth implements FeatureHandler {
             Math.pow(center - entryPoint[0], 2) + Math.pow(center - entryPoint[1], 2)
         );
 
-        int centerY = WorldSettings.get().seaLevel() - 1;
+        int seaLevel = WorldSettings.get().seaLevel();
+        int centerY = seaLevel - 1;
 
         CellCache cache = CellCache.get();
         CellPos upstreamPos = upstreamSet.iterator().next();
@@ -47,7 +50,8 @@ public class Mouth implements FeatureHandler {
         int cellMinX = cellPos.getMinBlockX();
         int cellMinZ = cellPos.getMinBlockZ();
 
-        int maxDistance = DEFAULT_WIDTH / 2;
+        int oceanWaterY = seaLevel - 1;
+        SampleCache sampleCache = SampleCache.get();
 
         Shape[][] result = new Shape[16][16];
 
@@ -61,32 +65,72 @@ public class Mouth implements FeatureHandler {
 
                 PathInfo pathInfo = getPathInfo(cellLocalX, cellLocalZ, entryPoint, exitPoint, center, center);
                 double distance = pathInfo.distance();
+                Direction flowDir = entryDir.opposite();
 
-                if (distance > maxDistance) {
-                    continue;
+                double tUnclamped = projectOntoSegmentUnclamped(
+                    cellLocalX, cellLocalZ, entryPoint[0], entryPoint[1], center, center
+                );
+                double tClamped = Math.max(0, Math.min(1, tUnclamped));
+                double embankmentScale = 1.0 - tClamped;
+
+                double perpDistance;
+                double terminusOverflow = Math.max(0, (tUnclamped - 1.0) * entrySegmentLength);
+                if (tUnclamped > 1.0) {
+                    double dirMagnitude = Math.sqrt(flowDir.dx * flowDir.dx + flowDir.dz * flowDir.dz);
+                    perpDistance = Math.abs(
+                        (cellLocalX - center) * flowDir.dz - (cellLocalZ - center) * flowDir.dx
+                    ) / dirMagnitude;
+                } else {
+                    perpDistance = distance;
                 }
 
-                Direction flowDir = entryDir.opposite();
                 FlowInfo flowInfo = computeFlowInfo(
                     pathInfo, entryY, centerY, centerY, entrySegmentLength,
                     flowDir, cellLocalX, cellLocalZ, entryPoint, exitPoint
                 );
-                int waterY = flowInfo.waterY();
-                Integer flowLevel = flowInfo.flowLevel();
+                int waterY = tUnclamped > 1.0 ? oceanWaterY : flowInfo.waterY();
+                Integer flowLevel = tUnclamped > 1.0 ? null : flowInfo.flowLevel();
 
-                ProfileResult profile = calculateProfile(distance, waterY, waterY);
-                if (profile == null || !profile.isRiverbed()) {
+                Sample blockSample = sampleCache.getOrCompute(worldX, worldZ);
+                int vanillaY = blockSample.estimatedHeight();
+
+                ProfileResult profile = calculateProfile(
+                    perpDistance, waterY, vanillaY,
+                    DEFAULT_WIDTH, DEFAULT_DEPTH, DEFAULT_DEPTH, embankmentScale
+                );
+                if (profile == null) {
                     continue;
                 }
 
-                Integer shapeFlowLevel = profile.isRiverbed() ? flowLevel : null;
+                double weight = profile.weight();
+                if (tUnclamped > 1.0) {
+                    double effectiveOverflow = Math.max(0, terminusOverflow - PARALLEL_GRACE_ZONE);
+                    double overflowAttenuation = 1.0 / (1.0 + effectiveOverflow / PARALLEL_DECAY_DISTANCE);
+                    weight = weight * overflowAttenuation;
+                }
+
+                int surfaceY = profile.surfaceY();
+                boolean isRiverbed;
+                Integer fillWaterY;
+                if (tUnclamped > 1.0 && surfaceY <= oceanWaterY) {
+                    isRiverbed = true;
+                    fillWaterY = oceanWaterY;
+                } else {
+                    isRiverbed = profile.isRiverbed();
+                    fillWaterY = profile.waterY();
+                }
+
+                boolean inChannel = perpDistance <= DEFAULT_WIDTH / 2 && tUnclamped <= 1.0;
+                Integer shapeFlowLevel = isRiverbed && inChannel ? flowLevel : null;
+                Direction shapeFlowDir = shapeFlowLevel != null ? entryDir.opposite() : null;
                 result[localX][localZ] = new Shape(
-                    profile.surfaceY(),
-                    profile.weight(),
-                    profile.isRiverbed(),
-                    profile.waterY(),
+                    surfaceY,
+                    weight,
+                    isRiverbed,
+                    fillWaterY,
                     shapeFlowLevel,
-                    entryDir.opposite()
+                    shapeFlowDir,
+                    true
                 );
             }
         }

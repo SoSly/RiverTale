@@ -133,10 +133,11 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
                 double effectiveOverflow = Math.max(0, overflow - PARALLEL_GRACE_ZONE);
                 double parallelAttenuation = 1.0 / (1.0 + effectiveOverflow / PARALLEL_DECAY_DISTANCE);
 
-                Integer shapeFlowLevel = profile.isRiverbed() ? flowLevel : null;
-                Direction flowDirection = pathInfo.isEntrySegment()
-                    ? entryDir.opposite()
-                    : exitDir;
+                boolean inChannel = distance <= DEFAULT_WIDTH / 2;
+                Integer shapeFlowLevel = profile.isRiverbed() && inChannel ? flowLevel : null;
+                Direction flowDirection = profile.isRiverbed() && inChannel
+                    ? (pathInfo.isEntrySegment() ? entryDir.opposite() : exitDir)
+                    : null;
                 double attenuatedWeight = profile.weight() * parallelAttenuation;
                 result[localX][localZ] = new Shape(
                     profile.surfaceY(),
@@ -144,7 +145,8 @@ public abstract class AbstractCourseHandler implements FeatureHandler {
                     profile.isRiverbed(),
                     profile.waterY(),
                     shapeFlowLevel,
-                    flowDirection
+                    flowDirection,
+                    false
                 );
             }
         }
