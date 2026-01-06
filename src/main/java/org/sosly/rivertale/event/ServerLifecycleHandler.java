@@ -1,10 +1,12 @@
 package org.sosly.rivertale.event;
 
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.chunk.ChunkSource;
@@ -28,7 +30,7 @@ import org.sosly.rivertale.networking.Network;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionTypeCache;
 import org.sosly.rivertale.river.WatershedCache;
-import org.sosly.rivertale.world.RiverBuilder;
+import org.sosly.rivertale.world.RiverShaping;
 import org.sosly.rivertale.world.WorldSettings;
 
 public class ServerLifecycleHandler {
@@ -67,13 +69,15 @@ public class ServerLifecycleHandler {
         RegionTypeCache.init();
         RegionCache.init();
         WatershedCache.init();
-        RiverBuilder.init(serverLevel.registryAccess().registryOrThrow(Registries.BIOME).getHolderOrThrow(Biomes.RIVER));
+
+        Holder<Biome> rivers = serverLevel.registryAccess().registryOrThrow(Registries.BIOME).getHolderOrThrow(Biomes.RIVER);
+        RiverShaping.init(rivers);
         RiverTale.LOGGER.info("Caches initialized on level load");
     }
 
     @SubscribeEvent
     public void onServerStopped(ServerStoppedEvent event) {
-        RiverBuilder.shutdown();
+        RiverShaping.shutdown();
         WatershedCache.shutdown();
         RegionCache.shutdown();
         RegionTypeCache.shutdown();

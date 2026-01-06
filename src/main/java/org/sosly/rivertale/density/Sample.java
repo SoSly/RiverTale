@@ -17,6 +17,10 @@ public record Sample(
         return continents < CommonConfig.get().oceanThreshold();
     }
 
+    public double ridgesFolded() {
+        return -3.0 * (Math.abs(Math.abs(-ridges) - 0.6666666) - 0.3333333);
+    }
+
     public int estimatedHeight() {
         return (int) Math.round(70 + 144 * depth);
     }

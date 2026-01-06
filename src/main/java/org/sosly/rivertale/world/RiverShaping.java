@@ -37,7 +37,7 @@ import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.terrain.Shape;
 
-public class RiverBuilder {
+public class RiverShaping {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int SHARPNESS = 3;
     private static final double BLEND_THRESHOLD = 0.3;
@@ -51,7 +51,7 @@ public class RiverBuilder {
 
     private static Holder<Biome> riverBiome;
 
-    private RiverBuilder() {}
+    private RiverShaping() {}
 
     public static void init(Holder<Biome> river) {
         riverBiome = river;
@@ -62,6 +62,7 @@ public class RiverBuilder {
     }
 
     public static void generateRiverMap(ChunkAccess chunk) {
+        Timer.Record timer = Store.getTimer(RiverShaping.class, "generateRiverMap").start();
         RegionPos center = new RegionPos(chunk.getPos().getMiddleBlockPosition(0));
         CellCache cellCache = CellCache.get();
         SampleCache sampleCache = SampleCache.get();
@@ -79,30 +80,31 @@ public class RiverBuilder {
         }
 
         WatershedCache.get().finalizeReady(loadedRegions);
+        timer.stop();
     }
 
     private record ColumnResult(int y, boolean isRiverbed, Integer waterY, Integer flowLevel, Direction flowDirection, boolean preserveBiome) {}
 
     public static void shape(ChunkAccess chunk) {
-        Timer.Record shapeTimer = Store.getTimer(RiverBuilder.class, "shape").start();
+        Timer.Record timer = Store.getTimer(RiverShaping.class, "shape").start();
         ChunkPos chunkPos = chunk.getPos();
 
         Set<Cell> contributors = findContributingCells(chunkPos);
         if (contributors.isEmpty()) {
-            shapeTimer.stop();
+            timer.stop();
             return;
         }
 
         Map<Cell, Shape[][]> opinions = collectOpinions(contributors, chunkPos);
         if (opinions.isEmpty()) {
-            shapeTimer.stop();
+            timer.stop();
             return;
         }
 
         ColumnResult[][] results = combinePerColumn(chunk, opinions);
         applyToChunk(chunk, results);
 
-        shapeTimer.stop();
+        timer.stop();
     }
 
     private static Set<Cell> findContributingCells(ChunkPos chunkPos) {

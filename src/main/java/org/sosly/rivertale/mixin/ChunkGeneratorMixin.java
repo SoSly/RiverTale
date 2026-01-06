@@ -7,7 +7,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
-import org.sosly.rivertale.world.RiverBuilder;
+import org.sosly.rivertale.world.RiverShaping;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -27,8 +27,8 @@ public abstract class ChunkGeneratorMixin {
             CallbackInfoReturnable<ChunkAccess> cir) {
 
         Timer.Record timer = Store.getTimer(ChunkGeneratorMixin.class, "onChunkFill").start();
-        RiverBuilder.generateRiverMap(chunk);
-        RiverBuilder.shape(chunk);
+        RiverShaping.generateRiverMap(chunk);
+        RiverShaping.shape(chunk);
         timer.stop();
     }
 }

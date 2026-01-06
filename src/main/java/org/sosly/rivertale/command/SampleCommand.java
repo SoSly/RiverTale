@@ -22,7 +22,9 @@ import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
+import org.sosly.rivertale.density.CapturedDensityFunctions;
 import org.sosly.rivertale.RiverTale;
+import net.minecraft.world.level.levelgen.DensityFunction;
 
 public class SampleCommand {
 
@@ -94,8 +96,16 @@ public class SampleCommand {
         player.sendSystemMessage(Component.literal("  depth: " + format(sample.depth())));
         player.sendSystemMessage(Component.literal("  erosion: " + format(sample.erosion())));
         player.sendSystemMessage(Component.literal("  ridges: " + format(sample.ridges())));
+        player.sendSystemMessage(Component.literal("  ridgesFolded: " + format(sample.ridgesFolded())));
         player.sendSystemMessage(Component.literal("  temperature: " + format(sample.temperature())));
         player.sendSystemMessage(Component.literal("  vegetation: " + format(sample.vegetation())));
+
+        DensityFunction riverValleys = CapturedDensityFunctions.get("river_valleys");
+        if (riverValleys != null) {
+            DensityFunction.SinglePointContext ctx = new DensityFunction.SinglePointContext(sampleX, y, sampleZ);
+            double riverValleysValue = riverValleys.compute(ctx);
+            player.sendSystemMessage(Component.literal("  riverValleys: " + format(riverValleysValue)));
+        }
     }
 
     private static void sendCellInfo(ServerPlayer player, BlockPos pos) {
@@ -120,8 +130,16 @@ public class SampleCommand {
         player.sendSystemMessage(Component.literal("  depth: " + format(sample.depth())));
         player.sendSystemMessage(Component.literal("  erosion: " + format(sample.erosion())));
         player.sendSystemMessage(Component.literal("  ridges: " + format(sample.ridges())));
+        player.sendSystemMessage(Component.literal("  ridgesFolded: " + format(sample.ridgesFolded())));
         player.sendSystemMessage(Component.literal("  temperature: " + format(sample.temperature())));
         player.sendSystemMessage(Component.literal("  vegetation: " + format(sample.vegetation())));
+
+        DensityFunction riverValleys = CapturedDensityFunctions.get("river_valleys");
+        if (riverValleys != null) {
+            DensityFunction.SinglePointContext ctx = new DensityFunction.SinglePointContext(cellPos.getMiddleBlockX(), y, cellPos.getMiddleBlockZ());
+            double riverValleysValue = riverValleys.compute(ctx);
+            player.sendSystemMessage(Component.literal("  riverValleys: " + format(riverValleysValue)));
+        }
     }
 
     private static void sendRegionInfo(ServerPlayer player, BlockPos pos) {
