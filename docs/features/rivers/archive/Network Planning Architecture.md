@@ -1,6 +1,6 @@
 ---
 level: 3
-parent: "[[Rivers Feature Concept]]"
+parent: "[[Rivers]]"
 status: stable
 ---
 
@@ -16,9 +16,9 @@ flowchart TD
 
     subgraph Network Planning
         TS["Terrain Sampling"]
+        FC_early["Feature Classification<br/>(early phase)"]
         RPG["River Path Generation"]
-        WA["Watershed Aggregation"]
-        FC["Feature Classification"]
+        WA["Watershed Aggregation<br/>(includes late-phase classification)"]
     end
 
     subgraph Output
@@ -26,15 +26,14 @@ flowchart TD
     end
 
     WG -->|"Minecraft noise"| TS
-    TS -->|"flow direction,<br/>density values"| RPG
+    TS -->|"flow direction,<br/>density values"| FC_early
+    FC_early -->|"identified sources"| RPG
     TS -.->|"density values"| WA
-    TS -.->|"density values"| FC
     RPG -->|"traced paths"| WA
-    WA -->|"drainage network,<br/>width, elevation"| FC
-    FC -->|"classified watershed"| RS
+    WA -->|"classified watershed<br/>(structure, width, elevation, labels)"| RS
 ```
 
-Terrain Sampling outputs (flow direction, density values) are available to downstream subsystems beyond just River Path Generation (shown as dashed lines).
+Terrain Sampling outputs (flow direction, density values) are available to downstream subsystems (shown as dashed lines).
 
 ## Subsystems
 
@@ -62,11 +61,10 @@ Reads Minecraft's terrain data to determine where rivers should be planned and h
 
 ### River Path Generation
 
-Identifies potential river sources and traces complete paths from those sources toward the ocean. Each path is traced in isolation, without knowledge of other paths.
+Traces complete paths from identified sources toward the ocean. Each path is traced in isolation, without knowledge of other paths.
 
 **Owns:**
 
-- Source identification
 - Path tracing
 - Path validation
 - Terminus selection
@@ -83,7 +81,7 @@ Identifies potential river sources and traces complete paths from those sources 
 
 ### Watershed Aggregation
 
-Transforms individual river paths into a unified drainage network. Where paths meet, they merge into larger rivers. Computes segment width from upstream tributary count and assigns water surface elevations that flow monotonically downhill.
+Transforms individual river paths into a unified drainage network. Where paths meet, they merge into larger rivers. Computes segment width from upstream tributary count and assigns water surface elevations that flow monotonically downhill. Performs late-phase feature classification once network structure is known.
 
 **Owns:**
 
@@ -92,46 +90,47 @@ Transforms individual river paths into a unified drainage network. Where paths m
 - Tributary relationships
 - Network structure
 - Segment width (derived from upstream tributary count)
-- Water surface elevation (derived from terrain, corrected for monotonic downhill flow)
+- Water surface elevation (derived from terrain via cached samples, corrected for monotonic downhill flow)
+- Late-phase feature classification (courses, junctions, termini, lakes)
 
 **Does not:**
 
-- Classify segments
 - Trace original paths
-- Access terrain directly (receives paths)
+- Identify sources (handled by early-phase classification)
 
 **Outputs:**
 
-- Drainage network with computed values (structure, width, elevation, flow relationships)
+- Classified drainage network with computed values (structure, width, elevation, flow relationships, feature labels)
 
 ### Feature Classification
 
-Examines each segment of the drainage network and assigns a classification label based on its role in the network. This annotation tells Terrain Shaping what kind of terrain modification each segment needs.
+Assigns classification labels based on each cell's role in the network. Runs in two phases:
+
+- **Early phase:** Identifies sources before path generation (cells with outflow but no upstream neighbors)
+- **Late phase:** Classifies remaining features during Watershed Aggregation once network structure is known
 
 Classification labels fall into categories based on network role:
 
 - **Sources** — where rivers originate; network entry points
 - **Courses** — river segments between junctions
-- **Confluences** — junctions where channels merge or split
+- **Junctions** — where channels merge or split
 - **Termini** — where rivers end; network exit points (ocean, larger river)
 - **Lakes** — enclosed water bodies in endorheic basins
-- **Barrens** — areas without rivers but within influence of nearby drainage
+
+Cells outside river networks receive no special classification (DEFAULT).
 
 Specific features within each category are defined at the specification level.
 
 **Owns:**
 
-- Segment classification labels
+- Source identification (early phase)
+- Segment classification labels (late phase, executed within Watershed Aggregation)
 
 **Does not:**
 
 - Modify network structure
 - Modify computed values (width, elevation)
 - Trace paths or build network
-
-**Outputs:**
-
-- Complete watershed with classification annotations
 
 ## Key Decisions
 

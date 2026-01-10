@@ -18,9 +18,9 @@ flowchart TD
 	end
 
 	subgraph "Per Watershed"
-		W1[Watershed Building] --> W2[Validation]
+		W1[Watershed Building] --> W2[Wateshed Validation]
 		W2 --> W3a[Elevation Assignment]
-		W2 --> W3b[Accumulation Determination]
+		W2 --> W3b[Flow Accumulation]
 		W3a --> W4[Feature Reclassification]
 		W3b --> W4
 		W4 --> W5[Spline Building]
@@ -285,7 +285,7 @@ sequenceDiagram
 
 ### Flowline Tracing
 
-Flowline Tracing traces each Source cell's flow data until it reaches an ocean cell (via coastal region boundaries) or a basin terminus (a local minimum at or below sea level). Valid flowlines are returned to RiverShaping for aggregation.
+Flowline Tracing traces each Source cell's flow data until it reaches an ocean cell or a basin cell (both pre-identified via Boundary Identification). Valid flowlines are returned to RiverShaping for aggregation.
 
 ```mermaid
 sequenceDiagram
@@ -410,9 +410,9 @@ sequenceDiagram
     end
 ```
 
-### Accumulation Determination
+### Flow Accumulation
 
-Accumulation Determination calculates the depth and width of the river at each cell based on upstream accumulation, and stores topology counts (upstream/downstream) for later feature classification.
+Flow Accumulation calculates the depth and width of the river at each cell based on upstream accumulation, and stores topology counts (upstream/downstream) for later feature classification.
 
 ```mermaid
 sequenceDiagram
@@ -608,7 +608,7 @@ enum Feature {
     // Courses
     PLUNGE_POOL, WATERFALL, CASCADE, RAPIDS, RUN,
     // Fallback
-    DIVIDE, DEFAULT
+    DIVIDE, NONE
 }
 
 record Sample {
@@ -628,7 +628,7 @@ record Cell {
     entryY: int
     exitY: int
 
-    // Set during Accumulation Determination
+    // Set during Flow Accumulation
     width: int
     depth: int
     upstreamCount: int

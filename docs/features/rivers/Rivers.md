@@ -105,18 +105,37 @@ Players can trust rivers. That trust enables new gameplay strategies.
 
 River properties encode geographic information. Players who pay attention can read the world at a glance.
 
-| Property    | What You See                      | What It Means                                              |
-| ----------- | --------------------------------- | ---------------------------------------------------------- |
-| Width       | Narrow stream                     | Near source, inland, highland terrain                      |
-| Width       | Wide river                        | Far downstream, coastal, many tributaries joined           |
-| Elevation   | River at high altitude            | Continental interior, far from ocean                       |
-| Elevation   | River at sea level                | Near coast, approaching terminus                           |
-| Direction   | Water flowing one way             | Downstream points toward ocean; upstream toward highlands  |
-| Tributaries | Streams joining from side valleys | You're at a drainage junction; larger river system ahead   |
-| Termination | River meets ocean                 | You've reached the coast                                   |
-| Termination | River flows into inland lake      | Endorheic basin; terrain slopes inward from all directions |
+| Property    | What You See                       | What It Means                                              |
+| ----------- | ---------------------------------- | ---------------------------------------------------------- |
+| Width       | Narrow stream                      | Near source, inland, highland terrain                      |
+| Width       | Wide river                         | Far downstream, coastal, many tributaries joined           |
+| Elevation   | River at high altitude             | Continental interior, far from ocean                       |
+| Elevation   | River at sea level                 | Near coast, approaching terminus                           |
+| Direction   | Water flowing one way              | Downstream points toward ocean; upstream toward highlands  |
+| Tributaries | Streams joining from side valleys  | You're at a drainage junction; larger river system ahead   |
+| Termination | River meets ocean                  | You've reached the coast                                   |
+| Termination | River flows into inland lake       | Endorheic basin; terrain slopes inward from all directions |
+| Character   | Calm, steady flow                  | Gentle terrain; typical river run                          |
+| Character   | Churning rapids                    | Moderate elevation drop; rocky terrain                     |
+| Character   | Waterfall with pool below          | Sharp elevation drop; cliff or steep terrain               |
+| Character   | River splitting around terrain     | Obstacle or island; channels rejoin downstream             |
+| Character   | Multiple channels spreading wide   | Delta formation; flat coastal terrain                      |
 
 A player can answer "where am I?" and "which way to the ocean?" by observing any river segment.
+
+### River Character
+
+Rivers aren't uniform channels. As you travel along a river, its character changes based on terrain and position in the network.
+
+**Sources** — Where rivers begin, water emerges from the landscape. In highlands, you might find snowmelt trickling from peaks or springs bubbling up from rocky ground. The terrain tells you why water appears here: a bowl that collects runoff, a cliff face with seeping groundwater, a crater that funnels precipitation.
+
+**Courses** — The flowing sections between source and terminus. Most river length is calm runs—water moving steadily through carved channels. Where elevation drops sharply, you'll find rapids churning over rocks or waterfalls plunging down cliffs. After a waterfall, a plunge pool collects the falling water before it continues downstream. The steeper the terrain, the more dramatic the water.
+
+**Junctions** — Where rivers meet. Confluences are natural landmarks—two streams joining to form a larger river. Occasionally rivers split (bifurcations) where terrain forces water around obstacles. These junctions are navigation waypoints: "turn left at the confluence" makes sense in a RiverTale world.
+
+**Termini** — Where rivers end. Most rivers reach the ocean, but how they arrive varies. A delta spreads into multiple channels across flat coastal terrain. An estuary mingles fresh and salt water in a tidal zone. Some rivers simply empty through a mouth where the channel meets the sea. Inland, endorheic rivers end in lakes—basins where water collects with no outlet to the ocean.
+
+**Lakes** — Bodies of still water within the river network. Some form at terminus points (endorheic basins). Others punctuate the course—kettles left by ancient ice, sinkholes where ground collapsed, tectonic basins from shifting earth. Near the coast, lagoons form where sandbars partially close off ocean inlets. Lakes are pauses in the river's journey, or its final destination.
 
 ## Generation Requirements
 
@@ -149,32 +168,6 @@ The system needs a way to guarantee rivers terminate correctly without requiring
 ### Determinism
 
 Two players with the same seed must see identical rivers. This rules out any approach that depends on exploration order, cached state from previous sessions (unless that state is itself deterministic), or randomness that isn't seed-derived.
-
-### Solution Direction
-
-The planned approach divides the world into large regions. Within each region, RiverTale determines flow direction, upstream accumulation, and elevation by comparing its seed-derived density values at sample points. This makes all properties computable without requiring neighboring chunks to exist first.
-
-## Pillar Verification
-
-Any solution to these requirements must satisfy the design pillars. Here's what each pillar means concretely for rivers:
-
-### Rivers Are Consequences
-
-River placement must derive from terrain properties, not arbitrary noise. A river exists at a location because the surrounding terrain funnels water there. If someone asks "why is there a river here?", the answer should be visible in the landscape.
-
-### Rivers Are Legible
-
-River properties must encode geographic facts:
-
-- **Width** indicates position in the network. Narrow = near source. Wide = many tributaries joined.
-- **Elevation** indicates distance from ocean. High = inland. Sea level = coastal.
-- **Direction** indicates slope. Downstream always points toward lower elevation, toward the sea.
-
-A player should be able to read these properties without any UI, just by looking.
-
-### Rivers Are Coherent
-
-River generation must be purely deterministic from world seed and coordinates. No dependence on exploration order. No state that varies between play sessions. Two players with the same seed must see byte-identical river networks.
 
 ## Balance Targets
 

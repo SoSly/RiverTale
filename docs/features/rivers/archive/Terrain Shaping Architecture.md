@@ -1,6 +1,6 @@
 ---
 level: 3
-parent: "[[Rivers Feature Concept]]"
+parent: "[[Rivers]]"
 status: draft
 ---
 
