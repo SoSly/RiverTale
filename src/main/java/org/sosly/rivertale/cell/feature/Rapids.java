@@ -6,7 +6,7 @@ import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.river.Watershed;
 
-public class Rapids extends AbstractCourseHandler {
+public class Rapids implements FeatureHandler {
     private static final int MULTIPLIER = 2;
 
     @Override

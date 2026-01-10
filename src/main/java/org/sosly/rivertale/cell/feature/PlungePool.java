@@ -5,7 +5,7 @@ import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.river.Watershed;
 
-public class PlungePool extends AbstractCourseHandler {
+public class PlungePool implements FeatureHandler {
     @Override
     public boolean classify(Cell cell, Watershed watershed) {
         if (watershed == null) {

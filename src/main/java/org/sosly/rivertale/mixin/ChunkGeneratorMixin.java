@@ -28,7 +28,6 @@ public abstract class ChunkGeneratorMixin {
 
         Timer.Record timer = Store.getTimer(ChunkGeneratorMixin.class, "onChunkFill").start();
         RiverShaping.generateRiverMap(chunk);
-        RiverShaping.shape(chunk);
         timer.stop();
     }
 }
