@@ -1,7 +1,7 @@
 ---
 level: 4
 parent: "[[River Shaping]]"
-status: draft
+status: review
 ---
 
 # Elevation Assignment
@@ -186,7 +186,7 @@ assignDownstreamFromSource(watershed, source, visited):
 
 ### Getting Upstream Exit Y
 
-At confluences, multiple upstream cells feed into one cell. Their exitY values should match (they're exiting to the same boundary). Take the minimum to satisfy the strictest constraint.
+At confluences, multiple upstream cells feed into one cell. Their exitY values must match (they're exiting to the same boundary). Take the minimum to satisfy the strictest constraint, then adjust any higher tributaries to match.
 
 ```
 getUpstreamExitY(upstreamSet):
@@ -194,8 +194,17 @@ getUpstreamExitY(upstreamSet):
     for upstreamPos in upstreamSet:
         upstreamCell = CellCache.get().getOrCompute(upstreamPos)
         minExitY = min(minExitY, upstreamCell.exitY)
+
+    // Adjust any tributaries with higher exitY to match
+    for upstreamPos in upstreamSet:
+        upstreamCell = CellCache.get().getOrCompute(upstreamPos)
+        if upstreamCell.exitY > minExitY:
+            CellCache.get().put(upstreamCell.withElevations(upstreamCell.entryY, minExitY))
+
     return minExitY
 ```
+
+This adjustment may create steeper drops within the higher tributaries (their entryY stays the same but exitY drops). Feature Classification will detect these steeper segments and may classify them as rapids or waterfalls.
 
 ### Upstream Pass
 
@@ -298,7 +307,7 @@ The effective gradient depends on cell size. With a 48-block cell and minSlope=1
 
 **Detection:** `getUpstreamExitY()` finds varying values.
 
-**Response:** Take the minimum. Higher tributaries drop faster to match the lower one.
+**Response:** Take the minimum and adjust higher tributaries to match. Each tributary with a higher exitY has its exitY lowered to the minimum. This creates a steeper drop within those cells (entryY unchanged, exitY lowered), which Feature Classification may detect as rapids or waterfalls.
 
 ### Very Long River
 

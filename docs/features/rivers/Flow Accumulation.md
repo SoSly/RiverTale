@@ -1,7 +1,7 @@
 ---
 level: 4
 parent: "[[River Shaping]]"
-status: draft
+status: review
 ---
 
 # Flow Accumulation
@@ -227,15 +227,15 @@ Same seed + same cell = same random value. Different cells get different values.
 
 ## Configuration
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| minWidth | int | Minimum river width in blocks (smallest streams) |
-| maxWidth | int | Maximum river width in blocks (must be < cell size) |
-| widthScale | double | Multiplier for logarithmic width growth |
-| variancePercent | double | Width variance as fraction (e.g., 0.2 = ±20%) |
-| minDepth | int | Minimum channel depth in blocks |
-| maxDepth | int | Maximum channel depth in blocks |
-| depthScale | double | Multiplier for logarithmic depth growth |
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| minWidth | int | 3 | 1-16 | Minimum river width in blocks (smallest streams) |
+| maxWidth | int | 24 | 8-47 | Maximum river width in blocks (must be < cell size) |
+| widthScale | double | 3.0 | 0.5-10.0 | Multiplier for logarithmic width growth |
+| variancePercent | double | 0.2 | 0.0-0.5 | Width variance as fraction (e.g., 0.2 = ±20%) |
+| minDepth | int | 2 | 1-8 | Minimum channel depth in blocks |
+| maxDepth | int | 8 | 4-16 | Maximum channel depth in blocks |
+| depthScale | double | 2.0 | 0.5-5.0 | Multiplier for logarithmic depth growth |
 
 **Width constraints:** maxWidth must be less than cell size to ensure the river fits within its cell. At default cell size of 48 blocks, maxWidth should be at most 47.
 

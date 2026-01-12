@@ -1,7 +1,7 @@
 ---
 level: 4
 parent: "[[River Shaping]]"
-status: draft
+status: review
 ---
 
 # Flowline Tracing
@@ -161,6 +161,8 @@ class TracingState {
     valid: boolean                    // false once invalidated
 }
 ```
+
+`allowedRegions` is derived from the working set of regions constructed during [[Region Discovery]]. Flowlines may only traverse cells within these regions.
 
 ## Algorithm
 

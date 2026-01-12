@@ -1,7 +1,7 @@
 ---
 level: 4
 parent: "[[River Shaping]]"
-status: draft
+status: review
 ---
 
 # Watershed Building
@@ -74,6 +74,35 @@ flowchart TD
     WS -->|"stored"| WSC
 ```
 
+### WatershedCache
+
+**Purpose:** Stores built watersheds for lookup during downstream phases (Elevation Assignment, Flow Accumulation, Spline Building, Terrain Shaping, Water Placement).
+
+**Implements:** `Cache<Watershed>`
+
+**Cache key:** Terminus cell position (`CellPos.toLong()`)
+
+**Behavior:**
+
+- `get()` — singleton accessor
+- `getOrCompute(x, z)` — returns watershed for terminus at (x, z); **throws if not found** (watersheds are not computed on demand)
+- `getIfPresent(x, z)` — returns watershed or null
+- `put(watershed)` — stores watershed keyed by its terminus
+- `clear()` — evicts all watersheds
+
+**Usage pattern:**
+
+```
+// During Watershed Building
+watershed = buildWatershed(terminus, flowlines)
+WatershedCache.get().put(watershed)
+
+// During downstream phases (cell already marked via withWatershed)
+cell = CellCache.get().getOrCompute(x, z)
+if cell.terminus != null:
+    watershed = WatershedCache.get().getOrCompute(cell.terminus.x, cell.terminus.z)
+```
+
 ### Watershed Builder
 
 **Purpose:** Constructs a Watershed from a collection of flowlines sharing a terminus.
@@ -115,7 +144,6 @@ flowchart TD
 
 **Does not:**
 
-- Store terminus cell explicitly (derivable from graph)
 - Validate path lengths
 - Assign elevations
 - Build splines
@@ -170,6 +198,8 @@ buildWatershed(terminus, flowlines):
 ```
 
 Flowlines are processed in the order received. Earlier flowlines establish the graph; later flowlines merge into existing paths where they overlap.
+
+Note: Cell membership marking happens during [[Watershed Validation]], not here. Building constructs the graph; validation finalizes membership after pruning.
 
 ### Adding a Flowline
 

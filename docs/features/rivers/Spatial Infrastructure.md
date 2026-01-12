@@ -1,7 +1,7 @@
 ---
 level: 4
 parent: "[[River Shaping]]"
-status: draft
+status: review
 ---
 
 # Spatial Infrastructure
@@ -414,7 +414,8 @@ Boundaries represent the edges where rivers terminate. A COASTAL region may have
 record Region {
     pos: RegionPos
     type: RegionType
-    boundaries: Set<Boundary>    // only populated for COASTAL (and future basin support)
+    boundaries: Set<Boundary>    // ocean boundaries for COASTAL; basin boundaries for COASTAL and FLUVIAL
+    watersheds: Set<Watershed>   // watersheds whose terminus is in this region
 
     cells(): List<CellPos>       // computed on demand, not stored
 }
@@ -442,6 +443,9 @@ record Cell {
     upstreamCount: int
     downstreamCount: int
 
+    // Set during Watershed Building
+    terminus: CellPos                // lookup key for WatershedCache (null if not in a watershed)
+
     // Set during Spline Building
     entry_t: double
     exit_t: double
@@ -451,6 +455,7 @@ record Cell {
     averageDepth(): double               // average of samples' depth
     averageEstimatedTerrainHeight(): int // 70 + 144 * averageDepth()
     isOcean(): boolean                   // true only if ALL samples are ocean
+    isBasin(): boolean                   // true if below sea level but not ocean
 
     // Computed from samples (source classification fields, requires enriched samples)
     averageErosion(): double             // average of samples' erosion
@@ -462,6 +467,7 @@ record Cell {
     withFlowDirections(flowDirections: List<FlowDirection>): Cell
     withFeature(feature: Feature): Cell
     withWaypoint(waypoint: BlockPos): Cell
+    withWatershed(watershed: Watershed): Cell  // stores watershed.terminus as lookup key
     withElevations(entryY: int, exitY: int): Cell
     withAccumulation(width: int, depth: int, upstreamCount: int, downstreamCount: int): Cell
     withSplineParams(entry_t: double, exit_t: double): Cell
@@ -476,21 +482,48 @@ stateDiagram-v2
 
     Created: pos, samples, feature (NONE)
     Flowed: adds flowDirections
-    Classified: updates feature
+    EarlyClassified: feature (SOURCE, DIVIDE, or NONE)
+    InWatershed: adds terminus (via withWatershed)
     Elevated: adds entryY, exitY
     Accumulated: adds width, depth, upstreamCount, downstreamCount
+    Reclassified: feature updated with full context
     Splined: adds entry_t, exit_t, waypoint
 
     Created --> Flowed: Flow Evaluation (lazy)
-    Flowed --> Classified: Feature Classification
-    Classified --> Elevated: Elevation Assignment
+    Flowed --> EarlyClassified: Early Feature Classification
+    EarlyClassified --> InWatershed: Watershed Building
+    InWatershed --> Elevated: Elevation Assignment
     Elevated --> Accumulated: Flow Accumulation
-    Accumulated --> Splined: Spline Building
+    Accumulated --> Reclassified: Feature Reclassification
+    Reclassified --> Splined: Spline Building
 ```
 
 Waypoint is computed lazily on first access (typically during Spline Building).
 
 Cell is a record—mutation returns new instances via `withFeature()`, `withElevations()`, etc.
+
+**Note:** After Spline Building, cells are used by Terrain Shaping and Water Placement to generate Shape and Fill opinions for chunks. These phases read cell data but don't modify the Cell record.
+
+**Computed property implementations:**
+
+```
+isOcean():
+    for sample in samples:
+        if not sample.isOcean():
+            return false
+    return true
+
+isBasin():
+    if isOcean():
+        return false
+    seaLevel = WorldSettings.get().seaLevel()
+    for sample in samples:
+        if sample.estimatedTerrainHeight() >= seaLevel:
+            return false
+    return true
+```
+
+Basin cells are valid river termini because Minecraft automatically fills terrain below sea level with water. Rivers ending at basin cells will naturally connect to the standing water Minecraft places there.
 
 ## Lazy Services
 
@@ -507,14 +540,15 @@ Waypoint = cell center + deterministic noise offset. The offset adds natural mea
 ```
 offset_x = noise(worldSeed, cellPos) * (cellSize / 8)
 offset_z = noise(worldSeed, cellPos, different_seed) * (cellSize / 8)
-waypoint = (cellCenterX + offset_x, y, cellCenterZ + offset_z)
+waypoint = BlockPos(cellCenterX + offset_x, 0, cellCenterZ + offset_z)
 ```
 
 **Constraints:**
 
 - Max offset is cellSize/8 in each direction
 - Noise is seeded from world seed + cell position for determinism
-- Result is cached on the Cell
+
+**Note:** The waypoint is a 2D control point for Catmull-Rom curve generation. The Y value (0) is a placeholder and is not used. Actual river Y at any point along the spline is computed by the feature's `profile(t, entryY, exitY)` function using the cell's entry and exit elevations. The result is cached on the Cell.
 
 ### Flow Evaluation
 
@@ -786,4 +820,4 @@ Low hit ratios suggest eviction issues or access pattern problems. Compare acros
 | Flow directions as list                   | Sorted by steepness                               | Primary flow is steepest. Secondary flows enable branching/alternative paths.           |
 | D8 for cell flow, D4 for region traversal | Cells flow diagonally, regions connect cardinally | Rivers meander within regions but cross boundaries cleanly.                             |
 | Lazy waypoint computation                 | Computed on first access                          | Most cells never need waypoints. Only river cells use them.                             |
-| No separate WatershedCache                | Watersheds stored in terminus regions             | Reduces cache complexity. Watershed lifetime tied to region lifetime.                   |
+| WatershedCache keyed by terminus          | `WatershedCache.get().getOrCompute(terminus)`     | Watersheds are first-class entities used throughout shaping. Cells store terminus via `withWatershed()` for lookup. |

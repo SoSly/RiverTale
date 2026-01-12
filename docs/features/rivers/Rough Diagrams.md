@@ -255,7 +255,7 @@ sequenceDiagram
         loop For each cell in region
             Terrain ->> CellCache: get elevation
             CellCache -->> Terrain: elevation
-            opt Cell is local minimum at/below sea level
+            opt cell.isBasin()
                 Terrain ->> Terrain: record basin boundary
             end
         end
@@ -656,13 +656,13 @@ record Watershed {
     cells: Set<CellPos>
     upstreamLinks: Map<CellPos, Set<CellPos>>
     downstreamLinks: Map<CellPos, CellPos>
-    spline: List<Point>        // coarse sample points
+    spline: List<SplinePoint>        // coarse sample points
     splineGeometry: SplineCurve  // Catmull-Rom curve data
 }
 
-record Point {
-    pos: BlockPos   // x, z are world coords; y is bank elevation (riverY)
-    t: double       // normalized position along spline (0 = start, 1 = end)
+record SplinePoint {
+    pos: BlockPos   // x, z from Catmull-Rom; y from profile(t, entryY, exitY)
+    t: double       // normalized position along spline (0 = cell entry, 1 = cell exit)
 }
 
 record Shape {
@@ -670,7 +670,7 @@ record Shape {
     weight: double          // confidence 0-1 for blending
     isRiverbed: boolean     // true if underwater channel
     preserveBiome: boolean  // if true, keep original biome
-    point: Point            // nearest spline point (for weight calculation)
+    point: SplinePoint      // nearest spline point (for weight calculation)
 }
 
 record Fill {
@@ -685,10 +685,10 @@ interface FeatureHandler {
     classify(cell: Cell, watershed: Watershed?): boolean
 
     // Terrain shaping opinions for a chunk
-    shape(cell: Cell, watershed: Watershed, chunkPos: ChunkPos): Shape[16][16]
+    shape(cell: Cell, watershed: Watershed, chunkPos: ChunkPos): Shape[16][16]?
 
     // Water placement opinions for a chunk
-    fill(cell: Cell, watershed: Watershed, chunkPos: ChunkPos): Fill[16][16]
+    fill(cell: Cell, watershed: Watershed, chunkPos: ChunkPos): Fill[16][16]?
 
     // Y profile function for spline building (how Y varies from entryY to exitY)
     profile(t: double, entryY: int, exitY: int): int

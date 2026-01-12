@@ -1,12 +1,12 @@
 ---
 level: 4
 parent: "[[River Shaping]]"
-status: draft
+status: review
 ---
 
 # Boundary Identification
 
-Finds where rivers can terminate within each region. Ocean boundaries mark the land/ocean interface in COASTAL regions. Basin boundaries mark local minima where endorheic drainage collects.
+Finds where rivers can terminate within each region. Ocean boundaries mark the land/ocean interface in COASTAL regions. Basin boundaries mark cells below sea level where endorheic drainage collects. Minecraft automatically fills terrain below sea level with water, so rivers terminating at basin cells will naturally connect to standing water.
 
 ## Overview
 
@@ -139,7 +139,7 @@ See [[Spatial Infrastructure]] for the `Boundary` record definition.
 
 Ocean boundaries contain land cells that border ocean. The ocean direction is implicit—check D4 neighbors to find which one is ocean.
 
-Basin boundaries contain local minimum cells. Elevation comes from querying the cell itself.
+Basin boundaries contain cells below sea level. Elevation comes from querying the cell itself.
 
 ## Algorithm
 
@@ -206,7 +206,7 @@ identifyBasinBoundaries(region, cellCache):
 
 **Key behavior:**
 
-- `cell.isBasin()` returns true if all samples are below sea level
+- `cell.isBasin()` returns true if below sea level but not ocean
 - Returns a single Boundary containing all basin cells, or null if none
 
 ### Integration with Region
@@ -248,14 +248,6 @@ No configuration parameters. Uses `cell.isOcean()` and `cell.isBasin()` which en
 - Basin boundaries: proportional to below-sea-level terrain in region
 
 ## Edge Cases
-
-### No Ocean Cells in COASTAL Region
-
-**Cause:** Region classified as COASTAL but all sampled cells happen to be land.
-
-**Detection:** `Oceans.boundaries()` returns empty set.
-
-**Response:** No ocean boundaries stored. Rivers in this region trace toward ocean cells in adjacent regions (the COASTAL classification came from some cells being ocean—they just weren't adjacent to land cells within this region).
 
 ### Ocean Cell at Region Edge
 

@@ -1,7 +1,7 @@
 ---
 level: 4
 parent: "[[River Shaping]]"
-status: draft
+status: review
 ---
 
 # Watershed Validation
@@ -22,7 +22,8 @@ Watershed Validation runs once per watershed after building, before elevation as
 **Outputs:**
 
 - Validated watershed with short segments removed
-- Cells that were pruned are no longer in the watershed
+- Surviving cells marked with watershed membership (via `cell.withWatershed()`)
+- Pruned cells are not marked and retain no watershed reference
 
 ## Sequence Diagram
 
@@ -30,6 +31,7 @@ Watershed Validation runs once per watershed after building, before elevation as
 sequenceDiagram
     participant RiverShaping
     participant Watershed
+    participant CellCache
 
     loop For each watershed
         RiverShaping ->>+ Watershed: validate
@@ -43,6 +45,11 @@ sequenceDiagram
                     Watershed ->> Watershed: remove segment from watershed
                 end
             end
+        end
+
+        Note over Watershed,CellCache: Mark surviving cells
+        loop For each cell in watershed
+            Watershed ->> CellCache: cell.withWatershed(watershed)
         end
 
         Watershed -->>- RiverShaping: validated watershed
@@ -62,18 +69,23 @@ flowchart TD
         VAL[Validator]
     end
 
+    subgraph "Spatial Infrastructure"
+        CC[CellCache]
+    end
+
     subgraph Output
         VWS[Validated Watershed]
     end
 
     WS -->|"upstream/downstream links"| VAL
     CFG -->|"minPathLength"| VAL
-    VAL -->|"pruned"| VWS
+    VAL -->|"marks cells"| CC
+    VAL -->|"pruned + finalized"| VWS
 ```
 
 ### Validator
 
-**Purpose:** Removes segments shorter than the minimum path length.
+**Purpose:** Prunes short segments and finalizes cell membership.
 
 **Owns:**
 
@@ -82,6 +94,7 @@ flowchart TD
 - Segment length evaluation
 - Segment removal
 - Iteration until stable
+- Cell membership marking
 
 **Does:**
 
@@ -89,10 +102,10 @@ flowchart TD
 - Traces each source to its first confluence or terminus
 - Removes segments shorter than `minPathLength`
 - Repeats until no segments are pruned
+- Marks all surviving cells with watershed membership
 
 **Does not:**
 
-- Modify the watershed structure beyond pruning
 - Compute elevations or accumulation
 - Build splines
 
@@ -115,10 +128,15 @@ validate(watershed, minPathLength):
                 pruneSegment(watershed, segment)
                 pruned = true
 
+    // Mark surviving cells as members of this watershed
+    for cellPos in watershed.allCells():
+        cell = CellCache.get().getOrCompute(cellPos)
+        CellCache.get().put(cell.withWatershed(watershed))
+
     return watershed
 ```
 
-Validation iterates until no segments are pruned. This handles cascading effects—pruning one segment may create new sources that are themselves too short.
+Validation iterates until no segments are pruned, then marks all surviving cells with watershed membership. This handles cascading effects—pruning one segment may create new sources that are themselves too short. Only cells that survive the full pruning process get marked.
 
 ### Finding Sources
 
@@ -296,6 +314,8 @@ If minPathLength = 3:
 | Multiple short tributaries | Three 2-cell tributaries, minPathLength=3 | All three pruned |
 | Terminus segment short | 2-cell path to terminus, minPathLength=3 | Segment pruned |
 | Confluence preserved | Short tributary to confluence with other tributaries | Confluence remains, short tributary gone |
+| Surviving cells marked | 5-cell path after validation | All 5 cells have terminus set via withWatershed() |
+| Pruned cells not marked | Short tributary pruned | Pruned cells have no terminus reference |
 
 ### Diagnostic Commands
 
@@ -329,3 +349,4 @@ Instrumented via `Store.getTimer()`:
 | Prune after building, before elevation | Clean network before computing properties | Elevation/accumulation would be wasted on pruned cells. |
 | Configurable minPathLength | User can tune aggressiveness | Different worlds need different detail levels. |
 | Empty watershed valid outcome | Don't error on complete pruning | Rare but possible. Downstream steps skip empty watersheds. |
+| Mark cells after pruning, not during building | Validation marks surviving cells | Cells marked during building would include cells that get pruned. Marking after pruning ensures only finalized members are marked. |

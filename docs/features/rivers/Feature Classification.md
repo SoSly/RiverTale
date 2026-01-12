@@ -1,7 +1,7 @@
 ---
 level: 4
 parent: "[[River Shaping]]"
-status: draft
+status: review
 ---
 
 # Feature Classification
@@ -203,10 +203,38 @@ enum Feature {
     static classify(cell: Cell, watershed: Watershed?): Cell
 }
 
+record SplinePoint {
+    pos: BlockPos   // x, z from Catmull-Rom; y from profile(t, entryY, exitY)
+    t: double       // normalized position along spline (0 = cell entry, 1 = cell exit)
+}
+
+record Shape {
+    y: int                  // target terrain surface elevation
+    weight: double          // confidence 0-1 for blending
+    isRiverbed: boolean     // true if underwater channel
+    preserveBiome: boolean  // if true, keep original biome
+    point: SplinePoint      // nearest spline point (for weight calculation)
+}
+
+record Fill {
+    waterY: int                     // water surface level
+    flowLevel: Integer              // Minecraft water level 1-7 (null = source block)
+    flowDirection: FlowDirection    // downstream direction for mixin override
+    weight: double                  // confidence 0-1 for blending
+}
+
 interface FeatureHandler {
+    // Classify whether this feature applies to a cell
     classify(cell: Cell, watershed: Watershed?): boolean
+
+    // Terrain shaping opinions for a chunk
     shape(cell: Cell, watershed: Watershed, chunkPos: ChunkPos): Shape[16][16]?
-    fill(): void
+
+    // Water placement opinions for a chunk
+    fill(cell: Cell, watershed: Watershed, chunkPos: ChunkPos): Fill[16][16]?
+
+    // Y profile function for spline building (how Y varies from entryY to exitY)
+    profile(t: double, entryY: int, exitY: int): int
 }
 
 enum CellType {
