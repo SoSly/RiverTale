@@ -215,7 +215,7 @@ enum BoundaryType {
 
 ```
 record Boundary(
-    List<CellPos> cells,    // ordered list of cells along boundary
+    List<CellPos> cells,    // cells along boundary (iteration order, not geographic)
     BoundaryType type
 ) {}
 ```
@@ -1067,6 +1067,44 @@ Verify these commands work with the new implementation:
 | `/rivertale sample <x> <z>` | Shows core fields; shows "not enriched" for classification fields if not sampled |
 | `/rivertale cell <x> <z>` | Shows sample count, average values, flow directions (if computed) |
 | `/rivertale metrics` | Cache hit ratios, sample counts |
+
+---
+
+## Visualization Updates
+
+### Update /rivertale debug Output
+
+**File:** `command/DebugCommand.java`
+
+After the full refactor, `/rivertale debug` should show all Cell fields:
+
+```
+=== River Debug at X, Z ===
+Cell: CellPos(x, z) (FEATURE_NAME)
+Flow: NORTHEAST
+entryY: 72, exitY: 70
+width: 8, depth: 4
+upstreamCount: 2, downstreamCount: 1
+terminus: CellPos(tx, tz)
+Watershed: (terminus info or "none")
+```
+
+### Update /rivertale cell Output
+
+The `/rivertale cell` command should also show the new fields:
+
+```
+=== Cell at CellPos(x, z) ===
+Samples: 9 (3x3 grid)
+Average depth: 0.42
+Average continents: 0.81
+Feature: RUN
+Flow directions: [NORTHEAST, EAST] (sorted by steepness)
+entryY: 72, exitY: 70
+width: 8, depth: 4
+upstreamCount: 2, downstreamCount: 1
+terminus: CellPos(tx, tz)
+```
 
 ---
 
