@@ -1,5 +1,8 @@
 package org.sosly.rivertale.core;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.NotNull;
 import org.sosly.rivertale.config.CommonConfig;
@@ -77,6 +80,55 @@ public record RegionPos(int x, int z) {
         return cell.getRegion().equals(this);
     }
 
+    public boolean contains(BlockPos pos) {
+        return pos.getX() >= getMinBlockX()
+            && pos.getX() < getMinBlockX() + size()
+            && pos.getZ() >= getMinBlockZ()
+            && pos.getZ() < getMinBlockZ() + size();
+    }
+
+    public boolean containsOutOfBoundsCells() {
+        int WORLD_LIMIT = 30_000_000;
+        return getMinBlockX() < -WORLD_LIMIT
+            || getMinBlockX() + size() > WORLD_LIMIT
+            || getMinBlockZ() < -WORLD_LIMIT
+            || getMinBlockZ() + size() > WORLD_LIMIT;
+    }
+
+    public List<CellPos> getBorderCells(FlowDirection edgeDirection) {
+        if (!Arrays.asList(FlowDirection.D4).contains(edgeDirection)) {
+            throw new IllegalArgumentException("Edge direction must be cardinal");
+        }
+
+        CellPos minCell = getMinCell();
+        int regionSize = cellsPerRegion();
+        List<CellPos> cells = new ArrayList<>(regionSize);
+
+        switch (edgeDirection) {
+            case NORTH:
+                for (int i = 0; i < regionSize; i++) {
+                    cells.add(new CellPos(minCell.x() + i, minCell.z()));
+                }
+                break;
+            case SOUTH:
+                for (int i = 0; i < regionSize; i++) {
+                    cells.add(new CellPos(minCell.x() + i, minCell.z() + regionSize - 1));
+                }
+                break;
+            case WEST:
+                for (int i = 0; i < regionSize; i++) {
+                    cells.add(new CellPos(minCell.x(), minCell.z() + i));
+                }
+                break;
+            case EAST:
+                for (int i = 0; i < regionSize; i++) {
+                    cells.add(new CellPos(minCell.x() + regionSize - 1, minCell.z() + i));
+                }
+                break;
+        }
+        return cells;
+    }
+
     @NotNull
     public String toString() {
         return "[" + this.x + ", " + this.z + "]";
@@ -87,10 +139,10 @@ public record RegionPos(int x, int z) {
     }
 
     private static int size() {
-        return CommonConfig.get().regionSize();
+        return CommonConfig.get().regionBlocks();
     }
 
     private static int cellsPerRegion() {
-        return CommonConfig.get().cellsPerRegion();
+        return CommonConfig.get().regionSize();
     }
 }

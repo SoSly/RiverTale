@@ -52,10 +52,29 @@ public enum FlowDirection {
         }
 
         if (diff <= 4) {
-            return COMPASS[(currentIdx + 2) % 8];
+            return COMPASS[(currentIdx + 1) % 8];
         }
 
-        return COMPASS[(currentIdx + 6) % 8];
+        return COMPASS[(currentIdx + 7) % 8];
+    }
+
+    public static FlowDirection toward(CellPos from, CellPos to) {
+        int dx = to.x() - from.x();
+        int dz = to.z() - from.z();
+
+        if (dx == 0 && dz == 0) {
+            return NONE;
+        }
+
+        int ndx = (dx == 0) ? 0 : (dx > 0) ? 1 : -1;
+        int ndz = (dz == 0) ? 0 : (dz > 0) ? 1 : -1;
+
+        for (FlowDirection dir : D8) {
+            if (dir.dx == ndx && dir.dz == ndz) {
+                return dir;
+            }
+        }
+        return NONE;
     }
 
     private static int compassIndex(FlowDirection dir) {

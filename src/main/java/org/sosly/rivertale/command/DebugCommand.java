@@ -11,8 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.density.Sample;
-import org.sosly.rivertale.density.SampleCache;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.RiverTale;
@@ -47,17 +46,22 @@ public class DebugCommand {
         CellPos cellPos = new CellPos(pos);
         Cell cell = CellCache.get().getOrCompute(cellPos);
 
-        Sample blockSample = SampleCache.get().getOrCompute(pos.getX(), pos.getZ());
-        int vanillaY = blockSample.estimatedHeight();
-        int waterY = cell.y();
-
         player.sendSystemMessage(Component.literal("=== River Debug at " + pos.getX() + ", " + pos.getZ() + " ==="));
         player.sendSystemMessage(Component.literal("Cell: " + cellPos + " (" + cell.feature().name() + ")"));
-        player.sendSystemMessage(Component.literal("waterY: " + waterY + ", vanillaY: " + vanillaY));
+
+        String flowStr = cell.flowDirections().isEmpty()
+            ? FlowDirection.NONE.name()
+            : cell.flowDirections().get(0).name();
+        player.sendSystemMessage(Component.literal("Flow: " + flowStr));
+
+        player.sendSystemMessage(Component.literal("entryY: " + formatNullableInt(cell.entryY()) + ", exitY: " + formatNullableInt(cell.exitY())));
+        player.sendSystemMessage(Component.literal("width: " + formatNullableInt(cell.width()) + ", depth: " + formatNullableInt(cell.depth())));
+        player.sendSystemMessage(Component.literal("upstreamCount: " + formatNullableInt(cell.upstreamCount()) + ", downstreamCount: " + formatNullableInt(cell.downstreamCount())));
+        player.sendSystemMessage(Component.literal("terminus: " + (cell.terminus() != null ? cell.terminus().toString() : "(not computed)")));
 
         Watershed watershed = WatershedCache.get().getWatershed(cellPos);
         if (watershed == null) {
-            player.sendSystemMessage(Component.literal("(no watershed data)"));
+            player.sendSystemMessage(Component.literal("Watershed: (none)"));
             return;
         }
 
@@ -69,5 +73,9 @@ public class DebugCommand {
         for (CellPos upstream : upstreamSet) {
             player.sendSystemMessage(Component.literal("  - " + upstream));
         }
+    }
+
+    private static String formatNullableInt(Integer value) {
+        return value != null ? value.toString() : "(not computed)";
     }
 }

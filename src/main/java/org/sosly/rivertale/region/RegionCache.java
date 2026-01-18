@@ -71,7 +71,6 @@ public class RegionCache implements Cache<Region> {
 
         Region value = Region.createSkeleton(pos, cellCache, sampleCache);
         cache.put(key, value);
-        value.computePaths(cellCache, sampleCache);
 
         return value;
     }

@@ -1,7 +1,10 @@
 package org.sosly.rivertale.river;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import net.minecraft.world.level.ChunkPos;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +17,7 @@ import org.mockito.quality.Strictness;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.Sample;
@@ -35,11 +39,16 @@ class WatershedTest {
     @Mock
     CellCache cellCache;
 
-    @Mock
-    Sample sample;
+    private CommonConfig originalConfig;
 
     private Cell dummyCell(CellPos pos) {
-        return new Cell(pos, sample, Feature.DEFAULT, List.of(), 63);
+        Sample sample = new Sample(
+            new ChunkPos(pos.getMiddleBlockX() >> 4, pos.getMiddleBlockZ() >> 4),
+            0.5, 0.0, 0.0, 0.0, 0.0, 0.0
+        );
+        Map<ChunkPos, Sample> samples = new HashMap<>();
+        samples.put(sample.pos(), sample);
+        return new Cell(pos, samples, List.of(), Feature.NONE, null, 63, 63, null, null, null, null, null, null, null);
     }
 
     private Path mockPath(List<CellPos> cells) {
@@ -52,6 +61,8 @@ class WatershedTest {
     void setUp() {
         WorldSettings.init(63);
         WatershedCache.init();
+        originalConfig = CommonConfig.get();
+        CommonConfig.set(new CommonConfig(32, 3, 1, -0.17, 10, 1, 1, 288, false));
         when(cellCache.getOrCompute(any(CellPos.class))).thenAnswer(inv -> {
             CellPos pos = inv.getArgument(0);
             return dummyCell(pos);
@@ -62,12 +73,13 @@ class WatershedTest {
     void tearDown() {
         WatershedCache.shutdown();
         WorldSettings.shutdown();
+        CommonConfig.set(originalConfig);
     }
 
     @Test
     void diagonalCrossingCurrentPathLosesMergesIntoExisting() {
-        // Path 1 (existing, more accumulation): (3,0) → (2,0) → (1,0) → (0,1) → (0,2)
-        // Path 2 (new, less accumulation): (2,2) → (1,1) → (0,0)
+        // Path 1 (existing, more accumulation): (3,0) -> (2,0) -> (1,0) -> (0,1) -> (0,2)
+        // Path 2 (new, less accumulation): (2,2) -> (1,1) -> (0,0)
         //
         // When Path 2 moves from (1,1) to (0,0) [northwest]:
         // - North of (1,1) = (1,0), which has downstream (0,1) [southwest]
@@ -121,8 +133,8 @@ class WatershedTest {
 
     @Test
     void diagonalCrossingExistingPathLosesGetsPruned() {
-        // Path 1 (existing, less accumulation): (2,0) → (1,0) → (0,1) → (0,2)
-        // Path 2 (new, more accumulation): (4,2) → (3,2) → (2,2) → (1,1) → (0,0)
+        // Path 1 (existing, less accumulation): (2,0) -> (1,0) -> (0,1) -> (0,2)
+        // Path 2 (new, more accumulation): (4,2) -> (3,2) -> (2,2) -> (1,1) -> (0,0)
         //
         // When Path 2 moves from (1,1) to (0,0) [northwest]:
         // - North of (1,1) = (1,0), which has downstream (0,1) [southwest]
@@ -182,8 +194,8 @@ class WatershedTest {
     @Test
     void noDiagonalCrossingWhenPathsDoNotIntersect() {
         // Two parallel paths that don't cross
-        // Path 1: (2,0) → (1,0) → (0,0)
-        // Path 2: (2,2) → (1,2) → (0,2)
+        // Path 1: (2,0) -> (1,0) -> (0,0)
+        // Path 2: (2,2) -> (1,2) -> (0,2)
 
         Path path1 = mockPath(List.of(
             new CellPos(2, 0),

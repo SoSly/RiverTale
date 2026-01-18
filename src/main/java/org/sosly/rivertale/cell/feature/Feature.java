@@ -42,7 +42,7 @@ public enum Feature {
 
     // Fallback
     DIVIDE(CellType.NONE, new Divide(), new float[]{1f, 1f, 1f, 1f}),
-    DEFAULT(CellType.NONE, new Default(), new float[]{0.5f, 0.5f, 0.5f, 1f});
+    NONE(CellType.NONE, new Default(), new float[]{0.5f, 0.5f, 0.5f, 1f});
 
     public final CellType type;
     public final float[] color;
@@ -67,6 +67,6 @@ public enum Feature {
         }
 
         record.stop();
-        return cell.withFeature(DEFAULT);
+        return cell.withFeature(NONE);
     }
 }

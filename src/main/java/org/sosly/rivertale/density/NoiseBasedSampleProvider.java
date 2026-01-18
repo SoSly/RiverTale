@@ -21,8 +21,25 @@ public class NoiseBasedSampleProvider implements SampleProvider {
     }
 
     @Override
-    public Sample sample(ChunkPos pos) {
-        Timer.Record timer = Store.getTimer(NoiseBasedSampleProvider.class, "sample").start();
+    public Sample sampleCore(ChunkPos pos) {
+        Timer.Record timer = Store.getTimer(NoiseBasedSampleProvider.class, "sampleCore").start();
+
+        int x = pos.getMiddleBlockX();
+        int z = pos.getMiddleBlockZ();
+
+        DensityFunction.SinglePointContext ctx = new DensityFunction.SinglePointContext(x, y, z);
+
+        double continents = router.continents().compute(ctx);
+        double depth = router.depth().compute(ctx);
+
+        timer.stop();
+
+        return new Sample(pos, continents, depth);
+    }
+
+    @Override
+    public Sample sampleFull(ChunkPos pos) {
+        Timer.Record timer = Store.getTimer(NoiseBasedSampleProvider.class, "sampleFull").start();
 
         int x = pos.getMiddleBlockX();
         int z = pos.getMiddleBlockZ();

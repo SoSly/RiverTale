@@ -1,243 +1,292 @@
 package org.sosly.rivertale.cell;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import net.minecraft.world.level.ChunkPos;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
+import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
-import org.sosly.rivertale.density.SampleCache;
-
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class CellTest {
 
-    @Mock
-    SampleCache sampleCache;
-
     @Test
-    void computeFlowDirectionsReturnsEmptyWhenFlat() {
+    void minimalConstructionCreatesBasicCell() {
         CellPos pos = new CellPos(0, 0);
-        Sample sample = sampleAt(pos, 0.5);
-        mockNeighbors(pos, 0.5);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
+        );
 
-        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        Cell cell = new Cell(pos, samples);
 
-        assertTrue(flow.isEmpty());
+        assertEquals(pos, cell.pos());
+        assertEquals(1, cell.samples().size());
+        assertTrue(cell.flowDirections().isEmpty());
+        assertEquals(Feature.NONE, cell.feature());
+        assertNull(cell.waypoint());
+        assertNull(cell.entryY());
+        assertNull(cell.exitY());
+        assertNull(cell.width());
+        assertNull(cell.depth());
+        assertNull(cell.upstreamCount());
+        assertNull(cell.downstreamCount());
+        assertNull(cell.terminus());
+        assertNull(cell.entryT());
+        assertNull(cell.exitT());
     }
 
     @Test
-    void computeFlowDirectionsReturnsNorthFirstWhenNorthIsLowest() {
+    void averageContinentsComputesMean() {
         CellPos pos = new CellPos(0, 0);
-        Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, FlowDirection.NORTH, 0.2);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), -0.1, 0.5),
+            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), -0.2, 0.5),
+            new ChunkPos(2, 0), new Sample(new ChunkPos(2, 0), -0.3, 0.5)
+        );
 
-        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        Cell cell = new Cell(pos, samples);
 
-        assertEquals(FlowDirection.NORTH, flow.get(0));
+        assertEquals(-0.2, cell.averageContinents(), 0.0001);
     }
 
     @Test
-    void computeFlowDirectionsReturnsSouthFirstWhenSouthIsLowest() {
+    void averageDepthComputesMean() {
         CellPos pos = new CellPos(0, 0);
-        Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, FlowDirection.SOUTH, 0.2);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.3),
+            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), 0.5, 0.5),
+            new ChunkPos(2, 0), new Sample(new ChunkPos(2, 0), 0.5, 0.7)
+        );
 
-        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        Cell cell = new Cell(pos, samples);
 
-        assertEquals(FlowDirection.SOUTH, flow.get(0));
+        assertEquals(0.5, cell.averageDepth(), 0.0001);
     }
 
     @Test
-    void computeFlowDirectionsReturnsEastFirstWhenEastIsLowest() {
+    void averageEstimatedTerrainHeightUsesDepthFormula() {
         CellPos pos = new CellPos(0, 0);
-        Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, FlowDirection.EAST, 0.2);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
+        );
 
-        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        Cell cell = new Cell(pos, samples);
 
-        assertEquals(FlowDirection.EAST, flow.get(0));
+        assertEquals(142, cell.averageEstimatedTerrainHeight());
     }
 
     @Test
-    void computeFlowDirectionsReturnsWestFirstWhenWestIsLowest() {
+    void isOceanReturnsTrueWhenAllSamplesAreOcean() {
         CellPos pos = new CellPos(0, 0);
-        Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, FlowDirection.WEST, 0.2);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), -0.5, 0.5),
+            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), -0.5, 0.5),
+            new ChunkPos(2, 0), new Sample(new ChunkPos(2, 0), -0.5, 0.5)
+        );
 
-        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        Cell cell = new Cell(pos, samples);
 
-        assertEquals(FlowDirection.WEST, flow.get(0));
+        assertTrue(cell.isOcean());
     }
 
     @Test
-    void computeFlowDirectionsReturnsDiagonalFirstWhenDiagonalIsLowest() {
+    void isOceanReturnsFalseWhenMixed() {
         CellPos pos = new CellPos(0, 0);
-        Sample sample = sampleAt(pos, 0.5);
-        mockNeighborsExcept(pos, 0.5, FlowDirection.NORTHEAST, 0.0);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), -0.5, 0.5),
+            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), 0.5, 0.5)
+        );
 
-        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        Cell cell = new Cell(pos, samples);
 
-        assertEquals(FlowDirection.NORTHEAST, flow.get(0));
+        assertFalse(cell.isOcean());
     }
 
     @Test
-    void computeFlowDirectionsPrefersCardinalOverDiagonalWhenSlopeEqual() {
+    void isBasinReturnsTrueWhenBelowSeaLevelAndNotOcean() {
         CellPos pos = new CellPos(0, 0);
-        Sample sample = sampleAt(pos, 1.0);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, -0.1)
+        );
 
-        for (FlowDirection dir : FlowDirection.D8) {
-            CellPos neighborPos = pos.relative(dir);
-            double depth = (dir.dx != 0 && dir.dz != 0) ? 1.0 - 0.3 * Math.sqrt(2) : 0.7;
-            mockSampleAt(neighborPos, depth);
+        Cell cell = new Cell(pos, samples);
+        int estimatedHeight = cell.averageEstimatedTerrainHeight();
+
+        assertTrue(estimatedHeight < 63);
+        assertFalse(cell.isOcean());
+        assertTrue(cell.isBasin());
+    }
+
+    @Test
+    void isBasinReturnsFalseWhenOcean() {
+        CellPos pos = new CellPos(0, 0);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), -0.5, -0.1)
+        );
+
+        Cell cell = new Cell(pos, samples);
+
+        assertTrue(cell.isOcean());
+        assertFalse(cell.isBasin());
+    }
+
+    @Test
+    void withFlowDirectionsPreservesOtherFields() {
+        CellPos pos = new CellPos(0, 0);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
+        );
+        Cell cell = new Cell(pos, samples)
+            .withFeature(Feature.RUN)
+            .withElevations(100, 95);
+
+        Cell updated = cell.withFlowDirections(List.of(FlowDirection.NORTH, FlowDirection.EAST));
+
+        assertEquals(List.of(FlowDirection.NORTH, FlowDirection.EAST), updated.flowDirections());
+        assertEquals(Feature.RUN, updated.feature());
+        assertEquals(100, updated.entryY());
+        assertEquals(95, updated.exitY());
+    }
+
+    @Test
+    void withFeaturePreservesOtherFields() {
+        CellPos pos = new CellPos(0, 0);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
+        );
+        Cell cell = new Cell(pos, samples)
+            .withFlowDirections(List.of(FlowDirection.SOUTH))
+            .withElevations(100, 95);
+
+        Cell updated = cell.withFeature(Feature.CASCADE);
+
+        assertEquals(Feature.CASCADE, updated.feature());
+        assertEquals(List.of(FlowDirection.SOUTH), updated.flowDirections());
+        assertEquals(100, updated.entryY());
+        assertEquals(95, updated.exitY());
+    }
+
+    @Test
+    void withElevationsPreservesOtherFields() {
+        CellPos pos = new CellPos(0, 0);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
+        );
+        Cell cell = new Cell(pos, samples)
+            .withFlowDirections(List.of(FlowDirection.WEST))
+            .withFeature(Feature.RAPIDS);
+
+        Cell updated = cell.withElevations(80, 70);
+
+        assertEquals(80, updated.entryY());
+        assertEquals(70, updated.exitY());
+        assertEquals(List.of(FlowDirection.WEST), updated.flowDirections());
+        assertEquals(Feature.RAPIDS, updated.feature());
+    }
+
+    @Test
+    void averageErosionThrowsWhenNoEnrichedSamples() {
+        CellPos pos = new CellPos(0, 0);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
+        );
+
+        Cell cell = new Cell(pos, samples);
+
+        assertThrows(IllegalStateException.class, cell::averageErosion);
+    }
+
+    @Test
+    void averageErosionComputesMeanForEnrichedSamples() {
+        CellPos pos = new CellPos(0, 0);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5, 0.2, 0.3, 0.4, 0.5),
+            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), 0.5, 0.5, 0.4, 0.3, 0.4, 0.5)
+        );
+
+        Cell cell = new Cell(pos, samples);
+
+        assertEquals(0.3, cell.averageErosion(), 0.0001);
+    }
+
+    @Test
+    void samplePositionsN1ReturnsCenterOnly() {
+        List<CellCache.SampleOffset> positions = CellCache.getSamplePositions(3, 1);
+
+        assertEquals(1, positions.size());
+        assertEquals(1, positions.get(0).x());
+        assertEquals(1, positions.get(0).z());
+    }
+
+    @Test
+    void samplePositionsN5ReturnsCenterAndCorners() {
+        List<CellCache.SampleOffset> positions = CellCache.getSamplePositions(3, 5);
+
+        assertEquals(5, positions.size());
+
+        Set<String> coords = new HashSet<>();
+        for (CellCache.SampleOffset p : positions) {
+            coords.add(p.x() + "," + p.z());
         }
 
-        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
-
-        assertTrue(flow.get(0).dx == 0 || flow.get(0).dz == 0);
+        assertTrue(coords.contains("1,1"));
+        assertTrue(coords.contains("0,0"));
+        assertTrue(coords.contains("2,2"));
+        assertTrue(coords.contains("0,2"));
+        assertTrue(coords.contains("2,0"));
     }
 
     @Test
-    void computeFlowDirectionsReturnsEmptyWhenUphillEverywhere() {
-        CellPos pos = new CellPos(0, 0);
-        Sample sample = sampleAt(pos, 0.2);
-        mockNeighbors(pos, 0.5);
+    void samplePositionsN9ReturnsAllPositions() {
+        List<CellCache.SampleOffset> positions = CellCache.getSamplePositions(3, 9);
 
-        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
+        assertEquals(9, positions.size());
 
-        assertTrue(flow.isEmpty());
-    }
-
-    @Test
-    void computeFlowDirectionsReturnsSteepestFirstWhenMultipleDownhill() {
-        CellPos pos = new CellPos(0, 0);
-        Sample sample = sampleAt(pos, 1.0);
-
-        mockSampleAt(pos.relative(FlowDirection.NORTH), 0.8);
-        mockSampleAt(pos.relative(FlowDirection.SOUTH), 0.3);
-        mockSampleAt(pos.relative(FlowDirection.EAST), 0.9);
-        mockSampleAt(pos.relative(FlowDirection.WEST), 0.9);
-        for (FlowDirection dir : new FlowDirection[]{FlowDirection.NORTHEAST, FlowDirection.NORTHWEST, FlowDirection.SOUTHEAST, FlowDirection.SOUTHWEST}) {
-            mockSampleAt(pos.relative(dir), 0.9);
+        Set<String> coords = new HashSet<>();
+        for (CellCache.SampleOffset p : positions) {
+            coords.add(p.x() + "," + p.z());
         }
 
-        List<FlowDirection> flow = Cell.computeFlowDirections(pos, sample, sampleCache);
-
-        assertEquals(8, flow.size());
-        assertEquals(FlowDirection.SOUTH, flow.get(0));
-        assertEquals(FlowDirection.NORTH, flow.get(1));
-    }
-
-    @Test
-    void hasUpstreamNeighborReturnsFalseWhenNullCache() {
-        CellPos pos = new CellPos(0, 0);
-
-        boolean result = Cell.hasUpstreamNeighbor(pos, null);
-
-        assertEquals(false, result);
-    }
-
-    @Test
-    void hasUpstreamNeighborReturnsFalseWhenNoNeighborFlowsIn() {
-        CellPos pos = new CellPos(0, 0);
-        mockSampleAt(pos, 0.0);
-        for (FlowDirection dir : FlowDirection.D8) {
-            CellPos neighbor = pos.relative(dir);
-            mockSampleAt(neighbor, 1.0);
-            mockNeighborsOf(neighbor, 1.0);
-        }
-
-        boolean result = Cell.hasUpstreamNeighbor(pos, sampleCache);
-
-        assertEquals(false, result);
-    }
-
-    @Test
-    void hasUpstreamNeighborReturnsTrueWhenOneNeighborFlowsIn() {
-        CellPos pos = new CellPos(0, 0);
-        CellPos north = pos.relative(FlowDirection.NORTH);
-
-        mockSampleAt(pos, 0.0);
-        mockSampleAt(north, 1.0);
-
-        for (FlowDirection dir : FlowDirection.D8) {
-            mockSampleAt(north.relative(dir), dir == FlowDirection.SOUTH ? 0.0 : 1.0);
-        }
-
-        for (FlowDirection dir : FlowDirection.D8) {
-            if (dir == FlowDirection.NORTH) {
-                continue;
+        for (int x = 0; x < 3; x++) {
+            for (int z = 0; z < 3; z++) {
+                assertTrue(coords.contains(x + "," + z));
             }
-            CellPos neighbor = pos.relative(dir);
-            mockSampleAt(neighbor, 1.0);
-            for (FlowDirection neighborDir : FlowDirection.D8) {
-                CellPos nn = neighbor.relative(neighborDir);
-                if (!nn.equals(pos) && !nn.equals(north)) {
-                    mockSampleAt(nn, 1.0);
-                }
-            }
         }
-
-        boolean result = Cell.hasUpstreamNeighbor(pos, sampleCache);
-
-        assertEquals(true, result);
     }
 
     @Test
-    void hasUpstreamNeighborReturnsFalseWhenAllNeighborsFlat() {
-        CellPos pos = new CellPos(0, 0);
-        mockSampleAt(pos, 0.5);
-        for (FlowDirection dir : FlowDirection.D8) {
-            CellPos neighbor = pos.relative(dir);
-            mockSampleAt(neighbor, 0.5);
-            mockNeighborsOf(neighbor, 0.5);
-        }
+    void samplePositionsStartsWithCenter() {
+        List<CellCache.SampleOffset> positions = CellCache.getSamplePositions(3, 3);
 
-        boolean result = Cell.hasUpstreamNeighbor(pos, sampleCache);
-
-        assertEquals(false, result);
+        assertEquals(1, positions.get(0).x());
+        assertEquals(1, positions.get(0).z());
     }
 
-    private Sample sampleAt(CellPos pos, double depth) {
-        ChunkPos chunk = new ChunkPos(pos.getMiddleBlockX() >> 4, pos.getMiddleBlockZ() >> 4);
-        return new Sample(chunk, 0.5, depth, 0, 0, 0, 0);
-    }
-
-    private void mockSampleAt(CellPos pos, double depth) {
-        int x = pos.getMiddleBlockX();
-        int z = pos.getMiddleBlockZ();
-        when(sampleCache.getOrCompute(x, z)).thenReturn(sampleAt(pos, depth));
-    }
-
-    private void mockNeighbors(CellPos center, double depth) {
-        for (FlowDirection dir : FlowDirection.D8) {
-            CellPos neighborPos = center.relative(dir);
-            mockSampleAt(neighborPos, depth);
+    @Test
+    void samplePositionsReturnsRequestedCount() {
+        for (int n = 1; n <= 9; n++) {
+            List<CellCache.SampleOffset> positions = CellCache.getSamplePositions(3, n);
+            assertEquals(n, positions.size());
         }
     }
 
-    private void mockNeighborsExcept(CellPos center, double defaultDepth, FlowDirection exception, double exceptionDepth) {
-        for (FlowDirection dir : FlowDirection.D8) {
-            CellPos neighborPos = center.relative(dir);
-            double depth = (dir == exception) ? exceptionDepth : defaultDepth;
-            mockSampleAt(neighborPos, depth);
-        }
-    }
+    @Test
+    void samplePositionsHasNoDuplicates() {
+        List<CellCache.SampleOffset> positions = CellCache.getSamplePositions(3, 9);
 
-    private void mockNeighborsOf(CellPos center, double depth) {
-        for (FlowDirection dir : FlowDirection.D8) {
-            CellPos neighborPos = center.relative(dir);
-            mockSampleAt(neighborPos, depth);
+        Set<String> coords = new HashSet<>();
+        for (CellCache.SampleOffset p : positions) {
+            String key = p.x() + "," + p.z();
+            assertTrue(coords.add(key), "Duplicate position found: " + key);
         }
     }
 }

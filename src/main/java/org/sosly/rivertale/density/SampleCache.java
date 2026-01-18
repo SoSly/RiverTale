@@ -51,6 +51,10 @@ public class SampleCache implements Cache<Sample> {
         }
     }
 
+    public SampleProvider getProvider() {
+        return sampler;
+    }
+
     @Override
     public Sample getOrCompute(int x, int z) {
         ChunkPos chunk = new ChunkPos(new BlockPos(x, 0, z));
@@ -64,7 +68,7 @@ public class SampleCache implements Cache<Sample> {
 
         Store.getRatio(SampleCache.class, "hits").failure();
 
-        Sample value = sampler.sample(chunk);
+        Sample value = sampler.sampleCore(chunk);
         cache.put(key, value);
         return value;
     }

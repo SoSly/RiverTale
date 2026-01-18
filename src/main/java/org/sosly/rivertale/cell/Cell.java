@@ -1,87 +1,178 @@
 package org.sosly.rivertale.cell;
 
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
-import org.sosly.rivertale.density.SampleCache;
 
-public record Cell(CellPos pos, Sample sample, Feature feature, List<FlowDirection> flowDirections, int y) {
-    private static final double SQRT2 = Math.sqrt(2.0);
-
-    private record SlopeEntry(FlowDirection dir, double slope) {}
-
-    public static List<FlowDirection> computeFlowDirections(CellPos pos, Sample sample, SampleCache cache) {
-        if (cache == null) {
-            return List.of();
-        }
-
-        double currentDensity = sample.continents() + sample.depth();
-        List<SlopeEntry> downhill = new ArrayList<>();
-
-        for (FlowDirection dir : FlowDirection.D8) {
-            CellPos neighbor = pos.relative(dir);
-            Sample neighborSample = cache.getOrCompute(neighbor.getMiddleBlockX(), neighbor.getMiddleBlockZ());
-            double neighborDensity = neighborSample.continents() + neighborSample.depth();
-            double slope = currentDensity - neighborDensity;
-
-            if (dir.dx != 0 && dir.dz != 0) {
-                slope /= SQRT2;
-            }
-
-            if (slope > 0) {
-                downhill.add(new SlopeEntry(dir, slope));
-            }
-        }
-
-        downhill.sort(Comparator.comparingDouble(SlopeEntry::slope).reversed());
-        return downhill.stream().map(SlopeEntry::dir).toList();
+public record Cell(
+    CellPos pos,
+    Map<ChunkPos, Sample> samples,
+    List<FlowDirection> flowDirections,
+    Feature feature,
+    BlockPos waypoint,
+    Integer entryY,
+    Integer exitY,
+    Integer width,
+    Integer depth,
+    Integer upstreamCount,
+    Integer downstreamCount,
+    CellPos terminus,
+    Double entryT,
+    Double exitT
+) {
+    public Cell(CellPos pos, Map<ChunkPos, Sample> samples) {
+        this(pos, samples, List.of(), Feature.NONE, null, null, null, null, null, null, null, null, null, null);
     }
 
-    public static boolean hasUpstreamNeighbor(CellPos pos, SampleCache cache) {
-        if (cache == null) {
+    public double averageContinents() {
+        return samples.values().stream()
+            .mapToDouble(Sample::continents)
+            .average()
+            .orElse(0.0);
+    }
+
+    public double averageDepth() {
+        return samples.values().stream()
+            .mapToDouble(Sample::depth)
+            .average()
+            .orElse(0.0);
+    }
+
+    public int averageEstimatedTerrainHeight() {
+        return (int) Math.round(70 + 144 * averageDepth());
+    }
+
+    public double averageErosion() {
+        return samples.values().stream()
+            .filter(Sample::hasFullDensities)
+            .mapToDouble(Sample::erosion)
+            .average()
+            .orElseThrow(() -> new IllegalStateException("No enriched samples"));
+    }
+
+    public double averageRidges() {
+        return samples.values().stream()
+            .filter(Sample::hasFullDensities)
+            .mapToDouble(Sample::ridges)
+            .average()
+            .orElseThrow(() -> new IllegalStateException("No enriched samples"));
+    }
+
+    public double averageTemperature() {
+        return samples.values().stream()
+            .filter(Sample::hasFullDensities)
+            .mapToDouble(Sample::temperature)
+            .average()
+            .orElseThrow(() -> new IllegalStateException("No enriched samples"));
+    }
+
+    public double averageVegetation() {
+        return samples.values().stream()
+            .filter(Sample::hasFullDensities)
+            .mapToDouble(Sample::vegetation)
+            .average()
+            .orElseThrow(() -> new IllegalStateException("No enriched samples"));
+    }
+
+    public boolean isOcean() {
+        return samples.values().stream().allMatch(Sample::isOcean);
+    }
+
+    public boolean isBasin() {
+        if (isOcean()) {
             return false;
         }
-
-        for (FlowDirection dir : FlowDirection.D8) {
-            CellPos neighbor = pos.relative(dir);
-            Sample neighborSample = cache.getOrCompute(neighbor.getMiddleBlockX(), neighbor.getMiddleBlockZ());
-            List<FlowDirection> neighborFlows = computeFlowDirections(neighbor, neighborSample, cache);
-            if (neighborFlows.contains(dir.opposite())) {
-                return true;
-            }
-        }
-
-        return false;
+        int seaLevel = 63;
+        return samples.values().stream()
+            .allMatch(s -> s.estimatedTerrainHeight() < seaLevel);
     }
 
-    public Cell withY(int newY) {
-        return new Cell(pos, sample, feature, flowDirections, newY);
+    public Cell withFlowDirections(List<FlowDirection> flowDirections) {
+        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
 
-    public Cell withFeature(Feature newFeature) {
-        return new Cell(pos, sample, newFeature, flowDirections, y);
+    public Cell withFeature(Feature feature) {
+        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+    }
+
+    public Cell withWaypoint(BlockPos waypoint) {
+        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+    }
+
+    public Cell withElevations(int entryY, int exitY) {
+        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+    }
+
+    public Cell withAccumulation(int width, int depth, int upstreamCount, int downstreamCount) {
+        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+    }
+
+    public Cell withWatershed(CellPos terminus) {
+        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+    }
+
+    public Cell withSplineParams(double entryT, double exitT) {
+        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
 
     public CompoundTag encode() {
         CompoundTag tag = new CompoundTag();
         tag.putLong("pos", pos.toLong());
-        tag.put("sample", sample.encode());
         tag.putString("feature", feature.name());
-        tag.putInt("y", y);
+
+        ListTag sampleList = new ListTag();
+        for (Sample sample : samples.values()) {
+            sampleList.add(sample.encode());
+        }
+        tag.put("samples", sampleList);
 
         ListTag flowList = new ListTag();
         for (FlowDirection dir : flowDirections) {
             flowList.add(StringTag.valueOf(dir.name()));
         }
         tag.put("flowDirections", flowList);
+
+        if (waypoint != null) {
+            tag.putLong("waypoint", waypoint.asLong());
+        }
+        if (entryY != null) {
+            tag.putInt("entryY", entryY);
+        }
+        if (exitY != null) {
+            tag.putInt("exitY", exitY);
+        }
+        if (width != null) {
+            tag.putInt("width", width);
+        }
+        if (depth != null) {
+            tag.putInt("depth", depth);
+        }
+        if (upstreamCount != null) {
+            tag.putInt("upstreamCount", upstreamCount);
+        }
+        if (downstreamCount != null) {
+            tag.putInt("downstreamCount", downstreamCount);
+        }
+        if (terminus != null) {
+            tag.putLong("terminus", terminus.toLong());
+        }
+        if (entryT != null) {
+            tag.putDouble("entryT", entryT);
+        }
+        if (exitT != null) {
+            tag.putDouble("exitT", exitT);
+        }
 
         return tag;
     }
@@ -93,12 +184,28 @@ public record Cell(CellPos pos, Sample sample, Feature feature, List<FlowDirecti
             flows.add(FlowDirection.valueOf(flowList.getString(i)));
         }
 
+        Map<ChunkPos, Sample> samples = new HashMap<>();
+        ListTag sampleList = tag.getList("samples", Tag.TAG_COMPOUND);
+        for (int i = 0; i < sampleList.size(); i++) {
+            Sample sample = Sample.decode(sampleList.getCompound(i));
+            samples.put(sample.pos(), sample);
+        }
+
         return new Cell(
             new CellPos(tag.getLong("pos")),
-            Sample.decode(tag.getCompound("sample")),
-            Feature.valueOf(tag.getString("feature")),
+            samples,
             flows,
-            tag.getInt("y")
+            Feature.valueOf(tag.getString("feature")),
+            tag.contains("waypoint") ? BlockPos.of(tag.getLong("waypoint")) : null,
+            tag.contains("entryY") ? tag.getInt("entryY") : null,
+            tag.contains("exitY") ? tag.getInt("exitY") : null,
+            tag.contains("width") ? tag.getInt("width") : null,
+            tag.contains("depth") ? tag.getInt("depth") : null,
+            tag.contains("upstreamCount") ? tag.getInt("upstreamCount") : null,
+            tag.contains("downstreamCount") ? tag.getInt("downstreamCount") : null,
+            tag.contains("terminus") ? new CellPos(tag.getLong("terminus")) : null,
+            tag.contains("entryT") ? tag.getDouble("entryT") : null,
+            tag.contains("exitT") ? tag.getDouble("exitT") : null
         );
     }
 }

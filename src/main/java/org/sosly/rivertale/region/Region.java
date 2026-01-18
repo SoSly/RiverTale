@@ -159,7 +159,8 @@ public class Region {
             cellTag.putString("flow", cell.flowDirections().isEmpty()
                 ? FlowDirection.NONE.name()
                 : cell.flowDirections().get(0).name());
-            cellTag.putInt("y", cell.y());
+            int y = cell.entryY() != null ? cell.entryY() : cell.averageEstimatedTerrainHeight();
+            cellTag.putInt("y", y);
             cellList.add(cellTag);
         }
         tag.put("cells", cellList);

@@ -232,19 +232,21 @@ public class Watershed {
             visited.add(current);
 
             Cell cell = cache.getOrCompute(current);
-            int terrainY = cell.sample().estimatedHeight();
+            int terrainY = cell.averageEstimatedTerrainHeight();
 
             Set<CellPos> upstreamCells = upstream.get(current);
             if (upstreamCells == null || upstreamCells.isEmpty()) {
-                cache.put(cell.withY(Math.max(seaLevel, terrainY)));
+                int y = Math.max(seaLevel, terrainY);
+                cache.put(cell.withElevations(y, y));
             } else {
                 int maxAllowedY = Integer.MAX_VALUE;
                 for (CellPos upstreamPos : upstreamCells) {
                     Cell upstreamCell = cache.getOrCompute(upstreamPos);
-                    maxAllowedY = Math.min(maxAllowedY, upstreamCell.y() - minSlope);
+                    int upstreamY = upstreamCell.entryY() != null ? upstreamCell.entryY() : upstreamCell.averageEstimatedTerrainHeight();
+                    maxAllowedY = Math.min(maxAllowedY, upstreamY - minSlope);
                 }
                 int constrainedY = Math.max(seaLevel, Math.min(terrainY, maxAllowedY));
-                cache.put(cell.withY(constrainedY));
+                cache.put(cell.withElevations(constrainedY, constrainedY));
             }
 
             current = downstream.get(current);
@@ -262,9 +264,11 @@ public class Watershed {
 
             if (downstreamPos != null) {
                 Cell downstreamCell = cache.getOrCompute(downstreamPos);
-                int minY = downstreamCell.y() + minSlope;
-                if (cell.y() < minY) {
-                    cache.put(cell.withY(minY));
+                int downstreamY = downstreamCell.entryY() != null ? downstreamCell.entryY() : downstreamCell.averageEstimatedTerrainHeight();
+                int cellY = cell.entryY() != null ? cell.entryY() : cell.averageEstimatedTerrainHeight();
+                int minY = downstreamY + minSlope;
+                if (cellY < minY) {
+                    cache.put(cell.withElevations(minY, minY));
                 }
             }
 
@@ -356,8 +360,10 @@ public class Watershed {
             CompoundTag edge = new CompoundTag();
             edge.putLong("from", entry.getKey().toLong());
             edge.putLong("to", entry.getValue().toLong());
-            edge.putInt("fromY", fromCell.y());
-            edge.putInt("toY", toCell.y());
+            int fromY = fromCell.entryY() != null ? fromCell.entryY() : fromCell.averageEstimatedTerrainHeight();
+            int toY = toCell.entryY() != null ? toCell.entryY() : toCell.averageEstimatedTerrainHeight();
+            edge.putInt("fromY", fromY);
+            edge.putInt("toY", toY);
             edges.add(edge);
         }
 

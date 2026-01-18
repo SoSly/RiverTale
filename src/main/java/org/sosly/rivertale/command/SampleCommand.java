@@ -94,11 +94,12 @@ public class SampleCommand {
             + " (threshold: " + format(CommonConfig.get().oceanThreshold()) + ")"));
         player.sendSystemMessage(Component.literal("  continents: " + format(sample.continents())));
         player.sendSystemMessage(Component.literal("  depth: " + format(sample.depth())));
-        player.sendSystemMessage(Component.literal("  erosion: " + format(sample.erosion())));
-        player.sendSystemMessage(Component.literal("  ridges: " + format(sample.ridges())));
-        player.sendSystemMessage(Component.literal("  ridgesFolded: " + format(sample.ridgesFolded())));
-        player.sendSystemMessage(Component.literal("  temperature: " + format(sample.temperature())));
-        player.sendSystemMessage(Component.literal("  vegetation: " + format(sample.vegetation())));
+        player.sendSystemMessage(Component.literal("  estimatedTerrainHeight: " + sample.estimatedTerrainHeight()));
+        player.sendSystemMessage(Component.literal("  erosion: " + formatNullable(sample.erosion())));
+        player.sendSystemMessage(Component.literal("  ridges: " + formatNullable(sample.ridges())));
+        player.sendSystemMessage(Component.literal("  ridgesFolded: " + (sample.ridges() != null ? format(sample.ridgesFolded()) : "null")));
+        player.sendSystemMessage(Component.literal("  temperature: " + formatNullable(sample.temperature())));
+        player.sendSystemMessage(Component.literal("  vegetation: " + formatNullable(sample.vegetation())));
 
         DensityFunction riverValleys = CapturedDensityFunctions.get("river_valleys");
         if (riverValleys != null) {
@@ -111,28 +112,28 @@ public class SampleCommand {
     private static void sendCellInfo(ServerPlayer player, BlockPos pos) {
         CellPos cellPos = new CellPos(pos);
         Cell cell = CellCache.get().getOrCompute(cellPos);
-        Sample sample = cell.sample();
         int y = pos.getY();
 
-        Sample blockSample = SampleCache.get().getOrCompute(pos.getX(), pos.getZ());
-        int vanillaY = blockSample.estimatedHeight();
-        int waterY = cell.y();
-        boolean needsBank = vanillaY <= waterY;
+        player.sendSystemMessage(withTeleport("=== Cell at " + cellPos + " ===", cellPos.getMiddleBlockX(), y, cellPos.getMiddleBlockZ()));
+        player.sendSystemMessage(Component.literal("  Samples: " + cell.samples().size()));
+        player.sendSystemMessage(Component.literal("  Average depth: " + format(cell.averageDepth())));
+        player.sendSystemMessage(Component.literal("  Average continents: " + format(cell.averageContinents())));
+        player.sendSystemMessage(Component.literal("  Feature: " + cell.feature().name()));
+        player.sendSystemMessage(Component.literal("  Flow directions: " + cell.flowDirections() + " (sorted by steepness)"));
+        player.sendSystemMessage(Component.literal("  entryY: " + formatNullableInt(cell.entryY()) + ", exitY: " + formatNullableInt(cell.exitY())));
+        player.sendSystemMessage(Component.literal("  width: " + formatNullableInt(cell.width()) + ", depth: " + formatNullableInt(cell.depth())));
+        player.sendSystemMessage(Component.literal("  upstreamCount: " + formatNullableInt(cell.upstreamCount()) + ", downstreamCount: " + formatNullableInt(cell.downstreamCount())));
+        player.sendSystemMessage(Component.literal("  terminus: " + (cell.terminus() != null ? cell.terminus().toString() : "(not computed)")));
+        player.sendSystemMessage(Component.literal("  isOcean: " + cell.isOcean() + ", isBasin: " + cell.isBasin()));
 
-        player.sendSystemMessage(withTeleport("Cell " + cellPos, cellPos.getMiddleBlockX(), y, cellPos.getMiddleBlockZ()));
-        player.sendSystemMessage(Component.literal("  feature: " + cell.feature().name()));
-        player.sendSystemMessage(Component.literal("  type: " + cell.feature().type.name()));
-        player.sendSystemMessage(Component.literal("  flows: " + cell.flowDirections()));
-        player.sendSystemMessage(Component.literal("  waterY: " + waterY));
-        player.sendSystemMessage(Component.literal("  vanillaY: " + vanillaY + " (at player pos)"));
-        player.sendSystemMessage(Component.literal("  needsBank: " + needsBank));
-        player.sendSystemMessage(Component.literal("  continents: " + format(sample.continents())));
-        player.sendSystemMessage(Component.literal("  depth: " + format(sample.depth())));
-        player.sendSystemMessage(Component.literal("  erosion: " + format(sample.erosion())));
-        player.sendSystemMessage(Component.literal("  ridges: " + format(sample.ridges())));
-        player.sendSystemMessage(Component.literal("  ridgesFolded: " + format(sample.ridgesFolded())));
-        player.sendSystemMessage(Component.literal("  temperature: " + format(sample.temperature())));
-        player.sendSystemMessage(Component.literal("  vegetation: " + format(sample.vegetation())));
+        try {
+            player.sendSystemMessage(Component.literal("  Average erosion: " + format(cell.averageErosion())));
+            player.sendSystemMessage(Component.literal("  Average ridges: " + format(cell.averageRidges())));
+            player.sendSystemMessage(Component.literal("  Average temperature: " + format(cell.averageTemperature())));
+            player.sendSystemMessage(Component.literal("  Average vegetation: " + format(cell.averageVegetation())));
+        } catch (IllegalStateException e) {
+            player.sendSystemMessage(Component.literal("  (no enriched sample data)"));
+        }
 
         DensityFunction riverValleys = CapturedDensityFunctions.get("river_valleys");
         if (riverValleys != null) {
@@ -176,6 +177,14 @@ public class SampleCommand {
 
     private static String format(double value) {
         return String.format("%.3f", value);
+    }
+
+    private static String formatNullable(Double value) {
+        return value != null ? String.format("%.3f", value) : "(not computed)";
+    }
+
+    private static String formatNullableInt(Integer value) {
+        return value != null ? value.toString() : "(not computed)";
     }
 
     private static MutableComponent withTeleport(String text, int x, int y, int z) {

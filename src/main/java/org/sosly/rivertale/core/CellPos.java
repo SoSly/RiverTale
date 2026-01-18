@@ -75,6 +75,13 @@ public record CellPos(int x, int z) {
         return new RegionPos(this);
     }
 
+    public boolean contains(BlockPos pos) {
+        return pos.getX() >= getMinBlockX()
+            && pos.getX() < getMinBlockX() + size()
+            && pos.getZ() >= getMinBlockZ()
+            && pos.getZ() < getMinBlockZ() + size();
+    }
+
     @NotNull
     public String toString() {
         return "[" + this.x + ", " + this.z + "]";
@@ -89,6 +96,6 @@ public record CellPos(int x, int z) {
     }
 
     private static int size() {
-        return CommonConfig.get().cellSize();
+        return CommonConfig.get().cellBlocks();
     }
 }

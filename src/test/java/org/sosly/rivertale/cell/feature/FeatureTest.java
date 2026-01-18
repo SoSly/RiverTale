@@ -1,64 +1,46 @@
 package org.sosly.rivertale.cell.feature;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.world.level.ChunkPos;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
-import org.sosly.rivertale.density.SampleCache;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FeatureTest {
 
-    @BeforeEach
-    void setUp() {
-        SampleCache.init(chunk -> new Sample(chunk, 0.5, 0.0, 0, 0, 0, 0));
-    }
-
-    @AfterEach
-    void tearDown() {
-        SampleCache.shutdown();
-    }
-
     @Test
-    void classifiesHighScoreAsSnowmelt() {
+    void classifyReturnsNoneWhenNoHandlerMatches() {
         CellPos pos = new CellPos(10, 20);
-        Sample sample = new Sample(new ChunkPos(0, 0), 0.7, 0.7, 0, 0, 0, 0);
-        Cell original = new Cell(pos, sample, Feature.DEFAULT, List.of(FlowDirection.SOUTH), sample.estimatedHeight());
+        Sample sample = new Sample(new ChunkPos(0, 0), 0.5, 0.5, 0.0, 0.0, 0.0, 0.0);
+        Map<ChunkPos, Sample> samples = new HashMap<>();
+        samples.put(sample.pos(), sample);
+        int y = sample.estimatedTerrainHeight();
+        Cell original = new Cell(pos, samples, List.of(FlowDirection.SOUTH), Feature.NONE, null, y, y, null, null, null, null, null, null, null);
 
         Cell cell = Feature.classify(original, null);
 
-        assertEquals(Feature.SNOWMELT, cell.feature());
+        assertEquals(Feature.NONE, cell.feature());
         assertEquals(pos, cell.pos());
-        assertEquals(sample, cell.sample());
+        assertEquals(samples, cell.samples());
     }
 
     @Test
-    void classifiesLowScoreAsDefault() {
-        CellPos pos = new CellPos(10, 20);
-        Sample sample = new Sample(new ChunkPos(0, 0), 0.1, 0.1, 0, 0, 0, 0);
-        Cell original = new Cell(pos, sample, Feature.DEFAULT, List.of(FlowDirection.SOUTH), sample.estimatedHeight());
-
-        Cell cell = Feature.classify(original, null);
-
-        assertEquals(Feature.DEFAULT, cell.feature());
-    }
-
-    @Test
-    void classifiesFromExistingCell() {
+    void classifyPreservesExistingFeature() {
         CellPos pos = new CellPos(5, 5);
-        Sample sample = new Sample(new ChunkPos(0, 0), 0.8, 0.8, 0, 0, 0, 0);
-        Cell original = new Cell(pos, sample, Feature.DEFAULT, List.of(FlowDirection.SOUTH), sample.estimatedHeight());
+        Sample sample = new Sample(new ChunkPos(0, 0), 0.5, 0.5, 0.0, 0.0, 0.0, 0.0);
+        Map<ChunkPos, Sample> samples = new HashMap<>();
+        samples.put(sample.pos(), sample);
+        int y = sample.estimatedTerrainHeight();
+        Cell original = new Cell(pos, samples, List.of(FlowDirection.SOUTH), Feature.RUN, null, y, y, null, null, null, null, null, null, null);
 
         Cell classified = Feature.classify(original, null);
 
-        assertEquals(Feature.SNOWMELT, classified.feature());
-        assertEquals(pos, classified.pos());
-        assertEquals(sample, classified.sample());
+        assertEquals(Feature.NONE, classified.feature());
     }
 }

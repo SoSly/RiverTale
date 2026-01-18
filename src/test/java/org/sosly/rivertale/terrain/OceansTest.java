@@ -28,7 +28,9 @@ class OceansTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(1024, 32, -0.17, 10, 1, 3, 288, false));
+        // regionSize=32 cells, cellSize=2 chunks (32 blocks), samplesPerCell=1
+        // This gives: 32 cells * 32 blocks = 1024 blocks per region (same as old test)
+        CommonConfig.set(new CommonConfig(32, 2, 1, -0.17, 10, 1, 3, 288, false));
     }
 
     @Test
@@ -53,9 +55,9 @@ class OceansTest {
 
     @Test
     void boundariesFindsBoundaryAtOceanLandTransition() {
-        int cellSize = CommonConfig.get().cellSize();
+        int cellBlocks = CommonConfig.get().cellBlocks();
         int boundaryCellX = 16;
-        int boundaryBlockX = boundaryCellX * cellSize;
+        int boundaryBlockX = boundaryCellX * cellBlocks;
         RegionPos region = new RegionPos(0, 0);
         mockSampleCache((x, z) -> x >= boundaryBlockX);
 
@@ -85,9 +87,9 @@ class OceansTest {
 
     @Test
     void boundariesFindsBoundaryToSouth() {
-        int cellSize = CommonConfig.get().cellSize();
+        int cellBlocks = CommonConfig.get().cellBlocks();
         int boundaryCellZ = 16;
-        int boundaryBlockZ = boundaryCellZ * cellSize;
+        int boundaryBlockZ = boundaryCellZ * cellBlocks;
         RegionPos region = new RegionPos(0, 0);
         mockSampleCache((x, z) -> z >= boundaryBlockZ);
 
@@ -101,9 +103,9 @@ class OceansTest {
 
     @Test
     void boundariesFindsBoundaryToEast() {
-        int cellSize = CommonConfig.get().cellSize();
+        int cellBlocks = CommonConfig.get().cellBlocks();
         int boundaryCellX = 16;
-        int boundaryBlockX = boundaryCellX * cellSize;
+        int boundaryBlockX = boundaryCellX * cellBlocks;
         RegionPos region = new RegionPos(0, 0);
         mockSampleCache((x, z) -> x >= boundaryBlockX);
 
@@ -134,7 +136,7 @@ class OceansTest {
             int z = invocation.getArgument(1);
             double continents = isOcean.test(x, z) ? -0.5 : 0.5;
             ChunkPos chunk = new ChunkPos(x >> 4, z >> 4);
-            return new Sample(chunk, continents, 0, 0, 0, 0, 0);
+            return new Sample(chunk, continents, 0.0, 0.0, 0.0, 0.0, 0.0);
         });
     }
 }

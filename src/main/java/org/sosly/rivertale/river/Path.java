@@ -201,7 +201,7 @@ public class Path {
 
     private boolean isBasinTerminus(CellPos pos) {
         Cell cell = CellCache.get().getOrCompute(pos);
-        int y = cell.y();
+        int y = cell.entryY() != null ? cell.entryY() : cell.averageEstimatedTerrainHeight();
 
         if (y > WorldSettings.get().seaLevel()) {
             return false;
@@ -213,7 +213,8 @@ public class Path {
                 continue;
             }
             Cell neighborCell = CellCache.get().getOrCompute(neighbor);
-            if (neighborCell.y() < y) {
+            int neighborY = neighborCell.entryY() != null ? neighborCell.entryY() : neighborCell.averageEstimatedTerrainHeight();
+            if (neighborY < y) {
                 return false;
             }
         }
