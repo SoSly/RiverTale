@@ -88,11 +88,11 @@ public record RegionPos(int x, int z) {
     }
 
     public boolean containsOutOfBoundsCells() {
-        int WORLD_LIMIT = 30_000_000;
-        return getMinBlockX() < -WORLD_LIMIT
-            || getMinBlockX() + size() > WORLD_LIMIT
-            || getMinBlockZ() < -WORLD_LIMIT
-            || getMinBlockZ() + size() > WORLD_LIMIT;
+        int worldLimit = 30_000_000;
+        return getMinBlockX() < -worldLimit
+            || getMinBlockX() + size() > worldLimit
+            || getMinBlockZ() < -worldLimit
+            || getMinBlockZ() + size() > worldLimit;
     }
 
     public List<CellPos> getBorderCells(FlowDirection edgeDirection) {
@@ -125,6 +125,8 @@ public record RegionPos(int x, int z) {
                     cells.add(new CellPos(minCell.x() + regionSize - 1, minCell.z() + i));
                 }
                 break;
+            default:
+                throw new IllegalStateException("Unreachable: guard clause validates cardinal directions");
         }
         return cells;
     }

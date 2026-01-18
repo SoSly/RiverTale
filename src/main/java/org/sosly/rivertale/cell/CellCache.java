@@ -26,7 +26,7 @@ public class CellCache implements Cache<Cell> {
     private final Map<Long, Cell> cache;
     private final int capacity;
 
-    private static final Map<Integer, List<SampleOffset>> samplePositionCache = new HashMap<>();
+    private static final Map<Integer, List<SampleOffset>> SAMPLE_POSITION_CACHE = new HashMap<>();
 
     record SampleOffset(int x, int z) {}
     private record SlopeEntry(FlowDirection dir, double slope) {}
@@ -135,7 +135,7 @@ public class CellCache implements Cache<Cell> {
 
     static List<SampleOffset> getSamplePositions(int cellSize, int samplesPerCell) {
         int key = cellSize * 100 + samplesPerCell;
-        return samplePositionCache.computeIfAbsent(key, k -> selectSamplePositions(cellSize, samplesPerCell));
+        return SAMPLE_POSITION_CACHE.computeIfAbsent(key, k -> selectSamplePositions(cellSize, samplesPerCell));
     }
 
     private static List<SampleOffset> selectSamplePositions(int cellSize, int samplesPerCell) {
