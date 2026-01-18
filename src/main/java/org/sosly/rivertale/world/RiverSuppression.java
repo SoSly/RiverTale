@@ -20,8 +20,8 @@ import org.sosly.rivertale.density.CapturedDensityFunctions;
 
 public class RiverSuppression {
     private static final Map<String, ClampParams> CLAMP_CONFIG = new HashMap<>();
-    private static final Set<String> loggedKeys = Collections.synchronizedSet(new HashSet<>());
-    private static final Set<String> loggedClamps = Collections.synchronizedSet(new HashSet<>());
+    private static final Set<String> LOGGED_KEYS = Collections.synchronizedSet(new HashSet<>());
+    private static final Set<String> LOGGED_CLAMPS = Collections.synchronizedSet(new HashSet<>());
     private static boolean initialized = false;
     private static boolean loggedBiomeFilter = false;
 
@@ -53,8 +53,8 @@ public class RiverSuppression {
 
     public static void shutdown() {
         CLAMP_CONFIG.clear();
-        loggedKeys.clear();
-        loggedClamps.clear();
+        LOGGED_KEYS.clear();
+        LOGGED_CLAMPS.clear();
         initialized = false;
     }
 
@@ -70,7 +70,7 @@ public class RiverSuppression {
         }
 
         String path = key.get().location().getPath();
-        if (loggedKeys.add(path)) {
+        if (LOGGED_KEYS.add(path)) {
             RiverTale.LOGGER.info("HolderHolder.mapAll sees key: {}", path);
         }
 
@@ -87,7 +87,7 @@ public class RiverSuppression {
             return null;
         }
 
-        if (loggedClamps.add(path)) {
+        if (LOGGED_CLAMPS.add(path)) {
             RiverTale.LOGGER.info("Clamping {} to ({}, {}) to suppress river carving", path, clampParams.min(), clampParams.max());
         }
 

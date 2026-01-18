@@ -1,7 +1,6 @@
 package org.sosly.rivertale.mixin;
 
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraftforge.fml.loading.FMLLoader;

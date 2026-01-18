@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class HolderHolderMixin {
     @Inject(method = "mapAll", at = @At("HEAD"), cancellable = true)
     private void interceptDensityFunction(DensityFunction.Visitor visitor, CallbackInfoReturnable<DensityFunction> cir) {
-        DensityFunction result = RiverSuppression.intercept((DensityFunctions.HolderHolder)(Object)this, visitor);
+        DensityFunction result = RiverSuppression.intercept((DensityFunctions.HolderHolder) (Object) this, visitor);
         if (result != null) {
             cir.setReturnValue(result);
         }

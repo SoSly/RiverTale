@@ -5,17 +5,17 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.world.level.levelgen.DensityFunction;
 
 public class CapturedDensityFunctions {
-    private static final Map<String, DensityFunction> captured = new ConcurrentHashMap<>();
+    private static final Map<String, DensityFunction> CAPTURED = new ConcurrentHashMap<>();
 
     public static void put(String path, DensityFunction function) {
-        captured.put(path, function);
+        CAPTURED.put(path, function);
     }
 
     public static DensityFunction get(String path) {
-        return captured.get(path);
+        return CAPTURED.get(path);
     }
 
     public static void clear() {
-        captured.clear();
+        CAPTURED.clear();
     }
 }
