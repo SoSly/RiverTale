@@ -1,7 +1,7 @@
 ---
 level: 5
 parent: "[[Region Discovery]]"
-status: draft
+status: implemented
 ---
 
 # Region Discovery — Implementation

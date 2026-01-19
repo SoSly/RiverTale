@@ -31,22 +31,24 @@ public class RegionExplorer {
 
         for (FlowDirection dir : FlowDirection.D4) {
             RegionPos neighborPos = regionPos.relative(dir);
-
             if (neighborPos.containsOutOfBoundsCells()) {
                 continue;
             }
 
             Region neighbor = RegionCache.get().getOrCompute(neighborPos);
 
+            boolean shouldAdd = false;
             if (type == RegionType.COASTAL && neighbor.type() == RegionType.FLUVIAL) {
-                if (borderCellsFlowToward(neighbor, currentRegion, dir.opposite())) {
-                    workingSet.add(neighbor);
-                }
+                shouldAdd = borderCellsFlowToward(neighbor, currentRegion, dir.opposite());
             } else if (type == RegionType.FLUVIAL && neighbor.type() == RegionType.COASTAL) {
-                if (borderCellsFlowToward(currentRegion, neighbor, dir)) {
-                    workingSet.add(neighbor);
-                }
+                shouldAdd = borderCellsFlowToward(currentRegion, neighbor, dir);
             }
+
+            if (!shouldAdd) {
+                continue;
+            }
+
+            workingSet.add(neighbor);
         }
 
         return workingSet;
@@ -61,9 +63,10 @@ public class RegionExplorer {
 
             for (FlowDirection flowDir : cell.flowDirections()) {
                 CellPos neighborPos = cellPos.relative(flowDir);
-                if (target.pos().contains(neighborPos)) {
-                    return true;
+                if (!target.pos().contains(neighborPos)) {
+                    continue;
                 }
+                return true;
             }
         }
 

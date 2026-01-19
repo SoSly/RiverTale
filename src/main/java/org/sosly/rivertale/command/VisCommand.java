@@ -94,12 +94,14 @@ public class VisCommand {
         if (modes.isEmpty()) {
             ENABLED_MODES.remove(playerId);
             LAST_REGION.remove(playerId);
-        } else {
+            sendUpdate(player);
+            return 1;
+        }
+
+        if (!LAST_REGION.containsKey(playerId)) {
             RegionPos center = new RegionPos(player.blockPosition());
-            if (!LAST_REGION.containsKey(playerId)) {
-                LAST_REGION.put(playerId, center);
-                sendRegions(player, center);
-            }
+            LAST_REGION.put(playerId, center);
+            sendRegions(player, center);
         }
 
         sendUpdate(player);
@@ -163,11 +165,13 @@ public class VisCommand {
 
     @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) {
-            UUID id = player.getUUID();
-            ENABLED_MODES.remove(id);
-            LAST_REGION.remove(id);
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
         }
+
+        UUID id = player.getUUID();
+        ENABLED_MODES.remove(id);
+        LAST_REGION.remove(id);
     }
 
     @SubscribeEvent
@@ -213,9 +217,10 @@ public class VisCommand {
             int flags = buf.readInt();
             EnumSet<VisMode> modes = EnumSet.noneOf(VisMode.class);
             for (VisMode mode : VisMode.values()) {
-                if ((flags & (1 << mode.ordinal())) != 0) {
-                    modes.add(mode);
+                if ((flags & (1 << mode.ordinal())) == 0) {
+                    continue;
                 }
+                modes.add(mode);
             }
             return new TogglePacket(modes);
         }
@@ -223,9 +228,10 @@ public class VisCommand {
         public static void encode(TogglePacket msg, FriendlyByteBuf buf) {
             int flags = 0;
             for (VisMode mode : VisMode.values()) {
-                if (msg.modes.contains(mode)) {
-                    flags |= (1 << mode.ordinal());
+                if (!msg.modes.contains(mode)) {
+                    continue;
                 }
+                flags |= (1 << mode.ordinal());
             }
             buf.writeInt(flags);
         }
