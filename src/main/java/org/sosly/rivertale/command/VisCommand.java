@@ -94,11 +94,9 @@ public class VisCommand {
         if (modes.isEmpty()) {
             ENABLED_MODES.remove(playerId);
             LAST_REGION.remove(playerId);
-            sendUpdate(player);
-            return 1;
         }
 
-        if (!LAST_REGION.containsKey(playerId)) {
+        if (!modes.isEmpty() && !LAST_REGION.containsKey(playerId)) {
             RegionPos center = new RegionPos(player.blockPosition());
             LAST_REGION.put(playerId, center);
             sendRegions(player, center);
