@@ -5,8 +5,6 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
-import org.sosly.rivertale.metric.Store;
-import org.sosly.rivertale.metric.Timer;
 import org.sosly.rivertale.world.RiverShaping;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,8 +24,6 @@ public abstract class ChunkGeneratorMixin {
             int cellCountY,
             CallbackInfoReturnable<ChunkAccess> cir) {
 
-        Timer.Record timer = Store.getTimer(ChunkGeneratorMixin.class, "onChunkFill").start();
-        RiverShaping.generateRiverMap(chunk);
-        timer.stop();
+        RiverShaping.shape(chunk);
     }
 }

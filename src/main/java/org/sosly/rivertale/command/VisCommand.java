@@ -2,6 +2,7 @@ package org.sosly.rivertale.command;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -22,9 +23,7 @@ import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 import org.sosly.rivertale.RiverTale;
-import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.client.ClientRegionCache;
-import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
@@ -35,15 +34,21 @@ import org.sosly.rivertale.river.WatershedCache;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID)
 public class VisCommand {
-    private static final Set<UUID> ENABLED_PLAYERS = new HashSet<>();
+    private static final Map<UUID, EnumSet<VisMode>> ENABLED_MODES = new HashMap<>();
     private static final Map<UUID, RegionPos> LAST_REGION = new HashMap<>();
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         return Commands.literal("vis")
-            .executes(VisCommand::execute);
+            .executes(VisCommand::executeToggleAll)
+            .then(Commands.literal("regions")
+                .executes(ctx -> toggleMode(ctx, VisMode.REGIONS, "Region visualization")))
+            .then(Commands.literal("cells")
+                .executes(ctx -> toggleMode(ctx, VisMode.CELLS, "Cell visualization")))
+            .then(Commands.literal("boundaries")
+                .executes(ctx -> toggleMode(ctx, VisMode.BOUNDARIES, "Boundary visualization")));
     }
 
-    private static int execute(CommandContext<CommandSourceStack> context) {
+    private static int executeToggleAll(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         ServerPlayer player = source.getPlayer();
         if (player == null) {
@@ -52,71 +57,115 @@ public class VisCommand {
         }
 
         UUID playerId = player.getUUID();
-        if (ENABLED_PLAYERS.contains(playerId)) {
-            disable(player);
+        EnumSet<VisMode> modes = ENABLED_MODES.get(playerId);
+
+        if (modes == null || modes.isEmpty()) {
+            enableAll(player);
+        } else if (modes.size() < VisMode.values().length) {
+            enableAll(player);
         } else {
-            enable(player);
+            disableAll(player);
         }
 
         return 1;
     }
 
-    private static void enable(ServerPlayer player) {
+    private static int toggleMode(CommandContext<CommandSourceStack> context, VisMode mode, String name) {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("This command must be run by a player."));
+            return 0;
+        }
+
+        UUID playerId = player.getUUID();
+        EnumSet<VisMode> modes = ENABLED_MODES.computeIfAbsent(playerId, k -> EnumSet.noneOf(VisMode.class));
+
+        if (modes.contains(mode)) {
+            modes.remove(mode);
+            player.sendSystemMessage(Component.literal(name + " disabled.")
+                .withStyle(ChatFormatting.YELLOW));
+        } else {
+            modes.add(mode);
+            player.sendSystemMessage(Component.literal(name + " enabled.")
+                .withStyle(ChatFormatting.GREEN));
+        }
+
+        if (modes.isEmpty()) {
+            ENABLED_MODES.remove(playerId);
+            LAST_REGION.remove(playerId);
+        } else {
+            RegionPos center = new RegionPos(player.blockPosition());
+            if (!LAST_REGION.containsKey(playerId)) {
+                LAST_REGION.put(playerId, center);
+                sendRegions(player, center);
+            }
+        }
+
+        sendUpdate(player);
+        return 1;
+    }
+
+    private static void enableAll(ServerPlayer player) {
         UUID id = player.getUUID();
-        ENABLED_PLAYERS.add(id);
-        Network.sendToPlayer(new TogglePacket(true), player);
+        ENABLED_MODES.put(id, EnumSet.allOf(VisMode.class));
+        sendUpdate(player);
 
         RegionPos center = new RegionPos(player.blockPosition());
         LAST_REGION.put(id, center);
         sendRegions(player, center);
 
-        player.sendSystemMessage(Component.literal("Visualization enabled.")
+        player.sendSystemMessage(Component.literal("All visualizations enabled.")
             .withStyle(ChatFormatting.GREEN));
     }
 
-    private static void disable(ServerPlayer player) {
+    private static void disableAll(ServerPlayer player) {
         UUID id = player.getUUID();
-        ENABLED_PLAYERS.remove(id);
+        ENABLED_MODES.remove(id);
         LAST_REGION.remove(id);
-        Network.sendToPlayer(new TogglePacket(false), player);
+        sendUpdate(player);
 
-        player.sendSystemMessage(Component.literal("Visualization disabled.")
+        player.sendSystemMessage(Component.literal("All visualizations disabled.")
             .withStyle(ChatFormatting.YELLOW));
     }
 
+    private static void sendUpdate(ServerPlayer player) {
+        EnumSet<VisMode> modes = ENABLED_MODES.getOrDefault(player.getUUID(), EnumSet.noneOf(VisMode.class));
+        Network.sendToPlayer(new TogglePacket(modes), player);
+    }
+
     private static void sendRegions(ServerPlayer player, RegionPos center) {
-        CellCache cellCache = CellCache.get();
-        SampleCache sampleCache = SampleCache.get();
         RegionCache regionCache = RegionCache.get();
 
         Set<RegionPos> loadedRegions = new HashSet<>();
 
-        regionCache.getOrCompute(center, cellCache, sampleCache);
+        regionCache.getOrCompute(center);
         loadedRegions.add(center);
 
         for (FlowDirection dir : FlowDirection.D8) {
             RegionPos neighbor = center.relative(dir);
-            regionCache.getOrCompute(neighbor, cellCache, sampleCache);
+            regionCache.getOrCompute(neighbor);
             loadedRegions.add(neighbor);
         }
 
         WatershedCache.get().finalizeReady(loadedRegions);
 
         for (RegionPos pos : loadedRegions) {
-            Region region = regionCache.getOrCompute(pos, cellCache, sampleCache);
+            Region region = regionCache.getOrCompute(pos);
             Network.sendToPlayer(new Region.Packet(region), player);
         }
     }
 
     public static boolean isEnabled(ServerPlayer player) {
-        return ENABLED_PLAYERS.contains(player.getUUID());
+        EnumSet<VisMode> modes = ENABLED_MODES.get(player.getUUID());
+        return modes != null && !modes.isEmpty();
     }
 
     @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             UUID id = player.getUUID();
-            ENABLED_PLAYERS.remove(id);
+            ENABLED_MODES.remove(id);
             LAST_REGION.remove(id);
         }
     }
@@ -126,7 +175,7 @@ public class VisCommand {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
-        if (ENABLED_PLAYERS.isEmpty()) {
+        if (ENABLED_MODES.isEmpty()) {
             return;
         }
 
@@ -135,7 +184,7 @@ public class VisCommand {
             return;
         }
 
-        for (UUID id : ENABLED_PLAYERS) {
+        for (UUID id : ENABLED_MODES.keySet()) {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             if (player == null) {
                 continue;
@@ -152,24 +201,39 @@ public class VisCommand {
     }
 
     public static class TogglePacket extends Message {
-        private final boolean enabled;
+        private final EnumSet<VisMode> modes;
 
-        public TogglePacket(boolean enabled) {
-            this.enabled = enabled;
+        public TogglePacket(Set<VisMode> modes) {
+            this.modes = modes.isEmpty()
+                ? EnumSet.noneOf(VisMode.class)
+                : EnumSet.copyOf(modes);
         }
 
         public static TogglePacket decode(FriendlyByteBuf buf) {
-            return new TogglePacket(buf.readBoolean());
+            int flags = buf.readInt();
+            EnumSet<VisMode> modes = EnumSet.noneOf(VisMode.class);
+            for (VisMode mode : VisMode.values()) {
+                if ((flags & (1 << mode.ordinal())) != 0) {
+                    modes.add(mode);
+                }
+            }
+            return new TogglePacket(modes);
         }
 
         public static void encode(TogglePacket msg, FriendlyByteBuf buf) {
-            buf.writeBoolean(msg.enabled);
+            int flags = 0;
+            for (VisMode mode : VisMode.values()) {
+                if (msg.modes.contains(mode)) {
+                    flags |= (1 << mode.ordinal());
+                }
+            }
+            buf.writeInt(flags);
         }
 
         public static void handle(TogglePacket msg, Supplier<NetworkEvent.Context> ctx) {
             NetworkEvent.Context context = ctx.get();
             if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
-                context.enqueueWork(() -> ClientRegionCache.setEnabled(msg.enabled));
+                context.enqueueWork(() -> ClientRegionCache.setEnabledModes(msg.modes));
             }
             context.setPacketHandled(true);
         }

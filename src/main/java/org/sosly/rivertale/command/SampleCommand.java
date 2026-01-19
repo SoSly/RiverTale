@@ -18,11 +18,11 @@ import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.density.CapturedDensityFunctions;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
-import org.sosly.rivertale.density.CapturedDensityFunctions;
 import org.sosly.rivertale.RiverTale;
 import net.minecraft.world.level.levelgen.DensityFunction;
 
@@ -144,12 +144,10 @@ public class SampleCommand {
     }
 
     private static void sendRegionInfo(ServerPlayer player, BlockPos pos) {
-        CellCache cellCache = CellCache.get();
-        SampleCache sampleCache = SampleCache.get();
         RegionPos regionPos = new RegionPos(pos);
-        Region region = RegionCache.get().getOrCompute(regionPos, cellCache, sampleCache);
+        Region region = RegionCache.get().getOrCompute(regionPos);
 
-        Map<CellType, Integer> counts = countCellTypes(regionPos, cellCache);
+        Map<CellType, Integer> counts = countCellTypes(regionPos);
 
         player.sendSystemMessage(Component.literal("Region " + regionPos));
         player.sendSystemMessage(Component.literal("  type: " + region.encode().getString("type")));
@@ -159,10 +157,11 @@ public class SampleCommand {
         }
     }
 
-    private static Map<CellType, Integer> countCellTypes(RegionPos regionPos, CellCache cellCache) {
+    private static Map<CellType, Integer> countCellTypes(RegionPos regionPos) {
         Map<CellType, Integer> counts = new EnumMap<>(CellType.class);
         CellPos min = regionPos.getMinCell();
         int cells = CommonConfig.get().cellsPerRegion();
+        CellCache cellCache = CellCache.get();
 
         for (int x = 0; x < cells; x++) {
             for (int z = 0; z < cells; z++) {

@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Cache;
@@ -26,7 +27,7 @@ public class CellCache implements Cache<Cell> {
     private final Map<Long, Cell> cache;
     private final int capacity;
 
-    private static final Map<Integer, List<SampleOffset>> SAMPLE_POSITION_CACHE = new HashMap<>();
+    private static final Map<Integer, List<SampleOffset>> SAMPLE_POSITION_CACHE = new ConcurrentHashMap<>();
 
     record SampleOffset(int x, int z) {}
     private record SlopeEntry(FlowDirection dir, double slope) {}

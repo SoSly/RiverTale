@@ -2,6 +2,7 @@ package org.sosly.rivertale.client;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +14,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.sosly.rivertale.cell.feature.Feature;
+import org.sosly.rivertale.command.VisMode;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
@@ -25,7 +27,7 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
     private static final int DEFAULT_CAPACITY = 100;
 
     private static ClientRegionCache instance;
-    private static boolean enabled = false;
+    private static EnumSet<VisMode> enabledModes = EnumSet.noneOf(VisMode.class);
 
     private final Map<Long, Region> cache;
     private final int capacity;
@@ -106,16 +108,22 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
             instance.clear();
             instance = null;
         }
-        enabled = false;
+        enabledModes = EnumSet.noneOf(VisMode.class);
     }
 
     public static boolean isEnabled() {
-        return enabled && instance != null;
+        return !enabledModes.isEmpty() && instance != null;
     }
 
-    public static void setEnabled(boolean value) {
-        enabled = value;
-        if (!enabled && instance != null) {
+    public static boolean isModeEnabled(VisMode mode) {
+        return enabledModes.contains(mode);
+    }
+
+    public static void setEnabledModes(Set<VisMode> modes) {
+        enabledModes = modes.isEmpty()
+            ? EnumSet.noneOf(VisMode.class)
+            : EnumSet.copyOf(modes);
+        if (enabledModes.isEmpty() && instance != null) {
             instance.clear();
         }
     }

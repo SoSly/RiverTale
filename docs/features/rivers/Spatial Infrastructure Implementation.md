@@ -1,7 +1,7 @@
 ---
 level: 5
 parent: "[[Spatial Infrastructure]]"
-status: draft
+status: implemented
 ---
 
 # Spatial Infrastructure — Implementation

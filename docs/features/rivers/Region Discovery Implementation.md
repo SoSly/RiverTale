@@ -15,11 +15,14 @@ This implementation covers:
 - Refactoring `RiverShaping` to use it
 - Fixing the D8→D4 neighbor traversal
 - Adding border cell flow direction checks
+- Refactoring `/rivertale vis` to support subcommands
+- Adding `/rivertale vis regions` command
 
 This does NOT cover:
 - Region classification logic (see [[Spatial Infrastructure Implementation]])
 - Boundary identification (see [[Boundary Identification Implementation]])
 - Flowline tracing (see [[Flowline Tracing Implementation]])
+- `/rivertale vis flow` (see [[Feature Classification Implementation]])
 
 ## Overview
 
@@ -46,12 +49,15 @@ The current code works but diverges from the spec in structure and algorithm:
 - Early exit for OCEANIC/INLAND at discovery time
 - Unit tests from spec pass
 - `/rivertale regionset` command works
+- `/rivertale vis` supports subcommands with sync-first master toggle
+- `/rivertale vis regions` toggles region type coloring
 
 **What "done" does NOT mean:**
 
 - Rivers flow (that requires downstream specs)
 - Boundaries are identified (next spec)
 - Flowlines are traced (later spec)
+- `/rivertale vis flow` works (requires Feature Classification)
 
 ## Implementation Sequence
 
@@ -75,6 +81,15 @@ Phase 3: Refactor Existing Code
 
 Phase 4: Commands
     └── Add /rivertale regionset command
+
+Phase 5: Visualization Commands
+    ├── Add VisMode enum
+    ├── Refactor VisCommand for subcommands
+    ├── Implement sync-first master toggle
+    ├── Add /rivertale vis regions
+    ├── Update TogglePacket for mode set
+    ├── Update ClientRegionCache
+    └── Update RegionRenderer to check mode flags
 ```
 
 ---
@@ -262,6 +277,206 @@ Region Set for (x, z):
 ```
 
 This helps debug why regions are or aren't included in the working set.
+
+---
+
+## Phase 5: Visualization Commands
+
+Region Discovery is where region types become known, so `/rivertale vis regions` belongs here. This phase also refactors the base `/rivertale vis` command to support subcommands.
+
+### 5.1 Add VisMode Enum
+
+**File:** `command/VisCommand.java`
+
+```
+enum VisMode:
+    REGIONS,    // Region borders colored by type
+    CELLS,      // Cell borders (existing behavior)
+    BOUNDARIES, // Ocean boundaries (existing behavior)
+    PATHS       // Watershed paths (existing behavior)
+    // FLOW added by Feature Classification Implementation
+```
+
+Note: `FLOW` is added later by [[Feature Classification Implementation]] when flow computation is available for all cells.
+
+### 5.2 Refactor State Tracking
+
+**File:** `command/VisCommand.java`
+
+Replace the simple `ENABLED_PLAYERS` set with per-mode tracking:
+
+```
+// Before
+private static final Set<UUID> ENABLED_PLAYERS = new HashSet<>()
+
+// After
+private static final Map<UUID, EnumSet<VisMode>> ENABLED_MODES = new HashMap<>()
+```
+
+### 5.3 Master Toggle Behavior
+
+The base `/rivertale vis` command toggles all modes with sync-first behavior:
+
+```
+executeToggleAll(context):
+    player = context.getSource().getPlayer()
+    modes = ENABLED_MODES.get(player.getUUID())
+
+    if modes == null or modes.isEmpty():
+        // All off → turn all on
+        enableAll(player)
+    else if modes.size() < VisMode.values().length:
+        // Mixed state → sync to all on first
+        enableAll(player)
+    else:
+        // All on → turn all off
+        disableAll(player)
+
+enableAll(player):
+    ENABLED_MODES.put(player.getUUID(), EnumSet.allOf(VisMode.class))
+    sendUpdate(player)
+    player.sendSystemMessage("All visualizations enabled.")
+
+disableAll(player):
+    ENABLED_MODES.remove(player.getUUID())
+    sendUpdate(player)
+    player.sendSystemMessage("All visualizations disabled.")
+```
+
+This means: if any modes are off, first toggle syncs all to ON. Next toggle turns all OFF.
+
+### 5.4 Add Subcommand Structure
+
+**File:** `command/VisCommand.java`
+
+```
+public static LiteralArgumentBuilder<CommandSourceStack> register():
+    return Commands.literal("vis")
+        .executes(VisCommand::executeToggleAll)
+        .then(Commands.literal("regions")
+            .executes(VisCommand::executeToggleRegions))
+        .then(Commands.literal("cells")
+            .executes(VisCommand::executeToggleCells))
+        .then(Commands.literal("boundaries")
+            .executes(VisCommand::executeToggleBoundaries))
+        .then(Commands.literal("paths")
+            .executes(VisCommand::executeTogglePaths))
+
+executeToggleRegions(context):
+    return toggleMode(context, VisMode.REGIONS, "Region visualization")
+
+toggleMode(context, mode, name):
+    player = context.getSource().getPlayer()
+    modes = ENABLED_MODES.computeIfAbsent(player.getUUID(), k -> EnumSet.noneOf(VisMode.class))
+
+    if modes.contains(mode):
+        modes.remove(mode)
+        player.sendSystemMessage(name + " disabled.")
+    else:
+        modes.add(mode)
+        player.sendSystemMessage(name + " enabled.")
+
+    if modes.isEmpty():
+        ENABLED_MODES.remove(player.getUUID())
+
+    sendUpdate(player)
+    return 1
+```
+
+### 5.5 Update Network Packet
+
+**File:** `command/VisCommand.java`
+
+Update `TogglePacket` to send the full mode set:
+
+```
+class TogglePacket extends Message:
+    private final EnumSet<VisMode> modes
+
+    TogglePacket(Set<VisMode> modes):
+        this.modes = modes.isEmpty()
+            ? EnumSet.noneOf(VisMode.class)
+            : EnumSet.copyOf(modes)
+
+    static encode(msg, buf):
+        int flags = 0
+        for mode in VisMode.values():
+            if msg.modes.contains(mode):
+                flags |= (1 << mode.ordinal())
+        buf.writeInt(flags)
+
+    static decode(buf):
+        int flags = buf.readInt()
+        modes = EnumSet.noneOf(VisMode.class)
+        for mode in VisMode.values():
+            if (flags & (1 << mode.ordinal())) != 0:
+                modes.add(mode)
+        return new TogglePacket(modes)
+
+    static handle(msg, ctx):
+        ctx.get().enqueueWork(() ->
+            ClientRegionCache.setEnabledModes(msg.modes)
+        )
+```
+
+Using bitflags keeps the packet small regardless of how many modes exist.
+
+### 5.6 Update ClientRegionCache
+
+**File:** `client/ClientRegionCache.java`
+
+```
+private static EnumSet<VisMode> enabledModes = EnumSet.noneOf(VisMode.class)
+
+public static void setEnabledModes(Set<VisMode> modes):
+    enabledModes = modes.isEmpty()
+        ? EnumSet.noneOf(VisMode.class)
+        : EnumSet.copyOf(modes)
+
+public static boolean isEnabled():
+    return !enabledModes.isEmpty()
+
+public static boolean isModeEnabled(VisMode mode):
+    return enabledModes.contains(mode)
+```
+
+### 5.7 Update RegionRenderer
+
+**File:** `client/RegionRenderer.java`
+
+Check mode flags before each render call:
+
+```
+onRenderLevel(event):
+    if not ClientRegionCache.isEnabled():
+        return
+
+    for region in ClientRegionCache.get().getRegions():
+        if ClientRegionCache.isModeEnabled(VisMode.REGIONS):
+            renderRegionBorder(region, ...)
+
+        if ClientRegionCache.isModeEnabled(VisMode.CELLS):
+            renderCellBorders(region, ...)
+
+        if ClientRegionCache.isModeEnabled(VisMode.BOUNDARIES):
+            renderOceanBoundaries(region, ...)
+
+        if ClientRegionCache.isModeEnabled(VisMode.PATHS):
+            renderPaths(region, ...)
+```
+
+### 5.8 Region Type Colors
+
+Region type colors are already defined in `RegionType.java`:
+
+| Region Type | Color | RGB |
+|-------------|-------|-----|
+| OCEANIC | Blue | (0.0, 0.3, 1.0) |
+| COASTAL | Cyan | (0.0, 1.0, 1.0) |
+| FLUVIAL | Green | (0.0, 1.0, 0.3) |
+| INLAND | Gray | (0.5, 0.5, 0.5) |
+
+The existing `renderRegionBorder()` already uses `region.type().color`. No color changes needed.
 
 ---
 

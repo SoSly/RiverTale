@@ -55,10 +55,10 @@ public class RegionCache implements Cache<Region> {
 
     @Override
     public Region getOrCompute(int x, int z) {
-        return getOrCompute(new RegionPos(x, z), CellCache.get(), SampleCache.get());
+        return getOrCompute(new RegionPos(x, z));
     }
 
-    public Region getOrCompute(RegionPos pos, CellCache cellCache, SampleCache sampleCache) {
+    public Region getOrCompute(RegionPos pos) {
         long key = pos.toLong();
         Region cached = cache.get(key);
 
@@ -69,7 +69,7 @@ public class RegionCache implements Cache<Region> {
 
         Store.getRatio(RegionCache.class, "hits").failure();
 
-        Region value = Region.createSkeleton(pos, cellCache, sampleCache);
+        Region value = Region.createSkeleton(pos, CellCache.get(), SampleCache.get());
         cache.put(key, value);
 
         return value;

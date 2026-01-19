@@ -19,6 +19,7 @@ public class RiverTaleCommand {
         dispatcher.register(Commands.literal("rivertale")
             .then(DebugCommand.register())
             .then(MetricsCommand.register())
+            .then(RegionSetCommand.register())
             .then(SampleCommand.register())
             .then(VisCommand.register())
             .then(Commands.literal("poc")

@@ -15,6 +15,7 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.RiverTale;
+import org.sosly.rivertale.command.VisMode;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
@@ -59,15 +60,18 @@ public class RegionRenderer {
 
         buffer.begin(VertexFormat.Mode.DEBUG_LINES, DefaultVertexFormat.POSITION_COLOR);
 
-        int regionSize = CommonConfig.get().regionSize();
-        int cellsPerRegion = CommonConfig.get().cellsPerRegion();
+        int cellBlocks = CommonConfig.get().cellBlocks();
 
         for (ClientRegionCache.Region region : cache.getRegions()) {
-            renderRegionBorder(region, regionSize, poseStack, buffer, camPos);
-            renderCellBorders(region, regionSize, cellsPerRegion, poseStack, buffer, camPos);
-            renderOceanBoundaries(region, poseStack, buffer, camPos);
-            renderFlowArrows(region, regionSize, cellsPerRegion, poseStack, buffer, camPos);
-            renderPaths(region, poseStack, buffer, camPos);
+            if (ClientRegionCache.isModeEnabled(VisMode.REGIONS)) {
+                renderRegionBorder(region, poseStack, buffer, camPos);
+            }
+            if (ClientRegionCache.isModeEnabled(VisMode.CELLS)) {
+                renderCellBorders(region, cellBlocks, poseStack, buffer, camPos);
+            }
+            if (ClientRegionCache.isModeEnabled(VisMode.BOUNDARIES)) {
+                renderOceanBoundaries(region, poseStack, buffer, camPos);
+            }
         }
 
         tesselator.end();
@@ -75,13 +79,13 @@ public class RegionRenderer {
         RenderSystem.disableBlend();
     }
 
-    private static void renderRegionBorder(ClientRegionCache.Region region, int regionSize,
+    private static void renderRegionBorder(ClientRegionCache.Region region,
                                            PoseStack poseStack, BufferBuilder buffer, Vec3 camPos) {
         float[] color = region.type().color;
-        int minX = region.pos().getMinBlockX() + 1;
-        int minZ = region.pos().getMinBlockZ() + 1;
-        int maxX = minX + regionSize - 1;
-        int maxZ = minZ + regionSize - 1;
+        int minX = region.pos().getMinBlockX();
+        int minZ = region.pos().getMinBlockZ();
+        int maxX = region.pos().getMaxBlockX();
+        int maxZ = region.pos().getMaxBlockZ();
 
         Vec3 nw = new Vec3(minX, Y, minZ);
         Vec3 ne = new Vec3(maxX, Y, minZ);
@@ -134,23 +138,16 @@ public class RegionRenderer {
         }
     }
 
-    private static void renderCellBorders(ClientRegionCache.Region region, int regionSize, int cellsPerRegion,
+    private static void renderCellBorders(ClientRegionCache.Region region, int cellBlocks,
                                           PoseStack poseStack, BufferBuilder buffer, Vec3 camPos) {
-        int baseX = region.pos().getMinBlockX();
-        int baseZ = region.pos().getMinBlockZ();
-        double cellSize = (double) regionSize / cellsPerRegion;
-
         for (ClientRegionCache.Cell cell : region.cells()) {
-            int localX = cell.pos().x() - region.pos().getMinCell().x();
-            int localZ = cell.pos().z() - region.pos().getMinCell().z();
-
             float[] color = cell.feature().type.color;
             double y = cell.y();
 
-            double minX = baseX + localX * cellSize;
-            double minZ = baseZ + localZ * cellSize;
-            double maxX = minX + cellSize;
-            double maxZ = minZ + cellSize;
+            double minX = cell.pos().getMinBlockX();
+            double minZ = cell.pos().getMinBlockZ();
+            double maxX = minX + cellBlocks;
+            double maxZ = minZ + cellBlocks;
 
             Vec3 nw = new Vec3(minX, y, minZ);
             Vec3 ne = new Vec3(maxX, y, minZ);
@@ -164,23 +161,16 @@ public class RegionRenderer {
         }
     }
 
-    private static void renderFlowArrows(ClientRegionCache.Region region, int regionSize, int cellsPerRegion,
+    private static void renderFlowArrows(ClientRegionCache.Region region, int cellBlocks,
                                          PoseStack poseStack, BufferBuilder buffer, Vec3 camPos) {
-        int baseX = region.pos().getMinBlockX();
-        int baseZ = region.pos().getMinBlockZ();
-        double cellSize = (double) regionSize / cellsPerRegion;
-
         for (ClientRegionCache.Cell cell : region.cells()) {
             FlowDirection dir = cell.flow();
             if (dir == FlowDirection.NONE) {
                 continue;
             }
 
-            int localX = cell.pos().x() - region.pos().getMinCell().x();
-            int localZ = cell.pos().z() - region.pos().getMinCell().z();
-
-            double centerX = baseX + (localX + 0.5) * cellSize;
-            double centerZ = baseZ + (localZ + 0.5) * cellSize;
+            double centerX = cell.pos().getMinBlockX() + cellBlocks / 2.0;
+            double centerZ = cell.pos().getMinBlockZ() + cellBlocks / 2.0;
             Vec3 center = new Vec3(centerX, cell.y(), centerZ);
 
             float[] arrowColor = cell.feature().color;

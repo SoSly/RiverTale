@@ -70,10 +70,6 @@ public class RiverSuppression {
         }
 
         String path = key.get().location().getPath();
-        if (LOGGED_KEYS.add(path)) {
-            RiverTale.LOGGER.info("HolderHolder.mapAll sees key: {}", path);
-        }
-
         DensityFunction wired = visitor.apply(
             new DensityFunctions.HolderHolder(
                 new Holder.Direct<>(holder.function().value().mapAll(visitor))
