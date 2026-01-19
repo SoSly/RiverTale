@@ -169,11 +169,10 @@ public class CellCache implements Cache<Cell> {
                 }
             }
 
-            if (bestPos != null) {
-                selected.add(bestPos);
-            } else {
+            if (bestPos == null) {
                 break;
             }
+            selected.add(bestPos);
         }
 
         return selected;
