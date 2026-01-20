@@ -1,7 +1,7 @@
 ---
 level: 5
 parent: "[[Boundary Identification]]"
-status: pending
+status: implemented
 ---
 
 # Boundary Correction — Implementation
