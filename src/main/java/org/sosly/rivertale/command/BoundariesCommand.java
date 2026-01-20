@@ -1,14 +1,15 @@
 package org.sosly.rivertale.command;
 
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.coordinates.ColumnPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ColumnPos;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.RegionPos;
@@ -21,17 +22,15 @@ public class BoundariesCommand {
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         return Commands.literal("boundaries")
-            .then(Commands.argument("x", IntegerArgumentType.integer())
-                .then(Commands.argument("z", IntegerArgumentType.integer())
-                    .executes(BoundariesCommand::showBoundaries)));
+            .then(Commands.argument("pos", ColumnPosArgument.columnPos())
+                .executes(BoundariesCommand::showBoundaries));
     }
 
     private static int showBoundaries(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
 
-        int x = IntegerArgumentType.getInteger(context, "x");
-        int z = IntegerArgumentType.getInteger(context, "z");
-        BlockPos blockPos = new BlockPos(x, 0, z);
+        ColumnPos columnPos = ColumnPosArgument.getColumnPos(context, "pos");
+        BlockPos blockPos = new BlockPos(columnPos.x(), 0, columnPos.z());
         RegionPos regionPos = new RegionPos(blockPos);
 
         Region region = RegionCache.get().getOrCompute(regionPos);

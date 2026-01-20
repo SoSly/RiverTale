@@ -58,6 +58,15 @@ public enum FlowDirection {
         return COMPASS[(currentIdx + 7) % 8];
     }
 
+    public static FlowDirection fromDelta(int dx, int dz) {
+        for (FlowDirection dir : D8) {
+            if (dir.dx == dx && dir.dz == dz) {
+                return dir;
+            }
+        }
+        return NONE;
+    }
+
     public static FlowDirection toward(CellPos from, CellPos to) {
         int dx = to.x() - from.x();
         int dz = to.z() - from.z();
@@ -69,12 +78,7 @@ public enum FlowDirection {
         int ndx = (dx == 0) ? 0 : (dx > 0) ? 1 : -1;
         int ndz = (dz == 0) ? 0 : (dz > 0) ? 1 : -1;
 
-        for (FlowDirection dir : D8) {
-            if (dir.dx == ndx && dir.dz == ndz) {
-                return dir;
-            }
-        }
-        return NONE;
+        return fromDelta(ndx, ndz);
     }
 
     private static int compassIndex(FlowDirection dir) {

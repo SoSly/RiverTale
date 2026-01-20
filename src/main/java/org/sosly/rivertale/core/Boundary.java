@@ -16,21 +16,7 @@ public record Boundary(CellPos land, CellPos water, BoundaryType type) {
     public FlowDirection direction() {
         int dx = water.x() - land.x();
         int dz = water.z() - land.z();
-
-        if (dx == 1 && dz == 0) {
-            return FlowDirection.EAST;
-        }
-        if (dx == -1 && dz == 0) {
-            return FlowDirection.WEST;
-        }
-        if (dx == 0 && dz == 1) {
-            return FlowDirection.SOUTH;
-        }
-        if (dx == 0 && dz == -1) {
-            return FlowDirection.NORTH;
-        }
-
-        throw new IllegalStateException("Boundary cells must be D4 adjacent: land=" + land + ", water=" + water);
+        return FlowDirection.fromDelta(dx, dz);
     }
 
     public CompoundTag encode() {
