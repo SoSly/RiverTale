@@ -33,7 +33,7 @@ public class Path {
         for (Region region : regions) {
             this.allowedRegions.add(region.pos());
             for (Boundary boundary : region.boundaries()) {
-                this.boundaryLandCells.addAll(boundary.cells());
+                this.boundaryLandCells.add(boundary.land());
             }
         }
     }

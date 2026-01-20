@@ -394,19 +394,28 @@ Rivers only flow in FLUVIAL and COASTAL regions. OCEANIC and INLAND regions earl
 
 ```
 record Boundary {
-    cells: List<CellPos>         // ordered list of cells along the boundary
-    type: BoundaryType           // OCEAN or BASIN
+    land: CellPos            // the land cell (river terminus side)
+    water: CellPos           // the water cell (ocean or basin)
+    type: BoundaryType       // OCEAN or BASIN
+
+    direction(): FlowDirection   // D4 direction from land to water
 }
 
 enum BoundaryType {
-    OCEAN,   // boundary between land and ocean
-    BASIN    // boundary around an internal drainage basin
+    OCEAN,   // face between land cell and ocean cell
+    BASIN    // face between land cell above sea level and basin cell below sea level
 }
 ```
 
-Boundaries represent the edges where rivers terminate. A COASTAL region may have one or more OCEAN boundaries. A region with an internal lake may have BASIN boundaries.
+A Boundary is the **face** between two adjacent cells where land meets water. It is not a cell—it is the edge between cells. Each Boundary represents exactly one crossing point where a river can terminate.
 
-**Note:** Boundary _identification_—how cells are detected and ordered—is defined in [[Boundary Identification]]. This record just stores the result.
+- `land` is always a non-ocean, non-basin cell (the cell where the river arrives)
+- `water` is always an ocean cell (for OCEAN type) or a basin cell (for BASIN type)
+- `direction()` returns the D4 direction from land to water (derived from positions)
+
+A region may have many Boundary objects—one per land-water face along the coastline or basin edge.
+
+**Note:** Boundary _identification_—how faces are detected—is defined in [[Boundary Identification]]. This record stores individual faces, not collections of cells.
 
 ### Region
 

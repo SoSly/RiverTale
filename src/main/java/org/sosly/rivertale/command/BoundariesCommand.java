@@ -3,6 +3,7 @@ package org.sosly.rivertale.command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -10,14 +11,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
-import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 
 public class BoundariesCommand {
 
-    private static final int MAX_CELLS_TO_LIST = 5;
+    private static final int MAX_SAMPLES = 5;
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         return Commands.literal("boundaries")
@@ -46,93 +46,47 @@ public class BoundariesCommand {
             return 1;
         }
 
+        List<Boundary> oceanBoundaries = new ArrayList<>();
+        List<Boundary> basinBoundaries = new ArrayList<>();
         for (Boundary boundary : boundaries) {
+            if (boundary.type() == BoundaryType.OCEAN) {
+                oceanBoundaries.add(boundary);
+            } else {
+                basinBoundaries.add(boundary);
+            }
+        }
+
+        int oceanCount = oceanBoundaries.size();
+        int basinCount = basinBoundaries.size();
+        source.sendSuccess(() -> Component.literal("  Ocean boundaries: " + oceanCount + " faces"), false);
+        source.sendSuccess(() -> Component.literal("  Basin boundaries: " + basinCount + " faces"), false);
+
+        if (!oceanBoundaries.isEmpty()) {
             source.sendSuccess(() -> Component.literal(""), false);
-            formatBoundary(source, boundary);
+            source.sendSuccess(() -> Component.literal("  Sample ocean boundaries:"), false);
+            showSampleBoundaries(source, oceanBoundaries);
+        }
+
+        if (!basinBoundaries.isEmpty()) {
+            source.sendSuccess(() -> Component.literal(""), false);
+            source.sendSuccess(() -> Component.literal("  Sample basin boundaries:"), false);
+            showSampleBoundaries(source, basinBoundaries);
         }
 
         return 1;
     }
 
-    private static void formatBoundary(CommandSourceStack source, Boundary boundary) {
-        String typeName = boundary.type() == BoundaryType.OCEAN ? "Ocean" : "Basin";
-        List<CellPos> cells = boundary.cells();
-        int cellCount = cells.size();
-
-        source.sendSuccess(() -> Component.literal(
-            "  " + typeName + " boundary: " + cellCount + " cells"
-        ), false);
-
-        if (cellCount == 0) {
-            return;
-        }
-
-        if (boundary.type() == BoundaryType.OCEAN) {
-            formatOceanBoundary(source, cells);
-        } else {
-            formatBasinBoundary(source, cells);
-        }
-    }
-
-    private static void formatOceanBoundary(CommandSourceStack source, List<CellPos> cells) {
-        CellPos minCorner = findMinCorner(cells);
-        CellPos maxCorner = findMaxCorner(cells);
-
-        source.sendSuccess(() -> Component.literal(
-            "    Northwest corner: CellPos" + minCorner
-        ), false);
-        source.sendSuccess(() -> Component.literal(
-            "    Southeast corner: CellPos" + maxCorner
-        ), false);
-    }
-
-    private static void formatBasinBoundary(CommandSourceStack source, List<CellPos> cells) {
-        if (cells.size() <= MAX_CELLS_TO_LIST) {
-            for (CellPos cell : cells) {
-                source.sendSuccess(() -> Component.literal(
-                    "    CellPos" + cell
-                ), false);
-            }
-        } else {
-            CellPos first = cells.get(0);
-            CellPos last = cells.get(cells.size() - 1);
+    private static void showSampleBoundaries(CommandSourceStack source, List<Boundary> boundaries) {
+        int samplesToShow = Math.min(MAX_SAMPLES, boundaries.size());
+        for (int i = 0; i < samplesToShow; i++) {
+            Boundary boundary = boundaries.get(i);
             source.sendSuccess(() -> Component.literal(
-                "    CellPos" + first
-            ), false);
-            source.sendSuccess(() -> Component.literal(
-                "    ... (" + (cells.size() - 2) + " more)"
-            ), false);
-            source.sendSuccess(() -> Component.literal(
-                "    CellPos" + last
+                "    CellPos" + boundary.land() + " -> CellPos" + boundary.water() + " [" + boundary.direction() + "]"
             ), false);
         }
-    }
-
-    private static CellPos findMinCorner(List<CellPos> cells) {
-        int minX = Integer.MAX_VALUE;
-        int minZ = Integer.MAX_VALUE;
-        for (CellPos cell : cells) {
-            if (cell.x() < minX) {
-                minX = cell.x();
-            }
-            if (cell.z() < minZ) {
-                minZ = cell.z();
-            }
+        if (boundaries.size() > MAX_SAMPLES) {
+            int remaining = boundaries.size() - MAX_SAMPLES;
+            source.sendSuccess(() -> Component.literal("    ... (" + remaining + " more)"), false);
         }
-        return new CellPos(minX, minZ);
-    }
-
-    private static CellPos findMaxCorner(List<CellPos> cells) {
-        int maxX = Integer.MIN_VALUE;
-        int maxZ = Integer.MIN_VALUE;
-        for (CellPos cell : cells) {
-            if (cell.x() > maxX) {
-                maxX = cell.x();
-            }
-            if (cell.z() > maxZ) {
-                maxZ = cell.z();
-            }
-        }
-        return new CellPos(maxX, maxZ);
     }
 }

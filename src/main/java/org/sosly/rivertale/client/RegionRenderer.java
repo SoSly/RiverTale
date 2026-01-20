@@ -19,7 +19,6 @@ import org.sosly.rivertale.command.VisMode;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
-import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 
 @OnlyIn(Dist.CLIENT)
@@ -107,22 +106,28 @@ public class RegionRenderer {
                 ? COLOR_OCEAN_BOUNDARY
                 : COLOR_BASIN_BOUNDARY;
 
-            for (CellPos cellPos : boundary.cells()) {
-                int minX = cellPos.getMinBlockX();
-                int maxX = cellPos.getMaxBlockX();
-                int minZ = cellPos.getMinBlockZ();
-                int maxZ = cellPos.getMaxBlockZ();
+            int minX = boundary.land().getMinBlockX();
+            int maxX = boundary.land().getMaxBlockX();
+            int minZ = boundary.land().getMinBlockZ();
+            int maxZ = boundary.land().getMaxBlockZ();
+            FlowDirection dir = boundary.direction();
 
-                Vec3 nw = new Vec3(minX, Y, minZ);
-                Vec3 ne = new Vec3(maxX, Y, minZ);
-                Vec3 se = new Vec3(maxX, Y, maxZ);
-                Vec3 sw = new Vec3(minX, Y, maxZ);
-
-                drawLine(poseStack, buffer, nw, ne, camPos, color);
-                drawLine(poseStack, buffer, ne, se, camPos, color);
-                drawLine(poseStack, buffer, se, sw, camPos, color);
-                drawLine(poseStack, buffer, sw, nw, camPos, color);
+            Vec3 start;
+            Vec3 end;
+            if (dir == FlowDirection.NORTH) {
+                start = new Vec3(minX, Y, minZ);
+                end = new Vec3(maxX, Y, minZ);
+            } else if (dir == FlowDirection.SOUTH) {
+                start = new Vec3(minX, Y, maxZ);
+                end = new Vec3(maxX, Y, maxZ);
+            } else if (dir == FlowDirection.WEST) {
+                start = new Vec3(minX, Y, minZ);
+                end = new Vec3(minX, Y, maxZ);
+            } else {
+                start = new Vec3(maxX, Y, minZ);
+                end = new Vec3(maxX, Y, maxZ);
             }
+            drawLine(poseStack, buffer, start, end, camPos, color);
         }
     }
 

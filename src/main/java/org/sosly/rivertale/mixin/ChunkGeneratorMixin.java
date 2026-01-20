@@ -24,6 +24,7 @@ public abstract class ChunkGeneratorMixin {
             int cellCountY,
             CallbackInfoReturnable<ChunkAccess> cir) {
 
-        RiverShaping.shape(chunk);
+        int seaLevel = ((NoiseBasedChunkGenerator) (Object) this).getSeaLevel();
+        RiverShaping.shape(chunk, seaLevel);
     }
 }

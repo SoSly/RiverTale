@@ -1,6 +1,5 @@
 package org.sosly.rivertale.world;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,12 +14,12 @@ import org.sosly.rivertale.metric.Timer;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionExplorer;
-import org.sosly.rivertale.region.RegionType;
-import org.sosly.rivertale.terrain.Basins;
-import org.sosly.rivertale.terrain.Oceans;
+import org.sosly.rivertale.terrain.Coastal;
+import org.sosly.rivertale.terrain.Fluvial;
 
 public class RiverShaping {
     private static Holder<Biome> riverBiome;
+    private static int seaLevel = 63;
 
     private RiverShaping() {}
 
@@ -36,7 +35,12 @@ public class RiverShaping {
         return riverBiome;
     }
 
-    public static void shape(ChunkAccess chunk) {
+    public static int getSeaLevel() {
+        return seaLevel;
+    }
+
+    public static void shape(ChunkAccess chunk, int seaLevel) {
+        RiverShaping.seaLevel = seaLevel;
         Timer.Record timer = Store.getTimer(RiverShaping.class, "shape").start();
         BlockPos center = chunk.getPos().getMiddleBlockPosition(0);
 
@@ -50,21 +54,11 @@ public class RiverShaping {
         Set<Region> enrichedSet = new HashSet<>();
 
         for (Region region : workingSet) {
-            List<Boundary> boundaries = new ArrayList<>();
-
-            if (region.type() == RegionType.COASTAL) {
-                Boundary oceanBoundary = Oceans.boundaries(region.pos(), cellCache);
-                if (oceanBoundary != null) {
-                    boundaries.add(oceanBoundary);
-                }
-            }
-
-            if (region.type() == RegionType.COASTAL || region.type() == RegionType.FLUVIAL) {
-                Boundary basinBoundary = Basins.boundaries(region.pos(), cellCache);
-                if (basinBoundary != null) {
-                    boundaries.add(basinBoundary);
-                }
-            }
+            List<Boundary> boundaries = switch (region.type()) {
+                case COASTAL -> Coastal.boundaries(region.pos(), cellCache);
+                case FLUVIAL -> Fluvial.boundaries(region.pos(), cellCache);
+                default -> List.of();
+            };
 
             Region enriched = region.withBoundaries(boundaries);
             RegionCache.get().put(enriched);

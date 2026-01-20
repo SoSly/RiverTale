@@ -25,8 +25,8 @@ import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionExplorer;
 import org.sosly.rivertale.region.RegionType;
-import org.sosly.rivertale.terrain.Basins;
-import org.sosly.rivertale.terrain.Oceans;
+import org.sosly.rivertale.terrain.Coastal;
+import org.sosly.rivertale.terrain.Fluvial;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -48,8 +48,8 @@ class RiverShapingTest {
     private MockedStatic<CellCache> cellCacheStatic;
     private MockedStatic<RegionCache> regionCacheStatic;
     private MockedStatic<RegionExplorer> regionExplorerStatic;
-    private MockedStatic<Oceans> oceansStatic;
-    private MockedStatic<Basins> basinsStatic;
+    private MockedStatic<Coastal> coastalStatic;
+    private MockedStatic<Fluvial> fluvialStatic;
 
     @BeforeEach
     void setUp() {
@@ -59,8 +59,8 @@ class RiverShapingTest {
         cellCacheStatic = mockStatic(CellCache.class);
         regionCacheStatic = mockStatic(RegionCache.class);
         regionExplorerStatic = mockStatic(RegionExplorer.class);
-        oceansStatic = mockStatic(Oceans.class);
-        basinsStatic = mockStatic(Basins.class);
+        coastalStatic = mockStatic(Coastal.class);
+        fluvialStatic = mockStatic(Fluvial.class);
 
         cellCacheStatic.when(CellCache::get).thenReturn(cellCache);
         regionCacheStatic.when(RegionCache::get).thenReturn(regionCache);
@@ -71,8 +71,8 @@ class RiverShapingTest {
         cellCacheStatic.close();
         regionCacheStatic.close();
         regionExplorerStatic.close();
-        oceansStatic.close();
-        basinsStatic.close();
+        coastalStatic.close();
+        fluvialStatic.close();
     }
 
     @Test
@@ -81,14 +81,14 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of());
 
-        RiverShaping.shape(chunk);
+        RiverShaping.shape(chunk, 63);
 
-        oceansStatic.verify(() -> Oceans.boundaries(any(), any()), never());
-        basinsStatic.verify(() -> Basins.boundaries(any(), any()), never());
+        coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
+        fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
     }
 
     @Test
-    void coastalRegionGetsBothOceanAndBasinDetection() {
+    void coastalRegionGetsCoastalBoundaryDetection() {
         RegionPos pos = new RegionPos(0, 0);
         Region coastal = new Region(pos, RegionType.COASTAL);
         ChunkAccess chunk = mockChunk(0, 0);
@@ -96,19 +96,20 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of(coastal));
 
-        Boundary oceanBoundary = new Boundary(List.of(new CellPos(0, 0)), BoundaryType.OCEAN);
-        Boundary basinBoundary = new Boundary(List.of(new CellPos(1, 1)), BoundaryType.BASIN);
-        oceansStatic.when(() -> Oceans.boundaries(pos, cellCache)).thenReturn(oceanBoundary);
-        basinsStatic.when(() -> Basins.boundaries(pos, cellCache)).thenReturn(basinBoundary);
+        List<Boundary> boundaries = List.of(
+            new Boundary(new CellPos(0, 0), new CellPos(1, 0), BoundaryType.OCEAN),
+            new Boundary(new CellPos(1, 1), new CellPos(2, 1), BoundaryType.BASIN)
+        );
+        coastalStatic.when(() -> Coastal.boundaries(pos, cellCache)).thenReturn(boundaries);
 
-        RiverShaping.shape(chunk);
+        RiverShaping.shape(chunk, 63);
 
-        oceansStatic.verify(() -> Oceans.boundaries(pos, cellCache));
-        basinsStatic.verify(() -> Basins.boundaries(pos, cellCache));
+        coastalStatic.verify(() -> Coastal.boundaries(pos, cellCache));
+        fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
     }
 
     @Test
-    void fluvialRegionGetsOnlyBasinDetection() {
+    void fluvialRegionGetsFluvialBoundaryDetection() {
         RegionPos pos = new RegionPos(0, 0);
         Region fluvial = new Region(pos, RegionType.FLUVIAL);
         ChunkAccess chunk = mockChunk(0, 0);
@@ -116,13 +117,15 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of(fluvial));
 
-        Boundary basinBoundary = new Boundary(List.of(new CellPos(1, 1)), BoundaryType.BASIN);
-        basinsStatic.when(() -> Basins.boundaries(pos, cellCache)).thenReturn(basinBoundary);
+        List<Boundary> boundaries = List.of(
+            new Boundary(new CellPos(1, 1), new CellPos(2, 1), BoundaryType.BASIN)
+        );
+        fluvialStatic.when(() -> Fluvial.boundaries(pos, cellCache)).thenReturn(boundaries);
 
-        RiverShaping.shape(chunk);
+        RiverShaping.shape(chunk, 63);
 
-        oceansStatic.verify(() -> Oceans.boundaries(any(), any()), never());
-        basinsStatic.verify(() -> Basins.boundaries(pos, cellCache));
+        coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
+        fluvialStatic.verify(() -> Fluvial.boundaries(pos, cellCache));
     }
 
     @Test
@@ -134,10 +137,10 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of(oceanic));
 
-        RiverShaping.shape(chunk);
+        RiverShaping.shape(chunk, 63);
 
-        oceansStatic.verify(() -> Oceans.boundaries(any(), any()), never());
-        basinsStatic.verify(() -> Basins.boundaries(any(), any()), never());
+        coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
+        fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
     }
 
     @Test
@@ -149,10 +152,10 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of(inland));
 
-        RiverShaping.shape(chunk);
+        RiverShaping.shape(chunk, 63);
 
-        oceansStatic.verify(() -> Oceans.boundaries(any(), any()), never());
-        basinsStatic.verify(() -> Basins.boundaries(any(), any()), never());
+        coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
+        fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
     }
 
     @Test
@@ -166,16 +169,18 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of(coastal, fluvial));
 
-        Boundary oceanBoundary = new Boundary(List.of(new CellPos(0, 0)), BoundaryType.OCEAN);
-        oceansStatic.when(() -> Oceans.boundaries(coastalPos, cellCache)).thenReturn(oceanBoundary);
-        basinsStatic.when(() -> Basins.boundaries(any(), any())).thenReturn(null);
+        List<Boundary> coastalBoundaries = List.of(
+            new Boundary(new CellPos(0, 0), new CellPos(1, 0), BoundaryType.OCEAN)
+        );
+        coastalStatic.when(() -> Coastal.boundaries(coastalPos, cellCache)).thenReturn(coastalBoundaries);
+        fluvialStatic.when(() -> Fluvial.boundaries(any(), any())).thenReturn(List.of());
 
-        RiverShaping.shape(chunk);
+        RiverShaping.shape(chunk, 63);
 
-        oceansStatic.verify(() -> Oceans.boundaries(coastalPos, cellCache));
-        oceansStatic.verify(() -> Oceans.boundaries(fluvialPos, cellCache), never());
-        basinsStatic.verify(() -> Basins.boundaries(coastalPos, cellCache));
-        basinsStatic.verify(() -> Basins.boundaries(fluvialPos, cellCache));
+        coastalStatic.verify(() -> Coastal.boundaries(coastalPos, cellCache));
+        coastalStatic.verify(() -> Coastal.boundaries(fluvialPos, cellCache), never());
+        fluvialStatic.verify(() -> Fluvial.boundaries(coastalPos, cellCache), never());
+        fluvialStatic.verify(() -> Fluvial.boundaries(fluvialPos, cellCache));
     }
 
     @Test
@@ -187,11 +192,12 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of(coastal));
 
-        Boundary oceanBoundary = new Boundary(List.of(new CellPos(0, 0)), BoundaryType.OCEAN);
-        oceansStatic.when(() -> Oceans.boundaries(pos, cellCache)).thenReturn(oceanBoundary);
-        basinsStatic.when(() -> Basins.boundaries(pos, cellCache)).thenReturn(null);
+        List<Boundary> boundaries = List.of(
+            new Boundary(new CellPos(0, 0), new CellPos(1, 0), BoundaryType.OCEAN)
+        );
+        coastalStatic.when(() -> Coastal.boundaries(pos, cellCache)).thenReturn(boundaries);
 
-        RiverShaping.shape(chunk);
+        RiverShaping.shape(chunk, 63);
 
         verify(regionCache).put(any(Region.class));
     }

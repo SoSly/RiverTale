@@ -11,9 +11,11 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.feature.Feature;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.world.RiverShaping;
 
 public record Cell(
     CellPos pos,
@@ -86,16 +88,14 @@ public record Cell(
     }
 
     public boolean isOcean() {
-        return samples.values().stream().allMatch(Sample::isOcean);
+        return averageContinents() < CommonConfig.get().oceanThreshold();
     }
 
     public boolean isBasin() {
         if (samples.values().stream().anyMatch(Sample::isOcean)) {
             return false;
         }
-        int seaLevel = 63;
-        return samples.values().stream()
-            .allMatch(s -> s.estimatedTerrainHeight() < seaLevel);
+        return averageEstimatedTerrainHeight() < RiverShaping.getSeaLevel();
     }
 
     public Cell withFlowDirections(List<FlowDirection> flowDirections) {
