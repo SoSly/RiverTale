@@ -90,7 +90,7 @@ public record Cell(
     }
 
     public boolean isBasin() {
-        if (isOcean()) {
+        if (samples.values().stream().anyMatch(Sample::isOcean)) {
             return false;
         }
         int seaLevel = 63;

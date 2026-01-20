@@ -140,6 +140,20 @@ class CellTest {
     }
 
     @Test
+    void isBasinReturnsFalseWhenAnySampleIsOcean() {
+        CellPos pos = new CellPos(0, 0);
+        Map<ChunkPos, Sample> samples = Map.of(
+            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, -0.1),
+            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), -0.5, -0.1)
+        );
+
+        Cell cell = new Cell(pos, samples);
+
+        assertFalse(cell.isOcean());
+        assertFalse(cell.isBasin());
+    }
+
+    @Test
     void withFlowDirectionsPreservesOtherFields() {
         CellPos pos = new CellPos(0, 0);
         Map<ChunkPos, Sample> samples = Map.of(

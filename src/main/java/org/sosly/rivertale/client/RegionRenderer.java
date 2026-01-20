@@ -30,8 +30,8 @@ public class RegionRenderer {
     private static final double ARROWHEAD_SIZE = 1.5;
     private static final double DIAG_COMPONENT = ARROW_LENGTH / Math.sqrt(2.0);
 
-    private static final float[] COLOR_OCEAN_BOUNDARY = {0.0f, 0.0f, 1.0f, 1.0f};
-    private static final float[] COLOR_BASIN_BOUNDARY = {0.0f, 1.0f, 0.0f, 1.0f};
+    private static final float[] COLOR_OCEAN_BOUNDARY = {1.0f, 0.5f, 0.0f, 1.0f};
+    private static final float[] COLOR_BASIN_BOUNDARY = {1.0f, 0.0f, 0.0f, 1.0f};
     private static final float[] COLOR_PATH = {0.0f, 0.0f, 1.0f, 1.0f};
 
     @SubscribeEvent
