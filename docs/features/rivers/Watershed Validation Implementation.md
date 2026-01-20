@@ -255,6 +255,80 @@ Matches spec. Disconnects from downstream, removes all cells in segment. No chan
 
 ---
 
+## Wiring into RiverShaping
+
+This section describes how Watershed Validation integrates into the `RiverShaping.shape()` pipeline. Validation prunes short tributaries and marks cell membership.
+
+### Current State (after Watershed Building)
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // Region Discovery
+    workingSet = RegionExplorer.discover(...)
+    if workingSet.isEmpty():
+        return
+
+    // Boundary Identification
+    for region in workingSet:
+        // ... boundary detection ...
+
+    // Feature Classification (early phase)
+    for region in workingSet:
+        // ... classify cells ...
+
+    // Flowline Tracing
+    tracer = new FlowlineTracer(workingSet)
+    // ... trace and group flowlines ...
+    flowlineGroups = groupByTerminus(allFlowlines)
+
+    // Watershed Building
+    watersheds = new List<Watershed>()
+    for (terminus, flowlines) in flowlineGroups:
+        watershed = new Watershed(terminus, flowlines)
+        watersheds.add(watershed)
+```
+
+### This Implementation Adds
+
+**Watershed Validation** — After building. Prunes short tributaries, marks surviving cells, stores non-empty watersheds.
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // ... Region Discovery, Boundary Identification, Feature Classification, Flowline Tracing, Watershed Building unchanged ...
+
+    // Watershed Validation — NEW
+    validWatersheds = new List<Watershed>()
+    for watershed in watersheds:
+        watershed.validate()
+
+        // Skip empty watersheds (all tributaries pruned)
+        if watershed.allCells().isEmpty():
+            continue
+
+        WatershedCache.get().put(watershed)
+        validWatersheds.add(watershed)
+
+    // ... Elevation Assignment, Flow Accumulation, Reclassification follow ...
+```
+
+**Note:** Only non-empty watersheds are stored in `WatershedCache`. Watersheds that get completely pruned (all segments shorter than `minPathLength`) are discarded.
+
+### Validation at This Stage
+
+After this implementation, you can verify:
+- Short tributaries are pruned
+- Pruning cascades until stable
+- Surviving cells have terminus set via `cell.withWatershed()`
+- Empty watersheds are not stored in cache
+- Confluence cells survive pruning (they mark where tributaries join)
+
+You **cannot** yet verify:
+- Cells have elevation data (that's Elevation Assignment)
+- Cells have width/depth data (that's Flow Accumulation)
+- Final feature classification (that's Reclassification)
+
+---
+
 ## Validation Checklist
 
 ### Unit Tests Required

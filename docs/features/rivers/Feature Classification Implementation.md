@@ -291,6 +291,103 @@ classify(cell, watershed):
 
 This is intentional. The exploratory classification logic was for testing; the final logic will come from spike documents that define each feature's criteria properly.
 
+### 4.6 Add Cell.hasInflowingNeighbor()
+
+All source handlers need to check whether a cell has any D8 neighbor flowing toward it. Add this method to Cell:
+
+```
+hasInflowingNeighbor():
+    for dir in FlowDirection.D8:
+        neighborPos = pos.relative(dir)
+        neighbor = CellCache.get().getOrCompute(neighborPos)
+
+        if neighbor.flowDirections().contains(dir.opposite()):
+            return true
+
+    return false
+```
+
+This replaces the old static `Cell.hasUpstreamNeighbor()` method with an instance method. If any neighbor flows toward this cell, it's not a true source — water is already arriving from upstream.
+
+---
+
+## Wiring into RiverShaping
+
+This section describes how Feature Classification integrates into the `RiverShaping.shape()` pipeline. Feature Classification has two insertion points: early classification (before tracing) and reclassification (after watershed stages).
+
+### Current State (after Boundary Identification)
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // Region Discovery
+    workingSet = RegionExplorer.discover(chunk.getPos().getMiddleBlockPosition(0))
+    if workingSet.isEmpty():
+        return
+
+    // Boundary Identification
+    for region in workingSet:
+        boundaries = switch region.type():
+            case COASTAL -> Coastal.boundaries(region.pos(), cellCache)
+            case FLUVIAL -> Fluvial.boundaries(region.pos(), cellCache)
+            default -> List.of()
+
+        enriched = region.withBoundaries(boundaries)
+        RegionCache.get().put(enriched)
+```
+
+### This Implementation Adds
+
+**Early Classification** — After boundaries, before tracing. Identifies SOURCE and DIVIDE cells so Flowline Tracing knows where to start.
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // Region Discovery
+    workingSet = RegionExplorer.discover(...)
+    if workingSet.isEmpty():
+        return
+
+    // Boundary Identification
+    for region in workingSet:
+        // ... unchanged ...
+
+    // Feature Classification (early phase) — NEW
+    for region in workingSet:
+        for cellPos in region.cells():
+            cell = CellCache.get().getOrCompute(cellPos)
+            classified = Feature.classify(cell, null)  // null = no watershed yet
+            CellCache.get().put(classified)
+
+    // Reclassification placeholder — added now, called after watershed stages
+    // See below for where this gets called
+```
+
+**Reclassification** — After watershed stages complete (Validation, Elevation, Accumulation). Future implementation docs will slot their stages between early classification and reclassification.
+
+```
+    // ... after Flowline Tracing, Watershed Building, Validation, Elevation, Accumulation ...
+
+    // Feature Reclassification (with watershed context) — NEW
+    for watershed in watersheds:
+        for cellPos in watershed.allCells():
+            cell = CellCache.get().getOrCompute(cellPos)
+            reclassified = Feature.classify(cell, watershed)
+            CellCache.get().put(reclassified)
+
+    // ... Spline Building, Terrain Shaping, Water Placement follow ...
+```
+
+### Validation at This Stage
+
+After this implementation, you can verify:
+- Cells in the working set have features assigned
+- SOURCE cells exist (requires at least one working source handler)
+- DIVIDE cells exist at ridgelines
+- Cells outside working set remain NONE
+
+You **cannot** yet verify:
+- Reclassification (no watersheds to reclassify with)
+- Downstream features like RUN, WATERFALL, CONFLUENCE (require watershed context)
+
 ---
 
 ## Validation Checklist

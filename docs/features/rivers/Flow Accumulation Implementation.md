@@ -277,6 +277,94 @@ The existing method is used during building; the new method is called after vali
 
 ---
 
+## Wiring into RiverShaping
+
+This section describes how Flow Accumulation integrates into the `RiverShaping.shape()` pipeline. Flow Accumulation computes width/depth and neighbor counts for each cell. This is the last stage before Reclassification.
+
+### Current State (after Elevation Assignment)
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // Region Discovery
+    workingSet = RegionExplorer.discover(...)
+    if workingSet.isEmpty():
+        return
+
+    // Boundary Identification
+    for region in workingSet:
+        // ... boundary detection ...
+
+    // Feature Classification (early phase)
+    for region in workingSet:
+        // ... classify cells ...
+
+    // Flowline Tracing
+    tracer = new FlowlineTracer(workingSet)
+    // ... trace and group flowlines ...
+    flowlineGroups = groupByTerminus(allFlowlines)
+
+    // Watershed Building
+    watersheds = new List<Watershed>()
+    for (terminus, flowlines) in flowlineGroups:
+        watershed = new Watershed(terminus, flowlines)
+        watersheds.add(watershed)
+
+    // Watershed Validation
+    validWatersheds = new List<Watershed>()
+    for watershed in watersheds:
+        watershed.validate()
+        if watershed.allCells().isEmpty():
+            continue
+        WatershedCache.get().put(watershed)
+        validWatersheds.add(watershed)
+
+    // Elevation Assignment
+    for watershed in validWatersheds:
+        watershed.assignElevations()
+```
+
+### This Implementation Adds
+
+**Flow Accumulation** — After elevation assignment. Computes width, depth, and neighbor counts for each cell.
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // ... Region Discovery, Boundary Identification, Feature Classification, Flowline Tracing, Watershed Building, Validation, Elevation unchanged ...
+
+    // Flow Accumulation — NEW
+    for watershed in validWatersheds:
+        watershed.determineAccumulation()
+
+    // Reclassification (from Feature Classification Implementation)
+    for watershed in validWatersheds:
+        for cellPos in watershed.allCells():
+            cell = CellCache.get().getOrCompute(cellPos)
+            reclassified = Feature.classify(cell, watershed)
+            CellCache.get().put(reclassified)
+
+    // ... Spline Building, Terrain Shaping, Water Placement follow ...
+```
+
+**Note:** After Flow Accumulation, Reclassification runs. Reclassification was added as a placeholder in Feature Classification Implementation; now it has the data it needs (watershed context, elevation, accumulation).
+
+### Validation at This Stage
+
+After this implementation, you can verify:
+- Source cells have upstreamCount = 0
+- Terminus cells have downstreamCount = 0
+- Confluence cells have upstreamCount >= 2
+- Width grows logarithmically with upstream cell count
+- Depth grows logarithmically with upstream confluence count
+- Seeded variance produces deterministic width adjustments
+
+After Reclassification (which follows immediately):
+- RUN cells identified (normal flow segments)
+- WATERFALL/CASCADE cells identified (steep drop segments)
+- CONFLUENCE cells identified (upstreamCount >= 2)
+- MOUTH cells identified (at terminus)
+
+---
+
 ## Validation Checklist
 
 ### Unit Tests Required

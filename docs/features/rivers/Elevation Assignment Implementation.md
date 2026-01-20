@@ -327,6 +327,81 @@ public void assignElevations():
 
 ---
 
+## Wiring into RiverShaping
+
+This section describes how Elevation Assignment integrates into the `RiverShaping.shape()` pipeline. Elevation Assignment computes entryY/exitY for each cell.
+
+### Current State (after Watershed Validation)
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // Region Discovery
+    workingSet = RegionExplorer.discover(...)
+    if workingSet.isEmpty():
+        return
+
+    // Boundary Identification
+    for region in workingSet:
+        // ... boundary detection ...
+
+    // Feature Classification (early phase)
+    for region in workingSet:
+        // ... classify cells ...
+
+    // Flowline Tracing
+    tracer = new FlowlineTracer(workingSet)
+    // ... trace and group flowlines ...
+    flowlineGroups = groupByTerminus(allFlowlines)
+
+    // Watershed Building
+    watersheds = new List<Watershed>()
+    for (terminus, flowlines) in flowlineGroups:
+        watershed = new Watershed(terminus, flowlines)
+        watersheds.add(watershed)
+
+    // Watershed Validation
+    validWatersheds = new List<Watershed>()
+    for watershed in watersheds:
+        watershed.validate()
+        if watershed.allCells().isEmpty():
+            continue
+        WatershedCache.get().put(watershed)
+        validWatersheds.add(watershed)
+```
+
+### This Implementation Adds
+
+**Elevation Assignment** — After validation. Assigns entryY/exitY to each cell via two-pass algorithm.
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // ... Region Discovery, Boundary Identification, Feature Classification, Flowline Tracing, Watershed Building, Validation unchanged ...
+
+    // Elevation Assignment — NEW
+    for watershed in validWatersheds:
+        watershed.assignElevations()
+
+    // ... Flow Accumulation, Reclassification follow ...
+```
+
+**Note:** Elevation Assignment and Flow Accumulation have no dependency on each other. They could theoretically run in parallel, but sequential execution is simpler and the performance difference is negligible.
+
+### Validation at This Stage
+
+After this implementation, you can verify:
+- Source cells have entryY from terrain sampling
+- Each cell satisfies: `upstream.exitY == downstream.entryY`
+- Terminus cells have exitY at seaLevel - 1 (after normalization)
+- Confluences: all tributaries have same exitY at join point
+- Downhill flow: `entryY >= exitY` for each cell
+
+You **cannot** yet verify:
+- Cells have width/depth data (that's Flow Accumulation)
+- Final feature classification (that's Reclassification)
+- Steep segments classified as WATERFALL/CASCADE (that's Reclassification)
+
+---
+
 ## Validation Checklist
 
 ### Unit Tests Required

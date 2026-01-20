@@ -389,6 +389,79 @@ The `accumulation()` method with caching matches the spec's recursive counting. 
 
 ---
 
+## Wiring into RiverShaping
+
+This section describes how Watershed Building integrates into the `RiverShaping.shape()` pipeline. Watershed Building takes grouped flowlines and constructs the watershed graph.
+
+### Current State (after Flowline Tracing)
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // Region Discovery
+    workingSet = RegionExplorer.discover(...)
+    if workingSet.isEmpty():
+        return
+
+    // Boundary Identification
+    for region in workingSet:
+        // ... boundary detection ...
+
+    // Feature Classification (early phase)
+    for region in workingSet:
+        // ... classify cells ...
+
+    // Flowline Tracing
+    tracer = new FlowlineTracer(workingSet)
+    allFlowlines = new List<Flowline>()
+
+    for region in workingSet:
+        for cellPos in region.cells():
+            cell = CellCache.get().getOrCompute(cellPos)
+            if cell.feature() == Feature.SOURCE:
+                flowline = tracer.trace(cellPos)
+                if flowline.isValid():
+                    allFlowlines.add(flowline)
+
+    flowlineGroups = groupByTerminus(allFlowlines)
+```
+
+### This Implementation Adds
+
+**Watershed Building** — After flowline grouping. Constructs watershed graph from flowlines, resolving diagonal crossings.
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // ... Region Discovery, Boundary Identification, Feature Classification, Flowline Tracing unchanged ...
+
+    flowlineGroups = groupByTerminus(allFlowlines)
+
+    // Watershed Building — NEW
+    watersheds = new List<Watershed>()
+    for (terminus, flowlines) in flowlineGroups:
+        watershed = new Watershed(terminus, flowlines)
+        watersheds.add(watershed)
+
+    // ... Watershed Validation, Elevation, Accumulation, Reclassification follow ...
+```
+
+**Note:** Watersheds are built but not yet stored in `WatershedCache`. Storage happens after Watershed Validation confirms the watershed is non-empty. This avoids storing watersheds that get completely pruned.
+
+### Validation at This Stage
+
+After this implementation, you can verify:
+- Watersheds are keyed by terminus CellPos
+- upstream/downstream links are correctly built
+- Diagonal crossings are detected and resolved
+- Multiple flowlines to same terminus produce single watershed
+- Accumulation comparisons work for crossing resolution
+
+You **cannot** yet verify:
+- Short tributaries are pruned (that's Watershed Validation)
+- Cells have elevation data (that's Elevation Assignment)
+- Cells have width/depth data (that's Flow Accumulation)
+
+---
+
 ## Validation Checklist
 
 ### Unit Tests Required

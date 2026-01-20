@@ -368,6 +368,92 @@ groupByTerminus(flowlines: List<Flowline>): Map<CellPos, List<Flowline>>
 
 ---
 
+## Wiring into RiverShaping
+
+This section describes how Flowline Tracing integrates into the `RiverShaping.shape()` pipeline. Flowline Tracing runs after early Feature Classification and produces grouped flowlines for Watershed Building.
+
+### Current State (after Feature Classification early phase)
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // Region Discovery
+    workingSet = RegionExplorer.discover(...)
+    if workingSet.isEmpty():
+        return
+
+    // Boundary Identification
+    for region in workingSet:
+        boundaries = switch region.type():
+            case COASTAL -> Coastal.boundaries(region.pos(), cellCache)
+            case FLUVIAL -> Fluvial.boundaries(region.pos(), cellCache)
+            default -> List.of()
+
+        enriched = region.withBoundaries(boundaries)
+        RegionCache.get().put(enriched)
+
+    // Feature Classification (early phase)
+    for region in workingSet:
+        for cellPos in region.cells():
+            cell = CellCache.get().getOrCompute(cellPos)
+            classified = Feature.classify(cell, null)
+            CellCache.get().put(classified)
+```
+
+### This Implementation Adds
+
+**Flowline Tracing** — After early classification. Creates FlowlineTracer once per working set, traces from each SOURCE cell, groups results by terminus.
+
+```
+public static void shape(ChunkAccess chunk, int seaLevel):
+    // ... Region Discovery, Boundary Identification, Feature Classification unchanged ...
+
+    // Flowline Tracing — NEW
+    tracer = new FlowlineTracer(workingSet)
+    allFlowlines = new List<Flowline>()
+
+    for region in workingSet:
+        for cellPos in region.cells():
+            cell = CellCache.get().getOrCompute(cellPos)
+            if cell.feature() == Feature.SOURCE:
+                flowline = tracer.trace(cellPos)
+                if flowline.isValid():
+                    allFlowlines.add(flowline)
+
+    // Group by terminus for Watershed Building — NEW
+    flowlineGroups = groupByTerminus(allFlowlines)
+
+    // ... Watershed Building, Validation, etc. follow ...
+    // ... Reclassification still at the end ...
+```
+
+**Helper method:**
+
+```
+groupByTerminus(flowlines: List<Flowline>): Map<CellPos, List<Flowline>>
+    groups = new Map<CellPos, List<Flowline>>()
+
+    for flowline in flowlines:
+        terminus = flowline.terminus()
+        groups.computeIfAbsent(terminus, k -> new List<>()).add(flowline)
+
+    return groups
+```
+
+### Validation at This Stage
+
+After this implementation, you can verify:
+- SOURCE cells produce flowlines
+- Flowlines trace from source to terminus without cycles
+- Invalid flowlines (stuck, cycle, DIVIDE blocked) are filtered out
+- Multiple flowlines to the same terminus are grouped together
+- FlowlineTracer collects terminus cells correctly from boundaries
+
+You **cannot** yet verify:
+- Watershed graph structure (that's Watershed Building)
+- Whether flowlines merge correctly at confluences (that's Watershed Building)
+
+---
+
 ## Validation Checklist
 
 ### Unit Tests Required
