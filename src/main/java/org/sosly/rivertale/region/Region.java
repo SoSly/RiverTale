@@ -2,7 +2,6 @@ package org.sosly.rivertale.region;
 
 import com.mojang.logging.LogUtils;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -16,6 +15,7 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
@@ -23,39 +23,20 @@ import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.river.WatershedCache;
-import org.sosly.rivertale.terrain.OceanBoundary;
-import org.sosly.rivertale.terrain.Oceans;
 
-public class Region {
+public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) {
 
-    private final Set<OceanBoundary> boundaries = new HashSet<>();
-    private final RegionPos pos;
-    private final RegionType type;
-
-    Region(RegionPos pos, RegionType type) {
-        this.pos = pos;
-        this.type = type;
+    public Region(RegionPos pos, RegionType type) {
+        this(pos, type, List.of());
     }
 
     static Region createSkeleton(RegionPos pos, CellCache cellCache, SampleCache sampleCache) {
         RegionType type = RegionTypeCache.get().getOrCompute(pos, sampleCache);
-        Region region = new Region(pos, type);
-
-        if (type == RegionType.COASTAL) {
-            for (OceanBoundary boundary : Oceans.boundaries(pos, sampleCache)) {
-                region.addBoundary(boundary);
-            }
-        }
-
-        return region;
+        return new Region(pos, type);
     }
 
-    void addBoundary(OceanBoundary boundary) {
-        boundaries.add(boundary);
-    }
-
-    public Set<OceanBoundary> boundaries() {
-        return Collections.unmodifiableSet(boundaries);
+    public Region withBoundaries(List<Boundary> boundaries) {
+        return new Region(pos, type, boundaries);
     }
 
     List<CellPos> cells() {
@@ -70,21 +51,13 @@ public class Region {
         return result;
     }
 
-    public RegionPos pos() {
-        return pos;
-    }
-
-    public RegionType type() {
-        return type;
-    }
-
     public CompoundTag encode() {
         CompoundTag tag = new CompoundTag();
         tag.putLong("pos", pos.toLong());
         tag.putString("type", type.name());
 
         ListTag boundaryList = new ListTag();
-        for (OceanBoundary boundary : boundaries) {
+        for (Boundary boundary : boundaries) {
             boundaryList.add(boundary.encode());
         }
         tag.put("boundaries", boundaryList);

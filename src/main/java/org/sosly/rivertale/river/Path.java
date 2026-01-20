@@ -11,19 +11,18 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 import org.sosly.rivertale.region.Region;
-import org.sosly.rivertale.terrain.OceanBoundary;
-import org.sosly.rivertale.world.WorldSettings;
 
 public class Path {
     private final List<CellPos> cells = new ArrayList<>();
     private final Set<RegionPos> allowedRegions = new HashSet<>();
-    private final Set<CellPos> oceanCells = new HashSet<>();
+    private final Set<CellPos> boundaryLandCells = new HashSet<>();
     private final Set<CellPos> visited = new HashSet<>();
     private boolean valid = true;
 
@@ -33,8 +32,8 @@ public class Path {
 
         for (Region region : regions) {
             this.allowedRegions.add(region.pos());
-            for (OceanBoundary boundary : region.boundaries()) {
-                this.oceanCells.add(boundary.ocean());
+            for (Boundary boundary : region.boundaries()) {
+                this.boundaryLandCells.addAll(boundary.cells());
             }
         }
     }
@@ -50,12 +49,7 @@ public class Path {
                 return;
             }
 
-            if (isBasinTerminus(current)) {
-                record.stop();
-                return;
-            }
-
-            CellPos nearest = findNearestOceanCell(current);
+            CellPos nearest = findNearestBoundaryCell(current);
             if (nearest == null) {
                 valid = false;
                 record.stop();
@@ -89,10 +83,10 @@ public class Path {
         record.stop();
     }
 
-    private CellPos findNearestOceanCell(CellPos from) {
-        Timer.Record record = Store.getTimer(Path.class, "findNearestOceanCell").start();
+    private CellPos findNearestBoundaryCell(CellPos from) {
+        Timer.Record record = Store.getTimer(Path.class, "findNearestBoundaryCell").start();
 
-        if (oceanCells.isEmpty()) {
+        if (boundaryLandCells.isEmpty()) {
             record.stop();
             return null;
         }
@@ -100,11 +94,11 @@ public class Path {
         CellPos nearest = null;
         double nearestDistance = Double.MAX_VALUE;
 
-        for (CellPos ocean : oceanCells) {
-            double dist = distance(from, ocean);
+        for (CellPos boundaryCell : boundaryLandCells) {
+            double dist = distance(from, boundaryCell);
             if (dist < nearestDistance) {
                 nearestDistance = dist;
-                nearest = ocean;
+                nearest = boundaryCell;
             }
         }
 
@@ -112,15 +106,15 @@ public class Path {
         return nearest;
     }
 
-    private CellPos followFlow(CellPos current, CellPos nearestOcean) {
+    private CellPos followFlow(CellPos current, CellPos nearestBoundary) {
         Timer.Record record = Store.getTimer(Path.class, "followFlow").start();
 
         Cell cell = CellCache.get().getOrCompute(current);
-        double currentDistance = distance(current, nearestOcean);
+        double currentDistance = distance(current, nearestBoundary);
         int mergeThreshold = CommonConfig.get().mergeThreshold();
 
         if (currentDistance <= mergeThreshold) {
-            CellPos aligned = followAlignedFlow(current, cell.flowDirections(), nearestOcean, currentDistance);
+            CellPos aligned = followAlignedFlow(current, cell.flowDirections(), nearestBoundary, currentDistance);
             if (aligned != null) {
                 record.stop();
                 return aligned;
@@ -133,22 +127,22 @@ public class Path {
                     continue;
                 }
 
-                if (distance(next, nearestOcean) < currentDistance) {
+                if (distance(next, nearestBoundary) < currentDistance) {
                     record.stop();
                     return next;
                 }
             }
         }
 
-        CellPos forced = forceTowardOcean(current, nearestOcean, currentDistance);
+        CellPos forced = forceTowardBoundary(current, nearestBoundary, currentDistance);
         record.stop();
         return forced;
     }
 
     private CellPos followAlignedFlow(CellPos current, List<FlowDirection> flowDirections,
-                                       CellPos nearestOcean, double currentDistance) {
-        int dx = nearestOcean.x() - current.x();
-        int dz = nearestOcean.z() - current.z();
+                                       CellPos nearestBoundary, double currentDistance) {
+        int dx = nearestBoundary.x() - current.x();
+        int dz = nearestBoundary.z() - current.z();
 
         CellPos best = null;
         double bestAlignment = -Double.MAX_VALUE;
@@ -160,7 +154,7 @@ public class Path {
                 continue;
             }
 
-            if (distance(next, nearestOcean) >= currentDistance) {
+            if (distance(next, nearestBoundary) >= currentDistance) {
                 continue;
             }
 
@@ -174,7 +168,7 @@ public class Path {
         return best;
     }
 
-    private CellPos forceTowardOcean(CellPos current, CellPos nearestOcean, double currentDistance) {
+    private CellPos forceTowardBoundary(CellPos current, CellPos nearestBoundary, double currentDistance) {
         CellPos best = null;
         double bestDistance = currentDistance;
 
@@ -185,7 +179,7 @@ public class Path {
                 continue;
             }
 
-            double dist = distance(next, nearestOcean);
+            double dist = distance(next, nearestBoundary);
             if (dist < bestDistance) {
                 bestDistance = dist;
                 best = next;
@@ -196,30 +190,7 @@ public class Path {
     }
 
     private boolean isTerminus(CellPos pos) {
-        return oceanCells.contains(pos);
-    }
-
-    private boolean isBasinTerminus(CellPos pos) {
-        Cell cell = CellCache.get().getOrCompute(pos);
-        int y = cell.entryY() != null ? cell.entryY() : cell.averageEstimatedTerrainHeight();
-
-        if (y > WorldSettings.get().seaLevel()) {
-            return false;
-        }
-
-        for (FlowDirection dir : FlowDirection.D8) {
-            CellPos neighbor = pos.relative(dir);
-            if (!allowedRegions.contains(neighbor.getRegion())) {
-                continue;
-            }
-            Cell neighborCell = CellCache.get().getOrCompute(neighbor);
-            int neighborY = neighborCell.entryY() != null ? neighborCell.entryY() : neighborCell.averageEstimatedTerrainHeight();
-            if (neighborY < y) {
-                return false;
-            }
-        }
-
-        return true;
+        return boundaryLandCells.contains(pos);
     }
 
     private static double distance(CellPos a, CellPos b) {

@@ -3,7 +3,6 @@ package org.sosly.rivertale.client;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,12 +14,12 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.command.VisMode;
+import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.region.RegionType;
-import org.sosly.rivertale.terrain.OceanBoundary;
 
 @OnlyIn(Dist.CLIENT)
 public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
@@ -54,16 +53,16 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
         }
     }
 
-    public record Region(RegionPos pos, RegionType type, Set<OceanBoundary> boundaries, List<Cell> cells,
+    public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries, List<Cell> cells,
                          List<Edge> edges) {
         public static Region decode(CompoundTag tag) {
             RegionPos pos = new RegionPos(tag.getLong("pos"));
             RegionType type = RegionType.valueOf(tag.getString("type"));
 
-            Set<OceanBoundary> boundaries = new HashSet<>();
+            List<Boundary> boundaries = new ArrayList<>();
             ListTag boundaryList = tag.getList("boundaries", Tag.TAG_COMPOUND);
             for (int i = 0; i < boundaryList.size(); i++) {
-                boundaries.add(OceanBoundary.decode(boundaryList.getCompound(i)));
+                boundaries.add(Boundary.decode(boundaryList.getCompound(i)));
             }
 
             List<Cell> cells = new ArrayList<>();

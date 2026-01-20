@@ -8,18 +8,17 @@ import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 
-public final class Oceans {
-    private Oceans() {
+public final class Basins {
+    private Basins() {
     }
 
     public static Boundary boundaries(RegionPos region, CellCache cellCache) {
-        Timer.Record timer = Store.getTimer(Oceans.class, "boundaries").start();
-        List<CellPos> landCells = new ArrayList<>();
+        Timer.Record timer = Store.getTimer(Basins.class, "boundaries").start();
+        List<CellPos> basinCells = new ArrayList<>();
 
         CellPos minCell = region.getMinCell();
         int cells = CommonConfig.get().cellsPerRegion();
@@ -29,28 +28,18 @@ public final class Oceans {
                 CellPos cellPos = new CellPos(minCell.x() + x, minCell.z() + z);
                 Cell cell = cellCache.getOrCompute(cellPos);
 
-                if (cell.isOcean()) {
-                    continue;
-                }
-
-                for (FlowDirection dir : FlowDirection.D4) {
-                    CellPos neighborPos = cellPos.relative(dir);
-                    Cell neighbor = cellCache.getOrCompute(neighborPos);
-
-                    if (neighbor.isOcean()) {
-                        landCells.add(cellPos);
-                        break;
-                    }
+                if (cell.isBasin()) {
+                    basinCells.add(cellPos);
                 }
             }
         }
 
         timer.stop();
 
-        if (landCells.isEmpty()) {
+        if (basinCells.isEmpty()) {
             return null;
         }
 
-        return new Boundary(landCells, BoundaryType.OCEAN);
+        return new Boundary(basinCells, BoundaryType.BASIN);
     }
 }

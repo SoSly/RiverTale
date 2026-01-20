@@ -17,9 +17,10 @@ import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.command.VisMode;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.core.Boundary;
+import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
-import org.sosly.rivertale.terrain.OceanBoundary;
 
 @OnlyIn(Dist.CLIENT)
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
@@ -29,7 +30,8 @@ public class RegionRenderer {
     private static final double ARROWHEAD_SIZE = 1.5;
     private static final double DIAG_COMPONENT = ARROW_LENGTH / Math.sqrt(2.0);
 
-    private static final float[] COLOR_BOUNDARY = {1.0f, 0.5f, 0.0f, 1.0f};
+    private static final float[] COLOR_OCEAN_BOUNDARY = {0.0f, 0.0f, 1.0f, 1.0f};
+    private static final float[] COLOR_BASIN_BOUNDARY = {0.0f, 1.0f, 0.0f, 1.0f};
     private static final float[] COLOR_PATH = {0.0f, 0.0f, 1.0f, 1.0f};
 
     @SubscribeEvent
@@ -70,7 +72,7 @@ public class RegionRenderer {
                 renderCellBorders(region, cellBlocks, poseStack, buffer, camPos);
             }
             if (ClientRegionCache.isModeEnabled(VisMode.BOUNDARIES)) {
-                renderOceanBoundaries(region, poseStack, buffer, camPos);
+                renderBoundaries(region, poseStack, buffer, camPos);
             }
         }
 
@@ -98,43 +100,29 @@ public class RegionRenderer {
         drawLine(poseStack, buffer, sw, nw, camPos, color);
     }
 
-    private static void renderOceanBoundaries(ClientRegionCache.Region region, PoseStack poseStack,
-                                              BufferBuilder buffer, Vec3 camPos) {
-        for (OceanBoundary boundary : region.boundaries()) {
-            CellPos land = boundary.land();
-            FlowDirection bearing = boundary.bearing();
+    private static void renderBoundaries(ClientRegionCache.Region region, PoseStack poseStack,
+                                         BufferBuilder buffer, Vec3 camPos) {
+        for (Boundary boundary : region.boundaries()) {
+            float[] color = boundary.type() == BoundaryType.OCEAN
+                ? COLOR_OCEAN_BOUNDARY
+                : COLOR_BASIN_BOUNDARY;
 
-            Vec3 start;
-            Vec3 end;
+            for (CellPos cellPos : boundary.cells()) {
+                int minX = cellPos.getMinBlockX();
+                int maxX = cellPos.getMaxBlockX();
+                int minZ = cellPos.getMinBlockZ();
+                int maxZ = cellPos.getMaxBlockZ();
 
-            int cellMinX = land.getMinBlockX();
-            int cellMaxX = land.getMaxBlockX();
-            int cellMinZ = land.getMinBlockZ();
-            int cellMaxZ = land.getMaxBlockZ();
+                Vec3 nw = new Vec3(minX, Y, minZ);
+                Vec3 ne = new Vec3(maxX, Y, minZ);
+                Vec3 se = new Vec3(maxX, Y, maxZ);
+                Vec3 sw = new Vec3(minX, Y, maxZ);
 
-            switch (bearing) {
-                case NORTH -> {
-                    start = new Vec3(cellMinX, Y, cellMinZ);
-                    end = new Vec3(cellMaxX, Y, cellMinZ);
-                }
-                case SOUTH -> {
-                    start = new Vec3(cellMinX, Y, cellMaxZ);
-                    end = new Vec3(cellMaxX, Y, cellMaxZ);
-                }
-                case EAST -> {
-                    start = new Vec3(cellMaxX, Y, cellMinZ);
-                    end = new Vec3(cellMaxX, Y, cellMaxZ);
-                }
-                case WEST -> {
-                    start = new Vec3(cellMinX, Y, cellMinZ);
-                    end = new Vec3(cellMinX, Y, cellMaxZ);
-                }
-                default -> {
-                    continue;
-                }
+                drawLine(poseStack, buffer, nw, ne, camPos, color);
+                drawLine(poseStack, buffer, ne, se, camPos, color);
+                drawLine(poseStack, buffer, se, sw, camPos, color);
+                drawLine(poseStack, buffer, sw, nw, camPos, color);
             }
-
-            drawLine(poseStack, buffer, start, end, camPos, COLOR_BOUNDARY);
         }
     }
 

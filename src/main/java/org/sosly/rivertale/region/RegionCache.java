@@ -75,6 +75,10 @@ public class RegionCache implements Cache<Region> {
         return value;
     }
 
+    public void put(Region region) {
+        cache.put(region.pos().toLong(), region);
+    }
+
     @Override
     public void clear() {
         cache.clear();
