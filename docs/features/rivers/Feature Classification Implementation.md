@@ -442,3 +442,13 @@ The shape()/fill()/profile() methods are stubs in this phase. Real implementatio
 - Spline Building Implementation (profile methods)
 
 The interface is defined here so handlers can be extended incrementally.
+
+### RandomState Access
+
+The Crater handler requires position-seeded randomness for its probability check. Rather than passing `RandomState` through method signatures, we store it on `RiverShaping` alongside `seaLevel`:
+
+- `RiverShaping.shape()` accepts `RandomState` from the mixin and stores it statically
+- Handlers access it via `RiverShaping.getRandomState()`
+- The value is cleared in `RiverShaping.shutdown()`
+
+This mirrors the existing pattern for `seaLevel` and keeps handler method signatures simple.

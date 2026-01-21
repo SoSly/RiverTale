@@ -39,7 +39,7 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
         return new Region(pos, type, boundaries);
     }
 
-    List<CellPos> cells() {
+    public List<CellPos> cells() {
         List<CellPos> result = new ArrayList<>();
         CellPos min = pos.getMinCell();
         int count = CommonConfig.get().cellsPerRegion();

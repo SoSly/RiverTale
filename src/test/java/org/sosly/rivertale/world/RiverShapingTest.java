@@ -5,6 +5,7 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.RandomState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,9 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
+import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
@@ -45,6 +48,9 @@ class RiverShapingTest {
     @Mock
     RegionCache regionCache;
 
+    @Mock
+    RandomState randomState;
+
     private MockedStatic<CellCache> cellCacheStatic;
     private MockedStatic<RegionCache> regionCacheStatic;
     private MockedStatic<RegionExplorer> regionExplorerStatic;
@@ -64,6 +70,19 @@ class RiverShapingTest {
 
         cellCacheStatic.when(CellCache::get).thenReturn(cellCache);
         regionCacheStatic.when(RegionCache::get).thenReturn(regionCache);
+
+        Cell mockCell = mock(Cell.class);
+        when(mockCell.averageEstimatedTerrainHeight()).thenReturn(50);
+        when(mockCell.averageTemperature()).thenReturn(0.5);
+        when(mockCell.averageDepth()).thenReturn(0.1);
+        when(mockCell.averageRidges()).thenReturn(0.8);
+        when(mockCell.averageVegetation()).thenReturn(0.1);
+        when(mockCell.averageErosion()).thenReturn(0.5);
+        when(mockCell.hasInflowingNeighbor()).thenReturn(true);
+        when(mockCell.pos()).thenReturn(new CellPos(0, 0));
+        when(mockCell.feature()).thenReturn(Feature.NONE);
+        when(mockCell.withFeature(any())).thenReturn(mockCell);
+        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenReturn(mockCell);
     }
 
     @AfterEach
@@ -81,7 +100,7 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of());
 
-        RiverShaping.shape(chunk, 63);
+        RiverShaping.shape(chunk, 63, randomState);
 
         coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
         fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
@@ -102,7 +121,7 @@ class RiverShapingTest {
         );
         coastalStatic.when(() -> Coastal.boundaries(pos, cellCache)).thenReturn(boundaries);
 
-        RiverShaping.shape(chunk, 63);
+        RiverShaping.shape(chunk, 63, randomState);
 
         coastalStatic.verify(() -> Coastal.boundaries(pos, cellCache));
         fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
@@ -122,7 +141,7 @@ class RiverShapingTest {
         );
         fluvialStatic.when(() -> Fluvial.boundaries(pos, cellCache)).thenReturn(boundaries);
 
-        RiverShaping.shape(chunk, 63);
+        RiverShaping.shape(chunk, 63, randomState);
 
         coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
         fluvialStatic.verify(() -> Fluvial.boundaries(pos, cellCache));
@@ -137,7 +156,7 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of(oceanic));
 
-        RiverShaping.shape(chunk, 63);
+        RiverShaping.shape(chunk, 63, randomState);
 
         coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
         fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
@@ -152,7 +171,7 @@ class RiverShapingTest {
         regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenReturn(Set.of(inland));
 
-        RiverShaping.shape(chunk, 63);
+        RiverShaping.shape(chunk, 63, randomState);
 
         coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
         fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
@@ -175,7 +194,7 @@ class RiverShapingTest {
         coastalStatic.when(() -> Coastal.boundaries(coastalPos, cellCache)).thenReturn(coastalBoundaries);
         fluvialStatic.when(() -> Fluvial.boundaries(any(), any())).thenReturn(List.of());
 
-        RiverShaping.shape(chunk, 63);
+        RiverShaping.shape(chunk, 63, randomState);
 
         coastalStatic.verify(() -> Coastal.boundaries(coastalPos, cellCache));
         coastalStatic.verify(() -> Coastal.boundaries(fluvialPos, cellCache), never());
@@ -197,7 +216,7 @@ class RiverShapingTest {
         );
         coastalStatic.when(() -> Coastal.boundaries(pos, cellCache)).thenReturn(boundaries);
 
-        RiverShaping.shape(chunk, 63);
+        RiverShaping.shape(chunk, 63, randomState);
 
         verify(regionCache).put(any(Region.class));
     }

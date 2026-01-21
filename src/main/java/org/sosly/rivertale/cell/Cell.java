@@ -144,6 +144,18 @@ public record Cell(
         return true;
     }
 
+    public boolean hasInflowingNeighbor() {
+        CellCache cache = CellCache.get();
+        for (FlowDirection dir : FlowDirection.D8) {
+            CellPos neighborPos = pos.relative(dir);
+            Cell neighbor = cache.getOrCompute(neighborPos);
+            if (neighbor.flowDirections().contains(dir.opposite())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public Cell withFlowDirections(List<FlowDirection> flowDirections) {
         return new Cell(pos, samplePositions, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
