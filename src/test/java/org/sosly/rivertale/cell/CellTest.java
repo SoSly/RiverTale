@@ -2,34 +2,51 @@ package org.sosly.rivertale.cell;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import net.minecraft.world.level.ChunkPos;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
+import org.sosly.rivertale.density.DensityField;
 import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.density.SampleCache;
+import org.sosly.rivertale.density.SampleProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CellTest {
 
+    private TestSampleProvider provider;
+
+    @BeforeEach
+    void setUp() {
+        SampleCache.shutdown();
+        provider = new TestSampleProvider();
+        SampleCache.init(provider);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SampleCache.shutdown();
+    }
+
     @Test
     void minimalConstructionCreatesBasicCell() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
-        );
+        ChunkPos chunkPos = new ChunkPos(0, 0);
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
+        Set<ChunkPos> samplePositions = Set.of(chunkPos);
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Cell cell = new Cell(pos, samplePositions);
 
         assertEquals(pos, cell.pos());
-        assertEquals(1, cell.samples().size());
+        assertEquals(1, cell.samplePositions().size());
         assertTrue(cell.flowDirections().isEmpty());
         assertEquals(Feature.NONE, cell.feature());
         assertNull(cell.waypoint());
@@ -46,79 +63,86 @@ class CellTest {
 
     @Test
     void averageContinentsComputesMean() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), -0.1, 0.5),
-            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), -0.2, 0.5),
-            new ChunkPos(2, 0), new Sample(new ChunkPos(2, 0), -0.3, 0.5)
-        );
+        ChunkPos c0 = new ChunkPos(0, 0);
+        ChunkPos c1 = new ChunkPos(1, 0);
+        ChunkPos c2 = new ChunkPos(2, 0);
+        provider.putSample(c0, new Sample(c0, -0.1, 0.5));
+        provider.putSample(c1, new Sample(c1, -0.2, 0.5));
+        provider.putSample(c2, new Sample(c2, -0.3, 0.5));
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Set<ChunkPos> samplePositions = Set.of(c0, c1, c2);
+        Cell cell = new Cell(pos, samplePositions);
 
         assertEquals(-0.2, cell.averageContinents(), 0.0001);
     }
 
     @Test
     void averageDepthComputesMean() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.3),
-            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), 0.5, 0.5),
-            new ChunkPos(2, 0), new Sample(new ChunkPos(2, 0), 0.5, 0.7)
-        );
+        ChunkPos c0 = new ChunkPos(0, 0);
+        ChunkPos c1 = new ChunkPos(1, 0);
+        ChunkPos c2 = new ChunkPos(2, 0);
+        provider.putSample(c0, new Sample(c0, 0.5, 0.3));
+        provider.putSample(c1, new Sample(c1, 0.5, 0.5));
+        provider.putSample(c2, new Sample(c2, 0.5, 0.7));
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Set<ChunkPos> samplePositions = Set.of(c0, c1, c2);
+        Cell cell = new Cell(pos, samplePositions);
 
         assertEquals(0.5, cell.averageDepth(), 0.0001);
     }
 
     @Test
     void averageEstimatedTerrainHeightUsesDepthFormula() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
-        );
+        ChunkPos chunkPos = new ChunkPos(0, 0);
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Set<ChunkPos> samplePositions = Set.of(chunkPos);
+        Cell cell = new Cell(pos, samplePositions);
 
         assertEquals(142, cell.averageEstimatedTerrainHeight());
     }
 
     @Test
     void isOceanReturnsTrueWhenAllSamplesAreOcean() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), -0.5, 0.5),
-            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), -0.5, 0.5),
-            new ChunkPos(2, 0), new Sample(new ChunkPos(2, 0), -0.5, 0.5)
-        );
+        ChunkPos c0 = new ChunkPos(0, 0);
+        ChunkPos c1 = new ChunkPos(1, 0);
+        ChunkPos c2 = new ChunkPos(2, 0);
+        provider.putSample(c0, new Sample(c0, -0.5, 0.5));
+        provider.putSample(c1, new Sample(c1, -0.5, 0.5));
+        provider.putSample(c2, new Sample(c2, -0.5, 0.5));
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Set<ChunkPos> samplePositions = Set.of(c0, c1, c2);
+        Cell cell = new Cell(pos, samplePositions);
 
         assertTrue(cell.isOcean());
     }
 
     @Test
     void isOceanReturnsFalseWhenMixed() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), -0.5, 0.5),
-            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), 0.5, 0.5)
-        );
+        ChunkPos c0 = new ChunkPos(0, 0);
+        ChunkPos c1 = new ChunkPos(1, 0);
+        provider.putSample(c0, new Sample(c0, -0.5, 0.5));
+        provider.putSample(c1, new Sample(c1, 0.5, 0.5));
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Set<ChunkPos> samplePositions = Set.of(c0, c1);
+        Cell cell = new Cell(pos, samplePositions);
 
         assertFalse(cell.isOcean());
     }
 
     @Test
     void isBasinReturnsTrueWhenBelowSeaLevelAndNotOcean() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, -0.1)
-        );
+        ChunkPos chunkPos = new ChunkPos(0, 0);
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, -0.1));
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Set<ChunkPos> samplePositions = Set.of(chunkPos);
+        Cell cell = new Cell(pos, samplePositions);
         int estimatedHeight = cell.averageEstimatedTerrainHeight();
 
         assertTrue(estimatedHeight < 63);
@@ -128,12 +152,12 @@ class CellTest {
 
     @Test
     void isBasinReturnsFalseWhenOcean() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), -0.5, -0.1)
-        );
+        ChunkPos chunkPos = new ChunkPos(0, 0);
+        provider.putSample(chunkPos, new Sample(chunkPos, -0.5, -0.1));
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Set<ChunkPos> samplePositions = Set.of(chunkPos);
+        Cell cell = new Cell(pos, samplePositions);
 
         assertTrue(cell.isOcean());
         assertFalse(cell.isBasin());
@@ -141,13 +165,14 @@ class CellTest {
 
     @Test
     void isBasinReturnsFalseWhenAnySampleIsOcean() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, -0.1),
-            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), -0.5, -0.1)
-        );
+        ChunkPos c0 = new ChunkPos(0, 0);
+        ChunkPos c1 = new ChunkPos(1, 0);
+        provider.putSample(c0, new Sample(c0, 0.5, -0.1));
+        provider.putSample(c1, new Sample(c1, -0.5, -0.1));
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Set<ChunkPos> samplePositions = Set.of(c0, c1);
+        Cell cell = new Cell(pos, samplePositions);
 
         assertFalse(cell.isOcean());
         assertFalse(cell.isBasin());
@@ -155,11 +180,12 @@ class CellTest {
 
     @Test
     void withFlowDirectionsPreservesOtherFields() {
+        ChunkPos chunkPos = new ChunkPos(0, 0);
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
+
         CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
-        );
-        Cell cell = new Cell(pos, samples)
+        Set<ChunkPos> samplePositions = Set.of(chunkPos);
+        Cell cell = new Cell(pos, samplePositions)
             .withFeature(Feature.RUN)
             .withElevations(100, 95);
 
@@ -173,11 +199,12 @@ class CellTest {
 
     @Test
     void withFeaturePreservesOtherFields() {
+        ChunkPos chunkPos = new ChunkPos(0, 0);
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
+
         CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
-        );
-        Cell cell = new Cell(pos, samples)
+        Set<ChunkPos> samplePositions = Set.of(chunkPos);
+        Cell cell = new Cell(pos, samplePositions)
             .withFlowDirections(List.of(FlowDirection.SOUTH))
             .withElevations(100, 95);
 
@@ -191,11 +218,12 @@ class CellTest {
 
     @Test
     void withElevationsPreservesOtherFields() {
+        ChunkPos chunkPos = new ChunkPos(0, 0);
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
+
         CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
-        );
-        Cell cell = new Cell(pos, samples)
+        Set<ChunkPos> samplePositions = Set.of(chunkPos);
+        Cell cell = new Cell(pos, samplePositions)
             .withFlowDirections(List.of(FlowDirection.WEST))
             .withFeature(Feature.RAPIDS);
 
@@ -208,26 +236,30 @@ class CellTest {
     }
 
     @Test
-    void averageErosionThrowsWhenNoEnrichedSamples() {
+    void averageErosionEnrichesSamplesLazily() {
+        ChunkPos c0 = new ChunkPos(0, 0);
+        ChunkPos c1 = new ChunkPos(1, 0);
+        provider.putSample(c0, new Sample(c0, 0.5, 0.5));
+        provider.putSample(c1, new Sample(c1, 0.5, 0.5));
+        provider.setFieldValue(DensityField.EROSION, 0.3);
+
         CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5)
-        );
+        Set<ChunkPos> samplePositions = Set.of(c0, c1);
+        Cell cell = new Cell(pos, samplePositions);
 
-        Cell cell = new Cell(pos, samples);
-
-        assertThrows(IllegalStateException.class, cell::averageErosion);
+        assertEquals(0.3, cell.averageErosion(), 0.0001);
     }
 
     @Test
-    void averageErosionComputesMeanForEnrichedSamples() {
-        CellPos pos = new CellPos(0, 0);
-        Map<ChunkPos, Sample> samples = Map.of(
-            new ChunkPos(0, 0), new Sample(new ChunkPos(0, 0), 0.5, 0.5, 0.2, 0.3, 0.4, 0.5),
-            new ChunkPos(1, 0), new Sample(new ChunkPos(1, 0), 0.5, 0.5, 0.4, 0.3, 0.4, 0.5)
-        );
+    void averageErosionUsesEnrichedSamplesIfPresent() {
+        ChunkPos c0 = new ChunkPos(0, 0);
+        ChunkPos c1 = new ChunkPos(1, 0);
+        provider.putSample(c0, new Sample(c0, 0.5, 0.5, 0.2, 0.3, 0.4, 0.5));
+        provider.putSample(c1, new Sample(c1, 0.5, 0.5, 0.4, 0.3, 0.4, 0.5));
 
-        Cell cell = new Cell(pos, samples);
+        CellPos pos = new CellPos(0, 0);
+        Set<ChunkPos> samplePositions = Set.of(c0, c1);
+        Cell cell = new Cell(pos, samplePositions);
 
         assertEquals(0.3, cell.averageErosion(), 0.0001);
     }
@@ -301,6 +333,34 @@ class CellTest {
         for (CellCache.SampleOffset p : positions) {
             String key = p.x() + "," + p.z();
             assertTrue(coords.add(key), "Duplicate position found: " + key);
+        }
+    }
+
+    private static class TestSampleProvider implements SampleProvider {
+        private final java.util.Map<Long, Sample> samples = new java.util.HashMap<>();
+        private final java.util.Map<DensityField, Double> fieldValues = new java.util.EnumMap<>(DensityField.class);
+
+        void putSample(ChunkPos pos, Sample sample) {
+            samples.put(pos.toLong(), sample);
+            SampleCache.get().put(pos, sample);
+        }
+
+        void setFieldValue(DensityField field, double value) {
+            fieldValues.put(field, value);
+        }
+
+        @Override
+        public Sample sampleCore(ChunkPos pos) {
+            Sample cached = samples.get(pos.toLong());
+            if (cached != null) {
+                return cached;
+            }
+            return new Sample(pos, 0.0, 0.0);
+        }
+
+        @Override
+        public double sample(DensityField field, ChunkPos pos) {
+            return fieldValues.getOrDefault(field, 0.0);
         }
     }
 }

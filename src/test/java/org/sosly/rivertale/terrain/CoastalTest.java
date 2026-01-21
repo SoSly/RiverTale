@@ -1,9 +1,10 @@
 package org.sosly.rivertale.terrain;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import net.minecraft.world.level.ChunkPos;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,7 +17,10 @@ import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.density.DensityField;
 import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.density.SampleCache;
+import org.sosly.rivertale.density.SampleProvider;
 import org.sosly.rivertale.metric.Store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,10 +34,20 @@ class CoastalTest {
     @Mock
     CellCache cellCache;
 
+    private TestSampleProvider provider;
+
     @BeforeEach
     void setUp() {
         Store.clear();
         CommonConfig.set(new CommonConfig(32, 2, 1, -0.17, 10, 1, 3, 288, false));
+        SampleCache.shutdown();
+        provider = new TestSampleProvider();
+        SampleCache.init(provider);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SampleCache.shutdown();
     }
 
     @Test
@@ -143,18 +157,46 @@ class CoastalTest {
     private Cell createOceanCell(CellPos pos) {
         ChunkPos chunk = new ChunkPos(pos.x(), pos.z());
         Sample sample = new Sample(chunk, -0.5, 0.5);
-        return new Cell(pos, Map.of(chunk, sample));
+        provider.putSample(chunk, sample);
+        return new Cell(pos, Set.of(chunk));
     }
 
     private Cell createLandCell(CellPos pos) {
         ChunkPos chunk = new ChunkPos(pos.x(), pos.z());
         Sample sample = new Sample(chunk, 0.5, 0.5);
-        return new Cell(pos, Map.of(chunk, sample));
+        provider.putSample(chunk, sample);
+        return new Cell(pos, Set.of(chunk));
     }
 
     private Cell createBasinCell(CellPos pos) {
         ChunkPos chunk = new ChunkPos(pos.x(), pos.z());
         Sample sample = new Sample(chunk, 0.5, -0.1);
-        return new Cell(pos, Map.of(chunk, sample));
+        provider.putSample(chunk, sample);
+        return new Cell(pos, Set.of(chunk));
+    }
+
+    private static class TestSampleProvider implements SampleProvider {
+        private final java.util.Map<Long, Sample> samples = new java.util.HashMap<>();
+
+        void putSample(ChunkPos pos, Sample sample) {
+            samples.put(pos.toLong(), sample);
+            if (SampleCache.isInitialized()) {
+                SampleCache.get().put(pos, sample);
+            }
+        }
+
+        @Override
+        public Sample sampleCore(ChunkPos pos) {
+            Sample cached = samples.get(pos.toLong());
+            if (cached != null) {
+                return cached;
+            }
+            return new Sample(pos, 0.0, 0.0);
+        }
+
+        @Override
+        public double sample(DensityField field, ChunkPos pos) {
+            return 0.0;
+        }
     }
 }

@@ -21,12 +21,20 @@ public record Sample(
         return erosion != null && ridges != null && temperature != null && vegetation != null;
     }
 
-    public Sample withFullDensities(SampleProvider provider) {
-        if (hasFullDensities()) {
-            return this;
-        }
-        Sample full = provider.sampleFull(pos);
-        return new Sample(pos, continents, depth, full.erosion(), full.ridges(), full.temperature(), full.vegetation());
+    public Sample withTemperature(double temperature) {
+        return new Sample(pos, continents, depth, erosion, ridges, temperature, vegetation);
+    }
+
+    public Sample withErosion(double erosion) {
+        return new Sample(pos, continents, depth, erosion, ridges, temperature, vegetation);
+    }
+
+    public Sample withRidges(double ridges) {
+        return new Sample(pos, continents, depth, erosion, ridges, temperature, vegetation);
+    }
+
+    public Sample withVegetation(double vegetation) {
+        return new Sample(pos, continents, depth, erosion, ridges, temperature, vegetation);
     }
 
     public boolean isOcean() {

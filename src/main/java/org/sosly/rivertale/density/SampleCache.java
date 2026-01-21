@@ -51,13 +51,20 @@ public class SampleCache implements Cache<Sample> {
         }
     }
 
-    public SampleProvider getProvider() {
+    public SampleProvider provider() {
         return sampler;
+    }
+
+    public void put(ChunkPos pos, Sample sample) {
+        cache.put(pos.toLong(), sample);
     }
 
     @Override
     public Sample getOrCompute(int x, int z) {
-        ChunkPos chunk = new ChunkPos(new BlockPos(x, 0, z));
+        return getOrCompute(new ChunkPos(new BlockPos(x, 0, z)));
+    }
+
+    public Sample getOrCompute(ChunkPos chunk) {
         long key = chunk.toLong();
 
         Sample cached = cache.get(key);

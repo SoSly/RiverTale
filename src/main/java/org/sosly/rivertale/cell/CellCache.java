@@ -3,17 +3,17 @@ package org.sosly.rivertale.cell;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
-import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.region.RegionType;
@@ -80,8 +80,8 @@ public class CellCache implements Cache<Cell> {
 
         Store.getRatio(CellCache.class, "hits").failure();
 
-        Map<ChunkPos, Sample> samples = collectSamples(pos);
-        Cell cell = new Cell(pos, samples);
+        Set<ChunkPos> samplePositions = collectSamplePositions(pos);
+        Cell cell = new Cell(pos, samplePositions);
         cache.put(key, cell);
 
         return cell;
@@ -114,24 +114,21 @@ public class CellCache implements Cache<Cell> {
         cache.clear();
     }
 
-    private Map<ChunkPos, Sample> collectSamples(CellPos pos) {
+    private Set<ChunkPos> collectSamplePositions(CellPos pos) {
         CommonConfig config = CommonConfig.get();
         List<SampleOffset> offsets = getSamplePositions(config.cellSize(), config.samplesPerCell());
-        Map<ChunkPos, Sample> samples = new HashMap<>();
+        Set<ChunkPos> positions = new HashSet<>();
 
         int cellMinChunkX = pos.x() * config.cellSize();
         int cellMinChunkZ = pos.z() * config.cellSize();
 
-        SampleCache sampleCache = SampleCache.get();
         for (SampleOffset offset : offsets) {
             int chunkX = cellMinChunkX + offset.x();
             int chunkZ = cellMinChunkZ + offset.z();
-            ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
-            Sample sample = sampleCache.getOrCompute(chunkX * 16, chunkZ * 16);
-            samples.put(chunkPos, sample);
+            positions.add(new ChunkPos(chunkX, chunkZ));
         }
 
-        return samples;
+        return positions;
     }
 
     static List<SampleOffset> getSamplePositions(int cellSize, int samplesPerCell) {

@@ -1,9 +1,9 @@
 package org.sosly.rivertale.cell;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -11,15 +11,16 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.feature.Feature;
-import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
+import org.sosly.rivertale.density.DensityField;
 import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.world.RiverShaping;
 
 public record Cell(
     CellPos pos,
-    Map<ChunkPos, Sample> samples,
+    Set<ChunkPos> samplePositions,
     List<FlowDirection> flowDirections,
     Feature feature,
     BlockPos waypoint,
@@ -33,22 +34,26 @@ public record Cell(
     Double entryT,
     Double exitT
 ) {
-    public Cell(CellPos pos, Map<ChunkPos, Sample> samples) {
-        this(pos, samples, List.of(), Feature.NONE, null, null, null, null, null, null, null, null, null, null);
+    public Cell(CellPos pos, Set<ChunkPos> samplePositions) {
+        this(pos, samplePositions, List.of(), Feature.NONE, null, null, null, null, null, null, null, null, null, null);
     }
 
     public double averageContinents() {
-        return samples.values().stream()
-            .mapToDouble(Sample::continents)
-            .average()
-            .orElse(0.0);
+        double sum = 0;
+        for (ChunkPos pos : samplePositions) {
+            Sample sample = SampleCache.get().getOrCompute(pos);
+            sum += sample.continents();
+        }
+        return sum / samplePositions.size();
     }
 
     public double averageDepth() {
-        return samples.values().stream()
-            .mapToDouble(Sample::depth)
-            .average()
-            .orElse(0.0);
+        double sum = 0;
+        for (ChunkPos pos : samplePositions) {
+            Sample sample = SampleCache.get().getOrCompute(pos);
+            sum += sample.depth();
+        }
+        return sum / samplePositions.size();
     }
 
     public int averageEstimatedTerrainHeight() {
@@ -56,74 +61,115 @@ public record Cell(
     }
 
     public double averageErosion() {
-        return samples.values().stream()
-            .filter(Sample::hasFullDensities)
-            .mapToDouble(Sample::erosion)
-            .average()
-            .orElseThrow(() -> new IllegalStateException("No enriched samples"));
+        double sum = 0;
+        SampleCache cache = SampleCache.get();
+        for (ChunkPos pos : samplePositions) {
+            Sample sample = cache.getOrCompute(pos.getMiddleBlockX(), pos.getMiddleBlockZ());
+            if (sample.erosion() == null) {
+                double erosion = cache.provider().sample(DensityField.EROSION, pos);
+                sample = sample.withErosion(erosion);
+                cache.put(pos, sample);
+            }
+            sum += sample.erosion();
+        }
+        return sum / samplePositions.size();
     }
 
     public double averageRidges() {
-        return samples.values().stream()
-            .filter(Sample::hasFullDensities)
-            .mapToDouble(Sample::ridges)
-            .average()
-            .orElseThrow(() -> new IllegalStateException("No enriched samples"));
+        double sum = 0;
+        SampleCache cache = SampleCache.get();
+        for (ChunkPos pos : samplePositions) {
+            Sample sample = cache.getOrCompute(pos.getMiddleBlockX(), pos.getMiddleBlockZ());
+            if (sample.ridges() == null) {
+                double ridges = cache.provider().sample(DensityField.RIDGES, pos);
+                sample = sample.withRidges(ridges);
+                cache.put(pos, sample);
+            }
+            sum += sample.ridges();
+        }
+        return sum / samplePositions.size();
     }
 
     public double averageTemperature() {
-        return samples.values().stream()
-            .filter(Sample::hasFullDensities)
-            .mapToDouble(Sample::temperature)
-            .average()
-            .orElseThrow(() -> new IllegalStateException("No enriched samples"));
+        double sum = 0;
+        SampleCache cache = SampleCache.get();
+        for (ChunkPos pos : samplePositions) {
+            Sample sample = cache.getOrCompute(pos.getMiddleBlockX(), pos.getMiddleBlockZ());
+            if (sample.temperature() == null) {
+                double temp = cache.provider().sample(DensityField.TEMPERATURE, pos);
+                sample = sample.withTemperature(temp);
+                cache.put(pos, sample);
+            }
+            sum += sample.temperature();
+        }
+        return sum / samplePositions.size();
     }
 
     public double averageVegetation() {
-        return samples.values().stream()
-            .filter(Sample::hasFullDensities)
-            .mapToDouble(Sample::vegetation)
-            .average()
-            .orElseThrow(() -> new IllegalStateException("No enriched samples"));
+        double sum = 0;
+        SampleCache cache = SampleCache.get();
+        for (ChunkPos pos : samplePositions) {
+            Sample sample = cache.getOrCompute(pos.getMiddleBlockX(), pos.getMiddleBlockZ());
+            if (sample.vegetation() == null) {
+                double vegetation = cache.provider().sample(DensityField.VEGETATION, pos);
+                sample = sample.withVegetation(vegetation);
+                cache.put(pos, sample);
+            }
+            sum += sample.vegetation();
+        }
+        return sum / samplePositions.size();
     }
 
     public boolean isOcean() {
-        return averageContinents() < CommonConfig.get().oceanThreshold();
+        for (ChunkPos pos : samplePositions) {
+            Sample sample = SampleCache.get().getOrCompute(pos);
+            if (!sample.isOcean()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public boolean isBasin() {
-        if (samples.values().stream().anyMatch(Sample::isOcean)) {
-            return false;
+        int seaLevel = RiverShaping.getSeaLevel();
+        for (ChunkPos pos : samplePositions) {
+            Sample sample = SampleCache.get().getOrCompute(pos);
+            if (sample.isOcean()) {
+                return false;
+            }
+            if (sample.estimatedTerrainHeight() >= seaLevel) {
+                return false;
+            }
         }
-        return averageEstimatedTerrainHeight() < RiverShaping.getSeaLevel();
+        return true;
     }
 
     public Cell withFlowDirections(List<FlowDirection> flowDirections) {
-        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+        return new Cell(pos, samplePositions, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
 
     public Cell withFeature(Feature feature) {
-        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+        return new Cell(pos, samplePositions, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
 
     public Cell withWaypoint(BlockPos waypoint) {
-        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+        return new Cell(pos, samplePositions, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
 
     public Cell withElevations(int entryY, int exitY) {
-        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+        return new Cell(pos, samplePositions, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
 
     public Cell withAccumulation(int width, int depth, int upstreamCount, int downstreamCount) {
-        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+        return new Cell(pos, samplePositions, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
 
     public Cell withWatershed(CellPos terminus) {
-        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+        return new Cell(pos, samplePositions, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
 
     public Cell withSplineParams(double entryT, double exitT) {
-        return new Cell(pos, samples, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
+        return new Cell(pos, samplePositions, flowDirections, feature, waypoint, entryY, exitY, width, depth, upstreamCount, downstreamCount, terminus, entryT, exitT);
     }
 
     public CompoundTag encode() {
@@ -131,11 +177,12 @@ public record Cell(
         tag.putLong("pos", pos.toLong());
         tag.putString("feature", feature.name());
 
-        ListTag sampleList = new ListTag();
-        for (Sample sample : samples.values()) {
-            sampleList.add(sample.encode());
+        long[] posArray = new long[samplePositions.size()];
+        int i = 0;
+        for (ChunkPos chunkPos : samplePositions) {
+            posArray[i++] = chunkPos.toLong();
         }
-        tag.put("samples", sampleList);
+        tag.putLongArray("samplePositions", posArray);
 
         ListTag flowList = new ListTag();
         for (FlowDirection dir : flowDirections) {
@@ -184,16 +231,15 @@ public record Cell(
             flows.add(FlowDirection.valueOf(flowList.getString(i)));
         }
 
-        Map<ChunkPos, Sample> samples = new HashMap<>();
-        ListTag sampleList = tag.getList("samples", Tag.TAG_COMPOUND);
-        for (int i = 0; i < sampleList.size(); i++) {
-            Sample sample = Sample.decode(sampleList.getCompound(i));
-            samples.put(sample.pos(), sample);
+        Set<ChunkPos> samplePositions = new HashSet<>();
+        long[] posArray = tag.getLongArray("samplePositions");
+        for (long posLong : posArray) {
+            samplePositions.add(new ChunkPos(posLong));
         }
 
         return new Cell(
             new CellPos(tag.getLong("pos")),
-            samples,
+            samplePositions,
             flows,
             Feature.valueOf(tag.getString("feature")),
             tag.contains("waypoint") ? BlockPos.of(tag.getLong("waypoint")) : null,

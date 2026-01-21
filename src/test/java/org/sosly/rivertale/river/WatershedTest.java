@@ -1,8 +1,6 @@
 package org.sosly.rivertale.river;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import net.minecraft.world.level.ChunkPos;
 import org.junit.jupiter.api.AfterEach;
@@ -20,7 +18,10 @@ import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.density.DensityField;
 import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.density.SampleCache;
+import org.sosly.rivertale.density.SampleProvider;
 import org.sosly.rivertale.world.WorldSettings;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,15 +41,14 @@ class WatershedTest {
     CellCache cellCache;
 
     private CommonConfig originalConfig;
+    private TestSampleProvider provider;
 
     private Cell dummyCell(CellPos pos) {
-        Sample sample = new Sample(
-            new ChunkPos(pos.getMiddleBlockX() >> 4, pos.getMiddleBlockZ() >> 4),
-            0.5, 0.0, 0.0, 0.0, 0.0, 0.0
-        );
-        Map<ChunkPos, Sample> samples = new HashMap<>();
-        samples.put(sample.pos(), sample);
-        return new Cell(pos, samples, List.of(), Feature.NONE, null, 63, 63, null, null, null, null, null, null, null);
+        ChunkPos chunkPos = new ChunkPos(pos.getMiddleBlockX() >> 4, pos.getMiddleBlockZ() >> 4);
+        Sample sample = new Sample(chunkPos, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0);
+        provider.putSample(chunkPos, sample);
+        Set<ChunkPos> samplePositions = Set.of(chunkPos);
+        return new Cell(pos, samplePositions, List.of(), Feature.NONE, null, 63, 63, null, null, null, null, null, null, null);
     }
 
     private Path mockPath(List<CellPos> cells) {
@@ -59,6 +59,9 @@ class WatershedTest {
 
     @BeforeEach
     void setUp() {
+        SampleCache.shutdown();
+        provider = new TestSampleProvider();
+        SampleCache.init(provider);
         WorldSettings.init(63);
         WatershedCache.init();
         originalConfig = CommonConfig.get();
@@ -74,6 +77,7 @@ class WatershedTest {
         WatershedCache.shutdown();
         WorldSettings.shutdown();
         CommonConfig.set(originalConfig);
+        SampleCache.shutdown();
     }
 
     @Test
@@ -225,6 +229,31 @@ class WatershedTest {
             // Each path should have its own terminus
             assertNull(watershed.downstream(new CellPos(0, 0)));
             assertNull(watershed.downstream(new CellPos(0, 2)));
+        }
+    }
+
+    private static class TestSampleProvider implements SampleProvider {
+        private final java.util.Map<Long, Sample> samples = new java.util.HashMap<>();
+
+        void putSample(ChunkPos pos, Sample sample) {
+            samples.put(pos.toLong(), sample);
+            if (SampleCache.isInitialized()) {
+                SampleCache.get().put(pos, sample);
+            }
+        }
+
+        @Override
+        public Sample sampleCore(ChunkPos pos) {
+            Sample cached = samples.get(pos.toLong());
+            if (cached != null) {
+                return cached;
+            }
+            return new Sample(pos, 0.0, 0.0);
+        }
+
+        @Override
+        public double sample(DensityField field, ChunkPos pos) {
+            return 0.0;
         }
     }
 }

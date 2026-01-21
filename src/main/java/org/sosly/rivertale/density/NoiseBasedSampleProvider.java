@@ -38,30 +38,18 @@ public class NoiseBasedSampleProvider implements SampleProvider {
     }
 
     @Override
-    public Sample sampleFull(ChunkPos pos) {
-        Timer.Record timer = Store.getTimer(NoiseBasedSampleProvider.class, "sampleFull").start();
-
+    public double sample(DensityField field, ChunkPos pos) {
         int x = pos.getMiddleBlockX();
         int z = pos.getMiddleBlockZ();
-
         DensityFunction.SinglePointContext ctx = new DensityFunction.SinglePointContext(x, y, z);
 
-        double continents = router.continents().compute(ctx);
-        double depth = router.depth().compute(ctx);
-        double erosion = router.erosion().compute(ctx);
-        double ridges = router.ridges().compute(ctx);
-        double temperature = router.temperature().compute(ctx);
-        double vegetation = router.vegetation().compute(ctx);
-
-        timer.stop();
-
-        return new Sample(
-            pos,
-            continents,
-            depth,
-            erosion,
-            ridges,
-            temperature,
-            vegetation);
+        return switch (field) {
+            case CONTINENTS -> router.continents().compute(ctx);
+            case DEPTH -> router.depth().compute(ctx);
+            case EROSION -> router.erosion().compute(ctx);
+            case RIDGES -> router.ridges().compute(ctx);
+            case TEMPERATURE -> router.temperature().compute(ctx);
+            case VEGETATION -> router.vegetation().compute(ctx);
+        };
     }
 }

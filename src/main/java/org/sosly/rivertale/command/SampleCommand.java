@@ -115,7 +115,7 @@ public class SampleCommand {
         int y = pos.getY();
 
         player.sendSystemMessage(withTeleport("=== Cell at " + cellPos + " ===", cellPos.getMiddleBlockX(), y, cellPos.getMiddleBlockZ()));
-        player.sendSystemMessage(Component.literal("  Samples: " + cell.samples().size()));
+        player.sendSystemMessage(Component.literal("  Samples: " + cell.samplePositions().size()));
         player.sendSystemMessage(Component.literal("  Average depth: " + format(cell.averageDepth())));
         player.sendSystemMessage(Component.literal("  Average continents: " + format(cell.averageContinents())));
         player.sendSystemMessage(Component.literal("  Feature: " + cell.feature().name()));
