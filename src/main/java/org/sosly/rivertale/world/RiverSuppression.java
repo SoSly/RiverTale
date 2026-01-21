@@ -19,9 +19,9 @@ import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.density.CapturedDensityFunctions;
 
 public class RiverSuppression {
-    private static final Map<String, ClampParams> CLAMP_CONFIG = new HashMap<>();
+    private static final Map<String, Interceptor> INTERCEPTOR_CONFIG = new HashMap<>();
     private static final Set<String> LOGGED_KEYS = Collections.synchronizedSet(new HashSet<>());
-    private static final Set<String> LOGGED_CLAMPS = Collections.synchronizedSet(new HashSet<>());
+    private static final Set<String> LOGGED_INTERCEPTS = Collections.synchronizedSet(new HashSet<>());
     private static boolean initialized = false;
     private static boolean loggedBiomeFilter = false;
 
@@ -34,7 +34,19 @@ public class RiverSuppression {
         new ResourceLocation("minecraft", "frozen_river")
     );
 
-    public record ClampParams(double min, double max) {}
+    public interface Interceptor {
+        DensityFunction apply(DensityFunction f);
+    }
+    public record Abs() implements Interceptor {
+        public DensityFunction apply(DensityFunction f) {
+            return f.abs();
+        }
+    }
+    public record Clamp(double min, double max) implements Interceptor {
+        public DensityFunction apply(DensityFunction f) {
+            return f.clamp(min, max);
+        }
+    }
 
     public static void init() {
         if (initialized) {
@@ -42,25 +54,25 @@ public class RiverSuppression {
         }
 
         // Vanilla Minecraft
-        register("overworld/ridges_folded", -0.799, 1.0);
+        register("overworld/ridges_folded", new Abs());
 
         // Lithosphere
-        register("river_valleys", -0.5, 1.0);
+        register("river_valleys", new Clamp(-0.5, 1.0));
 
         initialized = true;
-        RiverTale.LOGGER.info("RiverSuppression initialized with {} density function overrides", CLAMP_CONFIG.size());
+        RiverTale.LOGGER.info("RiverSuppression initialized with {} density function overrides", INTERCEPTOR_CONFIG.size());
     }
 
     public static void shutdown() {
-        CLAMP_CONFIG.clear();
+        INTERCEPTOR_CONFIG.clear();
         LOGGED_KEYS.clear();
-        LOGGED_CLAMPS.clear();
+        LOGGED_INTERCEPTS.clear();
         initialized = false;
     }
 
-    private static void register(String path, double min, double max) {
-        CLAMP_CONFIG.put(path, new ClampParams(min, max));
-        RiverTale.LOGGER.debug("Registered river suppression for {}: clamp({}, {})", path, min, max);
+    private static void register(String path, Interceptor interceptor) {
+        INTERCEPTOR_CONFIG.put(path, interceptor);
+        RiverTale.LOGGER.debug("Registered river suppression for {}", path);
     }
 
     public static DensityFunction intercept(DensityFunctions.HolderHolder holder, DensityFunction.Visitor visitor) {
@@ -78,16 +90,16 @@ public class RiverSuppression {
 
         CapturedDensityFunctions.put(path, wired);
 
-        ClampParams clampParams = CLAMP_CONFIG.get(path);
-        if (clampParams == null) {
+        Interceptor interceptor = INTERCEPTOR_CONFIG.get(path);
+        if (interceptor == null) {
             return null;
         }
 
-        if (LOGGED_CLAMPS.add(path)) {
-            RiverTale.LOGGER.info("Clamping {} to ({}, {}) to suppress river carving", path, clampParams.min(), clampParams.max());
+        if (LOGGED_INTERCEPTS.add(path)) {
+            RiverTale.LOGGER.info("Intercepting {} to suppress river carving", path);
         }
 
-        return wired.clamp(clampParams.min(), clampParams.max());
+        return interceptor.apply(wired);
     }
 
     public static Climate.ParameterList<Holder<Biome>> filterRiverBiomes(Climate.ParameterList<Holder<Biome>> original) {
