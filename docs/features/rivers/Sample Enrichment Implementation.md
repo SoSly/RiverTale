@@ -15,6 +15,8 @@ This implementation covers:
 - Updating Cell's averaging methods to query SampleCache
 - Adding per-field enrichment in Cell's averaging methods
 - Adding `provider()` method to SampleCache
+- Adding per-field `sample(field, pos)` method to SampleProvider
+- Adding DensityField enum
 - Adding per-field `with*` mutation methods to Sample
 
 This does NOT cover:
@@ -47,8 +49,12 @@ The new design:
 Phase 1: Sample Changes
     └── Add with* mutation methods for each enriched field
 
-Phase 2: SampleCache Changes
-    └── Add provider() accessor
+Phase 2: SampleCache and SampleProvider Changes
+    ├── Add DensityField enum
+    ├── Add sample(field, pos) to SampleProvider
+    ├── Remove sampleFull() from SampleProvider
+    ├── Update NoiseBasedSampleProvider
+    └── Add provider() accessor to SampleCache
 
 Phase 3: Cell Changes
     ├── Change samples field to samplePositions
@@ -84,7 +90,65 @@ withVegetation(vegetation: double): Sample
 
 ---
 
-## Phase 2: SampleCache Changes
+## Phase 2: SampleCache and SampleProvider Changes
+
+### 2.1 SampleProvider Interface
+
+**File:** `SampleProvider.java`
+
+Add per-field sampling method:
+
+**Before:**
+```
+interface SampleProvider {
+    sampleCore(pos: ChunkPos): Sample
+    sampleFull(pos: ChunkPos): Sample
+}
+```
+
+**After:**
+```
+interface SampleProvider {
+    sampleCore(pos: ChunkPos): Sample
+    sample(field: DensityField, pos: ChunkPos): double
+}
+```
+
+Remove `sampleFull()` — no longer needed since fields are sampled individually.
+
+### 2.2 DensityField Enum
+
+**New file:** `DensityField.java`
+
+```
+enum DensityField {
+    CONTINENTS,
+    DEPTH,
+    EROSION,
+    RIDGES,
+    TEMPERATURE,
+    VEGETATION
+}
+```
+
+### 2.3 NoiseBasedSampleProvider
+
+**File:** `NoiseBasedSampleProvider.java`
+
+Add per-field sampling:
+
+```
+sample(field: DensityField, pos: ChunkPos): double
+    return switch field:
+        case CONTINENTS -> sampleNoise(CONTINENTS_NOISE, pos)
+        case DEPTH -> sampleNoise(DEPTH_NOISE, pos)
+        case EROSION -> sampleNoise(EROSION_NOISE, pos)
+        case RIDGES -> sampleNoise(RIDGES_NOISE, pos)
+        case TEMPERATURE -> sampleNoise(TEMPERATURE_NOISE, pos)
+        case VEGETATION -> sampleNoise(VEGETATION_NOISE, pos)
+```
+
+### 2.4 SampleCache
 
 **File:** `SampleCache.java`
 
@@ -251,6 +315,7 @@ getOrCompute(pos: CellPos): Cell
 
 - `Cell.samples` removed, replaced with `Cell.samplePositions`
 - `collectSamples()` renamed to `collectSamplePositions()`, returns `Set<ChunkPos>`
+- `SampleProvider.sampleFull()` removed, use `sample(field, pos)` instead
 - Any code that accessed `cell.samples` directly must be updated
 
 ### Dependencies
@@ -259,6 +324,7 @@ Requires:
 - SampleCache with `provider()` accessor
 - Sample with `with*` mutation methods
 - SampleProvider with per-field `sample(field, pos)` method
+- DensityField enum
 
 ### Performance Considerations
 

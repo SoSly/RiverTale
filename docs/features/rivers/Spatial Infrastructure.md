@@ -370,6 +370,26 @@ record Sample {
 
 **Two-tier sampling:** Core fields (continents, depth) are sampled on cache miss—sufficient for ocean detection and height estimation. Source classification fields are sampled lazily by Cell when needed—Cell enriches the sample, updates SampleCache, then averages. This reduces sampling cost for cells that never need classification.
 
+### SampleProvider
+
+```
+interface SampleProvider {
+    sampleCore(pos: ChunkPos): Sample    // continents, depth only
+    sample(field: DensityField, pos: ChunkPos): double  // individual field sampling
+}
+
+enum DensityField {
+    CONTINENTS,
+    DEPTH,
+    EROSION,
+    RIDGES,
+    TEMPERATURE,
+    VEGETATION
+}
+```
+
+SampleCache holds a SampleProvider and exposes it via `provider()` for per-field enrichment.
+
 ### RegionType
 
 ```
