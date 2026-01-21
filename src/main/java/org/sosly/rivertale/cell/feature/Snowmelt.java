@@ -5,7 +5,7 @@ import org.sosly.rivertale.river.Watershed;
 
 public class Snowmelt implements FeatureHandler {
     private static final double TEMPERATURE_THRESHOLD = 0.2;
-    private static final int HEIGHT_THRESHOLD = 100;
+    private static final int HEIGHT_THRESHOLD = 175;
 
     @Override
     public boolean classify(Cell cell, Watershed watershed) {
