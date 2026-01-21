@@ -103,7 +103,7 @@ flowchart TD
 
 - Queries Minecraft noise at chunk center on cache miss
 - Returns Sample with core fields populated, source classification fields null
-- Supports lazy enrichment via `Sample.withFullDensities()`
+- Exposes `provider()` for individual field sampling during enrichment
 
 **Does not:**
 
@@ -125,8 +125,7 @@ flowchart TD
 **Does:**
 
 - Computes sample positions on cache miss
-- Fetches samples from SampleCache for selected positions
-- Creates Cell with samples on cache miss
+- Creates Cell with sample positions on cache miss
 - Triggers Flow Evaluation when flow directions are first requested
 - Stores enriched cells via `put()`
 
@@ -345,29 +344,31 @@ Returns exactly `RegionSize` cells along the specified edge. Only accepts cardin
 
 ```
 record Sample {
-    chunkPos: ChunkPos            // which chunk this sample represents
+    pos: ChunkPos                 // which chunk this sample represents
 
-    // Core fields (always sampled)
+    // Core fields (always sampled on construction)
     continents: double            // land vs ocean (-1.0 to 1.0)
     depth: double                 // terrain height factor
 
-    // Source classification fields (sampled on demand)
-    erosion: double?              // terrain roughness factor
-    ridges: double?               // ridge/valley pattern
-    temperature: double?          // climate data
-    vegetation: double?           // vegetation density
+    // Source classification fields (null until enriched)
+    erosion: double?
+    ridges: double?
+    temperature: double?
+    vegetation: double?
 
     // Computed properties
     isOcean(): boolean            // continents < oceanThreshold
     estimatedTerrainHeight(): int // 70 + 144 * depth
 
-    // Enrichment
-    hasFullDensities(): boolean
-    withFullDensities(): Sample   // samples erosion, ridges, temperature, vegetation
+    // Mutation (returns new instance)
+    withErosion(erosion: double): Sample
+    withRidges(ridges: double): Sample
+    withTemperature(temperature: double): Sample
+    withVegetation(vegetation: double): Sample
 }
 ```
 
-**Two-tier sampling:** Core fields (continents, depth) are sampled on cache miss—sufficient for ocean detection and height estimation. Source classification fields are sampled lazily via `withFullDensities()` only when classifying river headwaters. This reduces sampling cost by ~2/3 for most cells.
+**Two-tier sampling:** Core fields (continents, depth) are sampled on cache miss—sufficient for ocean detection and height estimation. Source classification fields are sampled lazily by Cell when needed—Cell enriches the sample, updates SampleCache, then averages. This reduces sampling cost for cells that never need classification.
 
 ### RegionType
 
@@ -435,7 +436,7 @@ record Region {
 ```
 record Cell {
     pos: CellPos
-    samples: Set<Sample>                 // sampled chunks (1 to CellSize² samples)
+    samplePositions: Set<ChunkPos>       // positions to query SampleCache (1 to CellSize²)
     flowDirections: List<FlowDirection>  // sorted by steepest descent
     feature: Feature
 
@@ -459,14 +460,14 @@ record Cell {
     entry_t: double
     exit_t: double
 
-    // Computed from samples (core fields)
+    // Computed from samples (queries SampleCache for each position)
     averageContinents(): double          // average of samples' continents
     averageDepth(): double               // average of samples' depth
     averageEstimatedTerrainHeight(): int // 70 + 144 * averageDepth()
     isOcean(): boolean                   // true only if ALL samples are ocean
     isBasin(): boolean                   // true if below sea level but not ocean
 
-    // Computed from samples (source classification fields, requires enriched samples)
+    // Computed from samples (lazy-enriches via Sample getters)
     averageErosion(): double             // average of samples' erosion
     averageRidges(): double              // average of samples' ridges
     averageTemperature(): double         // average of samples' temperature
@@ -654,7 +655,7 @@ Samples terrain density from Minecraft's noise functions. Caches by ChunkPos—o
 2. Sample core fields only (continents, depth)
 3. Return Sample with `chunkPos` set, source classification fields null
 
-Source classification fields are sampled lazily via `Sample.withFullDensities()` when needed.
+Source classification fields are sampled lazily by Cell's averaging methods when needed.
 
 **Capacity:** 1,000,000 entries
 
@@ -768,7 +769,7 @@ Caches Region objects including type classification.
 | Flow direction rotateToward        | NORTH.rotateToward(EAST)                          | NORTHEAST or EAST (rotates toward target)              |
 | Flow direction toward              | FlowDirection.toward(CellPos(0,0), CellPos(1,1))  | SOUTHEAST (D8 direction closest to target)             |
 | Sample ocean detection             | Sample with continents < threshold                | isOcean() returns true                                 |
-| Sample enrichment                  | Sample.withFullDensities()                        | All source classification fields populated             |
+| Sample enrichment                  | sample.withTemperature(value)                     | New sample with temperature field populated            |
 | Cell mutation                      | cell.withFeature(RIVER)                           | New Cell with updated feature, original unchanged      |
 | Region type OCEANIC                | Region with 100% ocean cells                      | type == OCEANIC                                        |
 | Region type COASTAL                | Region with 50% ocean cells                       | type == COASTAL                                        |

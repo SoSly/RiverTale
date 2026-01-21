@@ -46,15 +46,15 @@ classify(cell: Cell, watershed: Watershed): boolean
     if cell.averageEstimatedTerrainHeight() < HEIGHT_THRESHOLD:
         return false
 
-    // Temperature check — must be warm (not snowmelt territory)
-    if cell.averageTemperature() < WARM_THRESHOLD:
-        return false
-
     // No inflow check
     if cell.hasInflowingNeighbor():
         return false
 
-    // Random chance — use Minecraft's PositionalRandomFactory
+    // Temperature check
+    if cell.averageTemperature() < WARM_THRESHOLD:
+        return false
+
+    // Random chance
     random = positionSeededRandom("rivertale:crater", cell.pos())
     return random.nextFloat() < CRATER_CHANCE
 ```

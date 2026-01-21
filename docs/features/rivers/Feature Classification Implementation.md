@@ -267,7 +267,7 @@ cell.averageTemperature()
 cell.averageVegetation()
 ```
 
-These throw if samples aren't enriched. Handlers using these fields should only be called during reclassification when samples are enriched, or should handle the exception gracefully.
+These methods handle lazy enrichment internally. If a sample hasn't been enriched for the requested field, the averaging method enriches it, updates SampleCache, then computes the average. Handlers don't need to manage enrichment—just call the averaging method.
 
 ### 4.5 Reset Broken Handlers to Stubs
 

@@ -44,16 +44,16 @@ These values are starting points. Tuning may be needed based on how Minecraft's 
 
 ```
 classify(cell: Cell, watershed: Watershed): boolean
-    // Temperature check
-    if cell.averageTemperature() >= TEMPERATURE_THRESHOLD:
-        return false
-
     // Height check
     if cell.averageEstimatedTerrainHeight() < HEIGHT_THRESHOLD:
         return false
 
     // No inflow check
     if cell.hasInflowingNeighbor():
+        return false
+
+    // Temperature check
+    if cell.averageTemperature() >= TEMPERATURE_THRESHOLD:
         return false
 
     return true

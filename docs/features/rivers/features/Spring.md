@@ -44,12 +44,12 @@ classify(cell: Cell, watershed: Watershed): boolean
     if cell.averageDepth() <= DEPTH_THRESHOLD:
         return false
 
-    // Ridges check — must not be on ridgeline
-    if cell.averageRidges() >= RIDGES_THRESHOLD:
-        return false
-
     // No inflow check
     if cell.hasInflowingNeighbor():
+        return false
+
+    // Ridges check
+    if cell.averageRidges() >= RIDGES_THRESHOLD:
         return false
 
     return true

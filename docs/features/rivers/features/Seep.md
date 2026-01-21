@@ -40,16 +40,16 @@ A cell is classified as SEEP if ALL of the following are true:
 
 ```
 classify(cell: Cell, watershed: Watershed): boolean
+    // No inflow check
+    if cell.hasInflowingNeighbor():
+        return false
+
     // Vegetation check
     if cell.averageVegetation() <= VEGETATION_THRESHOLD:
         return false
 
-    // Erosion check — must be stable terrain
+    // Erosion check
     if cell.averageErosion() >= EROSION_THRESHOLD:
-        return false
-
-    // No inflow check
-    if cell.hasInflowingNeighbor():
         return false
 
     return true
