@@ -31,7 +31,7 @@ import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.networking.Network;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
-import org.sosly.rivertale.river.WatershedCache;
+import org.sosly.rivertale.river.FlowlinePreview;
 import org.sosly.rivertale.world.RiverShaping;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID)
@@ -151,11 +151,9 @@ public class VisCommand {
             loadedRegions.add(neighbor);
         }
 
-        WatershedCache.get().finalizeReady(loadedRegions);
-
         for (RegionPos pos : loadedRegions) {
             Region region = regionCache.getOrCompute(pos);
-            Network.sendToPlayer(new Region.Packet(region), player);
+            Network.sendToPlayer(new Region.Packet(region, FlowlinePreview.trace(region)), player);
         }
     }
 

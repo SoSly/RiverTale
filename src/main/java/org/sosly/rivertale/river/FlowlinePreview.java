@@ -1,0 +1,44 @@
+package org.sosly.rivertale.river;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.CellType;
+import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.metric.Store;
+import org.sosly.rivertale.metric.Timer;
+import org.sosly.rivertale.region.Region;
+import org.sosly.rivertale.region.RegionExplorer;
+import org.sosly.rivertale.world.RiverShaping;
+
+public final class FlowlinePreview {
+    private FlowlinePreview() {
+    }
+
+    public static List<Flowline> trace(Region region) {
+        Timer.Record timer = Store.getTimer(FlowlinePreview.class, "trace").start();
+        try {
+            Set<Region> workingSet = RegionExplorer.discover(region.pos().getWorldPosition(0));
+            if (workingSet.stream().allMatch(candidate -> candidate.boundaries().isEmpty())) {
+                return List.of();
+            }
+
+            FlowlineTracer tracer = new FlowlineTracer(workingSet);
+            List<Flowline> paths = new ArrayList<>();
+            for (CellPos pos : region.cells()) {
+                Cell source = RiverShaping.classify(pos);
+                if (source.feature().type != CellType.SOURCE) {
+                    continue;
+                }
+                Flowline path = tracer.trace(pos);
+                if (path.isValid()) {
+                    paths.add(path);
+                }
+            }
+            return List.copyOf(paths);
+        } finally {
+            timer.stop();
+        }
+    }
+}

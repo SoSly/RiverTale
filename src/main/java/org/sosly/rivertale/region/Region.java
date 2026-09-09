@@ -21,6 +21,7 @@ import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.networking.Message;
+import org.sosly.rivertale.river.Flowline;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.terrain.Coastal;
@@ -64,6 +65,10 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
     }
 
     public CompoundTag encode() {
+        return encode(List.of());
+    }
+
+    public CompoundTag encode(List<Flowline> paths) {
         CompoundTag tag = new CompoundTag();
         tag.putLong("pos", pos.toLong());
         tag.putString("type", type.name());
@@ -106,6 +111,14 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
         }
         tag.put("watershed", watershedList);
 
+        ListTag pathList = new ListTag();
+        for (Flowline path : paths) {
+            if (path.isValid()) {
+                pathList.add(path.encode(cellCache));
+            }
+        }
+        tag.put("paths", pathList);
+
         return tag;
     }
 
@@ -113,7 +126,11 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
         private CompoundTag data;
 
         public Packet(Region region) {
-            this.data = region.encode();
+            this(region, List.of());
+        }
+
+        public Packet(Region region, List<Flowline> paths) {
+            this.data = region.encode(paths);
         }
 
         private Packet(CompoundTag data) {

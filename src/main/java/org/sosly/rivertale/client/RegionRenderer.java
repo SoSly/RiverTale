@@ -34,7 +34,7 @@ public class RegionRenderer {
 
     private static final float[] COLOR_OCEAN_BOUNDARY = {1.0f, 0.5f, 0.0f, 1.0f};
     private static final float[] COLOR_BASIN_BOUNDARY = {1.0f, 0.0f, 0.0f, 1.0f};
-    private static final float[] COLOR_PATH = {0.0f, 0.0f, 1.0f, 1.0f};
+    private static final float[] COLOR_PATH = {0.1f, 0.45f, 1.0f, 1.0f};
 
     public static void setSeaLevel(Integer value) {
         seaLevel = value;
@@ -94,6 +94,7 @@ public class RegionRenderer {
             if (ClientRegionCache.isModeEnabled(VisMode.BOUNDARIES)) {
                 renderBoundaries(region, poseStack, buffer, camPos, seaLevel);
             }
+            renderFlowlines(region, poseStack, buffer, camPos);
         }
 
         tesselator.end();
@@ -195,6 +196,28 @@ public class RegionRenderer {
             Vec3[] arrowhead = calculateArrowhead(arrowEnd, dir);
             drawLine(poseStack, buffer, arrowEnd, arrowhead[0], camPos, arrowColor);
             drawLine(poseStack, buffer, arrowEnd, arrowhead[1], camPos, arrowColor);
+        }
+    }
+
+    private static void renderFlowlines(ClientRegionCache.Region region, PoseStack poseStack,
+                                         BufferBuilder buffer, Vec3 camPos) {
+        for (ClientRegionCache.Flowline path : region.paths()) {
+            for (int i = 0; i < path.points().size(); i++) {
+                ClientRegionCache.Point point = path.points().get(i);
+                Vec3 start = new Vec3(point.pos().getMiddleBlockX(), point.y() + 2, point.pos().getMiddleBlockZ());
+                if (i == path.points().size() - 1) {
+                    drawLine(poseStack, buffer, start.add(-2, 0, 0), start.add(2, 0, 0), camPos, COLOR_PATH);
+                    drawLine(poseStack, buffer, start.add(0, 0, -2), start.add(0, 0, 2), camPos, COLOR_PATH);
+                    continue;
+                }
+                ClientRegionCache.Point next = path.points().get(i + 1);
+                Vec3 end = new Vec3(next.pos().getMiddleBlockX(), next.y() + 2, next.pos().getMiddleBlockZ());
+                drawLine(poseStack, buffer, start, end, camPos, COLOR_PATH);
+                FlowDirection direction = FlowDirection.toward(point.pos(), next.pos());
+                Vec3[] arrowhead = calculateArrowhead(end, direction);
+                drawLine(poseStack, buffer, end, arrowhead[0], camPos, COLOR_PATH);
+                drawLine(poseStack, buffer, end, arrowhead[1], camPos, COLOR_PATH);
+            }
         }
     }
 

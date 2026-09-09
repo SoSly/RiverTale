@@ -53,8 +53,30 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
         }
     }
 
+    public record Point(CellPos pos, int y) {
+    }
+
+    public record Flowline(List<Point> points) {
+        public Flowline {
+            points = List.copyOf(points);
+        }
+
+        public static Flowline decode(CompoundTag tag) {
+            long[] cells = tag.getLongArray("cells");
+            int[] heights = tag.getIntArray("heights");
+            if (cells.length != heights.length) {
+                throw new IllegalArgumentException("Path coordinates and heights must have the same length");
+            }
+            List<Point> points = new ArrayList<>();
+            for (int i = 0; i < cells.length; i++) {
+                points.add(new Point(new CellPos(cells[i]), heights[i]));
+            }
+            return new Flowline(points);
+        }
+    }
+
     public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries, List<Cell> cells,
-                         List<Edge> edges) {
+                         List<Edge> edges, List<Flowline> paths) {
         public static Region decode(CompoundTag tag) {
             RegionPos pos = new RegionPos(tag.getLong("pos"));
             RegionType type = RegionType.valueOf(tag.getString("type"));
@@ -77,7 +99,13 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
                 edges.add(Edge.decode(edgeList.getCompound(i)));
             }
 
-            return new Region(pos, type, boundaries, cells, edges);
+            List<Flowline> paths = new ArrayList<>();
+            ListTag pathList = tag.getList("paths", Tag.TAG_COMPOUND);
+            for (int i = 0; i < pathList.size(); i++) {
+                paths.add(Flowline.decode(pathList.getCompound(i)));
+            }
+
+            return new Region(pos, type, boundaries, cells, edges, paths);
         }
     }
 

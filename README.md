@@ -11,7 +11,9 @@
 
 This branch is an early integration prototype. It supports RiverTale's existing cell feature classification, neighboring flow calculations, diagnostic commands and overlays, timing metrics, and manual carving and filling experiments over RTF terrain.
 
-Automatic RiverTale path tracing, watershed construction, channel shaping, and water placement are not connected to world generation on this branch. Those unfinished stages and placeholder feature classifiers remain unfinished; the manual prototypes do not establish automatic river generation or custom currents.
+The existing `/rivertale vis` also traces and displays independent river paths from classified sources to known coastal or basin boundaries. Blue lines and arrows follow sampled base terrain heights, and a cross marks each endpoint. Tracing uses the current region discovery working set; sources without a reachable destination in that set have no displayed path. The near-destination approach and nudging can cross rising terrain, so these lines are route previews, not final downhill water profiles.
+
+Path previews run on demand when visualization requests a region and are measured by `FlowlinePreview.trace` and `FlowlineTracer.trace`. No Minecraft chunks are requested by tracing. Automatic watershed construction, channel shaping, and water placement are not connected to world generation on this branch. Those unfinished stages and placeholder feature classifiers remain unfinished; the manual prototypes do not establish automatic river generation or custom currents.
 
 ## Requirements
 
