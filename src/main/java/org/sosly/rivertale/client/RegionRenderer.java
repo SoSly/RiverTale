@@ -6,12 +6,15 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import java.util.EnumSet;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.sosly.rivertale.RiverTale;
@@ -24,7 +27,7 @@ import org.sosly.rivertale.core.FlowDirection;
 @OnlyIn(Dist.CLIENT)
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class RegionRenderer {
-    private static final double Y = 63.0;
+    private static Integer seaLevel;
     private static final double ARROW_LENGTH = 3.5;
     private static final double ARROWHEAD_SIZE = 1.5;
     private static final double DIAG_COMPONENT = ARROW_LENGTH / Math.sqrt(2.0);
@@ -33,12 +36,30 @@ public class RegionRenderer {
     private static final float[] COLOR_BASIN_BOUNDARY = {1.0f, 0.0f, 0.0f, 1.0f};
     private static final float[] COLOR_PATH = {0.0f, 0.0f, 1.0f, 1.0f};
 
+    public static void setSeaLevel(Integer value) {
+        seaLevel = value;
+    }
+
+    @SubscribeEvent
+    public static void onLevelUnload(LevelEvent.Unload event) {
+        if (!event.getLevel().isClientSide()) {
+            return;
+        }
+        seaLevel = null;
+        ClientRegionCache.setEnabledModes(EnumSet.noneOf(VisMode.class));
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        seaLevel = null;
+    }
+
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             return;
         }
-        if (!ClientRegionCache.isEnabled()) {
+        if (!ClientRegionCache.isEnabled() || seaLevel == null) {
             return;
         }
 
@@ -65,13 +86,13 @@ public class RegionRenderer {
 
         for (ClientRegionCache.Region region : cache.getRegions()) {
             if (ClientRegionCache.isModeEnabled(VisMode.REGIONS)) {
-                renderRegionBorder(region, poseStack, buffer, camPos);
+                renderRegionBorder(region, poseStack, buffer, camPos, seaLevel);
             }
             if (ClientRegionCache.isModeEnabled(VisMode.CELLS)) {
                 renderCellBorders(region, cellBlocks, poseStack, buffer, camPos);
             }
             if (ClientRegionCache.isModeEnabled(VisMode.BOUNDARIES)) {
-                renderBoundaries(region, poseStack, buffer, camPos);
+                renderBoundaries(region, poseStack, buffer, camPos, seaLevel);
             }
         }
 
@@ -81,17 +102,17 @@ public class RegionRenderer {
     }
 
     private static void renderRegionBorder(ClientRegionCache.Region region,
-                                           PoseStack poseStack, BufferBuilder buffer, Vec3 camPos) {
+                                           PoseStack poseStack, BufferBuilder buffer, Vec3 camPos, double seaLevel) {
         float[] color = region.type().color;
         int minX = region.pos().getMinBlockX();
         int minZ = region.pos().getMinBlockZ();
         int maxX = region.pos().getMaxBlockX();
         int maxZ = region.pos().getMaxBlockZ();
 
-        Vec3 nw = new Vec3(minX, Y, minZ);
-        Vec3 ne = new Vec3(maxX, Y, minZ);
-        Vec3 se = new Vec3(maxX, Y, maxZ);
-        Vec3 sw = new Vec3(minX, Y, maxZ);
+        Vec3 nw = new Vec3(minX, seaLevel, minZ);
+        Vec3 ne = new Vec3(maxX, seaLevel, minZ);
+        Vec3 se = new Vec3(maxX, seaLevel, maxZ);
+        Vec3 sw = new Vec3(minX, seaLevel, maxZ);
 
         drawLine(poseStack, buffer, nw, ne, camPos, color);
         drawLine(poseStack, buffer, ne, se, camPos, color);
@@ -100,7 +121,7 @@ public class RegionRenderer {
     }
 
     private static void renderBoundaries(ClientRegionCache.Region region, PoseStack poseStack,
-                                         BufferBuilder buffer, Vec3 camPos) {
+                                         BufferBuilder buffer, Vec3 camPos, double seaLevel) {
         for (Boundary boundary : region.boundaries()) {
             float[] color = boundary.type() == BoundaryType.OCEAN
                 ? COLOR_OCEAN_BOUNDARY
@@ -115,17 +136,17 @@ public class RegionRenderer {
             Vec3 start;
             Vec3 end;
             if (dir == FlowDirection.NORTH) {
-                start = new Vec3(minX, Y, minZ);
-                end = new Vec3(maxX, Y, minZ);
+                start = new Vec3(minX, seaLevel, minZ);
+                end = new Vec3(maxX, seaLevel, minZ);
             } else if (dir == FlowDirection.SOUTH) {
-                start = new Vec3(minX, Y, maxZ);
-                end = new Vec3(maxX, Y, maxZ);
+                start = new Vec3(minX, seaLevel, maxZ);
+                end = new Vec3(maxX, seaLevel, maxZ);
             } else if (dir == FlowDirection.WEST) {
-                start = new Vec3(minX, Y, minZ);
-                end = new Vec3(minX, Y, maxZ);
+                start = new Vec3(minX, seaLevel, minZ);
+                end = new Vec3(minX, seaLevel, maxZ);
             } else {
-                start = new Vec3(maxX, Y, minZ);
-                end = new Vec3(maxX, Y, maxZ);
+                start = new Vec3(maxX, seaLevel, minZ);
+                end = new Vec3(maxX, seaLevel, maxZ);
             }
             drawLine(poseStack, buffer, start, end, camPos, color);
         }

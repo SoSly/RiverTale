@@ -57,6 +57,10 @@ public enum Feature {
     }
 
     public static Cell classify(Cell cell, @Nullable Watershed watershed) {
+        if (cell.isOcean()) {
+            return cell.withFeature(NONE);
+        }
+
         Timer.Record record = Store.getTimer(Feature.class, "classify").start();
 
         for (Feature feature : VALUES) {

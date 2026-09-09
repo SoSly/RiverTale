@@ -49,7 +49,8 @@ public class RiverCarveExecutor {
         this.accumulation = accumulation;
 
         RiverPathInterpolator sizeCalc = new RiverPathInterpolator(
-            entryX, entryZ, exitX, exitZ, entryDist, exitDist, direction, accumulation, level.getSeed()
+            entryX, entryZ, exitX, exitZ, entryDist, exitDist, direction, accumulation,
+            level.getSeed(), level.getChunkSource().getGenerator().getSeaLevel()
         );
         this.width = sizeCalc.getWidth();
         this.slope = sizeCalc.getSlope();
@@ -61,7 +62,8 @@ public class RiverCarveExecutor {
             entryX, entryZ, exitX, exitZ, width, channelDepth);
 
         RiverPathInterpolator interpolator = new RiverPathInterpolator(
-            entryX, entryZ, exitX, exitZ, entryDist, exitDist, direction, accumulation, level.getSeed()
+            entryX, entryZ, exitX, exitZ, entryDist, exitDist, direction, accumulation,
+            level.getSeed(), level.getChunkSource().getGenerator().getSeaLevel()
         );
 
         List<RiverPathInterpolator.PathPoint> pathPoints = interpolator.generatePath();

@@ -24,7 +24,7 @@ class FeatureTest {
 
     @BeforeEach
     void setUp() {
-        CommonConfig.set(new CommonConfig(8, 2, 1, -0.17, 10, 1, 3, 288, false));
+        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false));
         SampleCache.shutdown();
         CellCache.shutdown();
         provider = new TestSampleProvider();
@@ -42,7 +42,7 @@ class FeatureTest {
     void classifyReturnsNoneWhenNoHandlerMatches() {
         CellPos pos = new CellPos(10, 20);
         ChunkPos chunkPos = new ChunkPos(0, 0);
-        Sample sample = new Sample(chunkPos, 0.5, 0.1, 0.5, 0.8, 0.5, 0.1);
+        Sample sample = new Sample(chunkPos, 0.5, 84, false, 0.5, 0.8, 0.5, 0.1);
         provider.putSample(chunkPos, sample);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
         int y = sample.estimatedTerrainHeight();
@@ -59,7 +59,7 @@ class FeatureTest {
     void classifyPreservesExistingFeature() {
         CellPos pos = new CellPos(5, 5);
         ChunkPos chunkPos = new ChunkPos(0, 0);
-        Sample sample = new Sample(chunkPos, 0.5, 0.1, 0.5, 0.8, 0.5, 0.1);
+        Sample sample = new Sample(chunkPos, 0.5, 84, false, 0.5, 0.8, 0.5, 0.1);
         provider.putSample(chunkPos, sample);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
         int y = sample.estimatedTerrainHeight();
@@ -84,7 +84,7 @@ class FeatureTest {
             if (cached != null) {
                 return cached;
             }
-            return new Sample(pos, 0.0, 0.0);
+            return new Sample(pos, 0.0, 70, false);
         }
 
         @Override

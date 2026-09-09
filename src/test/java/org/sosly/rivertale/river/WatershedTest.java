@@ -45,7 +45,7 @@ class WatershedTest {
 
     private Cell dummyCell(CellPos pos) {
         ChunkPos chunkPos = new ChunkPos(pos.getMiddleBlockX() >> 4, pos.getMiddleBlockZ() >> 4);
-        Sample sample = new Sample(chunkPos, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0);
+        Sample sample = new Sample(chunkPos, 0.5, 70, false, 0.0, 0.0, 0.0, 0.0);
         provider.putSample(chunkPos, sample);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
         return new Cell(pos, samplePositions, List.of(), Feature.NONE, null, 63, 63, null, null, null, null, null, null, null);
@@ -65,8 +65,12 @@ class WatershedTest {
         WorldSettings.init(63);
         WatershedCache.init();
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(32, 3, 1, -0.17, 10, 1, 1, 288, false));
+        CommonConfig.set(new CommonConfig(32, 3, 1, 10, 1, 1, 288, false));
         when(cellCache.getOrCompute(any(CellPos.class))).thenAnswer(inv -> {
+            CellPos pos = inv.getArgument(0);
+            return dummyCell(pos);
+        });
+        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(inv -> {
             CellPos pos = inv.getArgument(0);
             return dummyCell(pos);
         });
@@ -248,7 +252,7 @@ class WatershedTest {
             if (cached != null) {
                 return cached;
             }
-            return new Sample(pos, 0.0, 0.0);
+            return new Sample(pos, 0.0, 70, false);
         }
 
         @Override

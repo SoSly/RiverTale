@@ -2,17 +2,14 @@ package org.sosly.rivertale.event;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
-import net.minecraft.world.level.chunk.ChunkSource;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
-import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraftforge.event.level.ChunkWatchEvent;
 import net.minecraftforge.event.level.LevelEvent;
@@ -23,7 +20,7 @@ import org.sosly.rivertale.capability.FlowDirectionCapability;
 import org.sosly.rivertale.capability.FlowDirectionData;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.core.FlowDirection;
-import org.sosly.rivertale.density.NoiseBasedSampleProvider;
+import org.sosly.rivertale.density.RtfSampleProvider;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.networking.FlowDirectionSyncPacket;
 import org.sosly.rivertale.networking.Network;
@@ -32,6 +29,8 @@ import org.sosly.rivertale.region.RegionTypeCache;
 import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.world.RiverShaping;
 import org.sosly.rivertale.world.WorldSettings;
+import raccoonman.reterraforged.world.worldgen.GeneratorContext;
+import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 
 public class ServerLifecycleHandler {
 
@@ -46,33 +45,32 @@ public class ServerLifecycleHandler {
             return;
         }
 
-        ChunkSource chunkSource = serverLevel.getChunkSource();
-        if (!(chunkSource instanceof ServerChunkCache serverChunkCache)) {
+        if (!serverLevel.dimension().equals(Level.OVERWORLD)) {
             return;
         }
 
-        if (!(serverChunkCache.getGenerator() instanceof NoiseBasedChunkGenerator generator)) {
+        RandomState randomState = serverLevel.getChunkSource().randomState();
+        if (!((Object) randomState instanceof RTFRandomState rtfState)) {
+            RiverTale.LOGGER.warn("Rivertale requires an RTF overworld preset; terrain classification is inactive.");
             return;
         }
 
-        NoiseGeneratorSettings settings = generator.generatorSettings().value();
-        WorldSettings.init(settings.seaLevel());
+        GeneratorContext context = rtfState.generatorContext();
+        if (context == null) {
+            RiverTale.LOGGER.info("This overworld has no RTF terrain context; Rivertale classification is inactive.");
+            return;
+        }
 
-        RandomState randomState = RandomState.create(
-            settings,
-            serverLevel.registryAccess().lookupOrThrow(Registries.NOISE),
-            serverLevel.getSeed()
-        );
-
-        SampleCache.init(NoiseBasedSampleProvider.create(randomState, WorldSettings.get().seaLevel()));
+        WorldSettings.init(context.levels.waterLevel);
+        SampleCache.init(new RtfSampleProvider(context));
         CellCache.init();
         RegionTypeCache.init();
         RegionCache.init();
         WatershedCache.init();
 
         Holder<Biome> rivers = serverLevel.registryAccess().registryOrThrow(Registries.BIOME).getHolderOrThrow(Biomes.RIVER);
-        RiverShaping.init(rivers);
-        RiverTale.LOGGER.info("Caches initialized on level load");
+        RiverShaping.init(rivers, context.levels.waterLevel, randomState);
+        RiverTale.LOGGER.info("Rivertale initialized with RTF base terrain samples and sea level {}", context.levels.waterLevel);
     }
 
     @SubscribeEvent

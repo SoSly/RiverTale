@@ -9,8 +9,6 @@
     "ChunkGeneratorMixin",
     "ChunkMapMixin",
     "FlowingFluidMixin",
-    "HolderHolderMixin",
-    "MultiNoiseBiomeSourceMixin",
     "NaturalSpawnerMixin",
     "NoiseBasedChunkGeneratorMixin"
   ],

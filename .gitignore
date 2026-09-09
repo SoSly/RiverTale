@@ -121,4 +121,7 @@ repo/
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar
 
+# Pinned, separate ReTerraForged mod used by this integration branch
+!/libs/reterraforged-0.0.6-sosly-1.0.0-forge-1.20.1.jar
+
 .env

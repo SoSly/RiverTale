@@ -9,12 +9,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.sosly.rivertale.cell.Cell;
-import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.RiverTale;
+import org.sosly.rivertale.world.RiverShaping;
 
 public class DebugCommand {
 
@@ -44,7 +44,7 @@ public class DebugCommand {
 
     private static void sendRiverDebugInfo(ServerPlayer player, BlockPos pos) {
         CellPos cellPos = new CellPos(pos);
-        Cell cell = CellCache.get().getOrCompute(cellPos);
+        Cell cell = RiverShaping.classify(cellPos);
 
         player.sendSystemMessage(Component.literal("=== River Debug at " + pos.getX() + ", " + pos.getZ() + " ==="));
         player.sendSystemMessage(Component.literal("Cell: " + cellPos + " (" + cell.feature().name() + ")"));

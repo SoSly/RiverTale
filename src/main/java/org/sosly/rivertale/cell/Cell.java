@@ -47,17 +47,13 @@ public record Cell(
         return sum / samplePositions.size();
     }
 
-    public double averageDepth() {
+    public int averageEstimatedTerrainHeight() {
         double sum = 0;
         for (ChunkPos pos : samplePositions) {
             Sample sample = SampleCache.get().getOrCompute(pos);
-            sum += sample.depth();
+            sum += sample.terrainHeight();
         }
-        return sum / samplePositions.size();
-    }
-
-    public int averageEstimatedTerrainHeight() {
-        return (int) Math.round(70 + 144 * averageDepth());
+        return (int) Math.round(sum / samplePositions.size());
     }
 
     public double averageErosion() {
@@ -137,7 +133,7 @@ public record Cell(
             if (sample.isOcean()) {
                 return false;
             }
-            if (sample.estimatedTerrainHeight() >= seaLevel) {
+            if (sample.terrainHeight() >= seaLevel) {
                 return false;
             }
         }
@@ -148,7 +144,7 @@ public record Cell(
         CellCache cache = CellCache.get();
         for (FlowDirection dir : FlowDirection.D8) {
             CellPos neighborPos = pos.relative(dir);
-            Cell neighbor = cache.getOrCompute(neighborPos);
+            Cell neighbor = cache.getOrComputeWithFlow(neighborPos);
             if (neighbor.flowDirections().contains(dir.opposite())) {
                 return true;
             }

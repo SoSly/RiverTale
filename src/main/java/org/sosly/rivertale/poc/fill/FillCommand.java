@@ -61,8 +61,9 @@ public class FillCommand {
             return 0;
         }
 
-        int entryY = CarveConfig.SEA_LEVEL + entryDist * CarveConfig.ELEVATION_PER_CELL;
-        int exitY = CarveConfig.SEA_LEVEL + exitDist * CarveConfig.ELEVATION_PER_CELL;
+        int seaLevel = level.getChunkSource().getGenerator().getSeaLevel();
+        int entryY = seaLevel + entryDist * CarveConfig.ELEVATION_PER_CELL;
+        int exitY = seaLevel + exitDist * CarveConfig.ELEVATION_PER_CELL;
         source.sendSuccess(() -> Component.literal(String.format(
             "Starting fill: (%d, %d) Y=%d → (%d, %d) Y=%d, direction=%s, acc=%d",
             entryX, entryZ, entryY, exitX, exitZ, exitY, direction, accumulation))

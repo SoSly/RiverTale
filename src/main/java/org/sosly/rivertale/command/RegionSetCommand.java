@@ -38,9 +38,9 @@ public class RegionSetCommand {
             Set<Region> workingSet = RegionExplorer.discover(blockPos);
             Region centerRegion = RegionCache.get().getOrCompute(centerPos);
 
-            source.sendSuccess(() -> Component.literal("Region Set for (" + x + ", " + z + "):"), false);
+            source.sendSuccess(() -> Component.literal("Diagnostic region set for (" + x + ", " + z + "):"), false);
             source.sendSuccess(() -> Component.literal("  Center: RegionPos" + centerPos + " - " + centerRegion.type().name()), false);
-            source.sendSuccess(() -> Component.literal("  Working set size: " + workingSet.size()), false);
+            source.sendSuccess(() -> Component.literal("  Connected diagnostic regions: " + workingSet.size()), false);
 
             source.sendSuccess(() -> Component.literal(""), false);
             source.sendSuccess(() -> Component.literal("  Included regions:"), false);

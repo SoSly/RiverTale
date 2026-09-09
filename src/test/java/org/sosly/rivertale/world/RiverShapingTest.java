@@ -1,230 +1,170 @@
 package org.sosly.rivertale.world;
 
-import java.util.List;
+import java.util.HashSet;
 import java.util.Set;
-import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
-import org.sosly.rivertale.core.Boundary;
-import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.RegionPos;
-import org.sosly.rivertale.metric.Store;
-import org.sosly.rivertale.region.Region;
+import org.sosly.rivertale.core.FlowDirection;
+import org.sosly.rivertale.density.DensityField;
+import org.sosly.rivertale.density.Sample;
+import org.sosly.rivertale.density.SampleCache;
+import org.sosly.rivertale.density.SampleProvider;
 import org.sosly.rivertale.region.RegionCache;
-import org.sosly.rivertale.region.RegionExplorer;
-import org.sosly.rivertale.region.RegionType;
-import org.sosly.rivertale.terrain.Coastal;
-import org.sosly.rivertale.terrain.Fluvial;
+import org.sosly.rivertale.region.RegionTypeCache;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class RiverShapingTest {
-
-    @Mock
-    CellCache cellCache;
-
-    @Mock
-    RegionCache regionCache;
-
-    @Mock
-    RandomState randomState;
-
-    private MockedStatic<CellCache> cellCacheStatic;
-    private MockedStatic<RegionCache> regionCacheStatic;
-    private MockedStatic<RegionExplorer> regionExplorerStatic;
-    private MockedStatic<Coastal> coastalStatic;
-    private MockedStatic<Fluvial> fluvialStatic;
+    private static final CellPos CENTER = new CellPos(1000, -1000);
+    private CommonConfig originalConfig;
+    private TestSampleProvider provider;
+    private RandomState overworldState;
+    private Holder<Biome> riverBiome;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
-        Store.clear();
-        CommonConfig.set(new CommonConfig(8, 2, 1, -0.17, 10, 1, 3, 288, false));
-
-        cellCacheStatic = mockStatic(CellCache.class);
-        regionCacheStatic = mockStatic(RegionCache.class);
-        regionExplorerStatic = mockStatic(RegionExplorer.class);
-        coastalStatic = mockStatic(Coastal.class);
-        fluvialStatic = mockStatic(Fluvial.class);
-
-        cellCacheStatic.when(CellCache::get).thenReturn(cellCache);
-        regionCacheStatic.when(RegionCache::get).thenReturn(regionCache);
-
-        Cell mockCell = mock(Cell.class);
-        when(mockCell.averageEstimatedTerrainHeight()).thenReturn(50);
-        when(mockCell.averageTemperature()).thenReturn(0.5);
-        when(mockCell.averageDepth()).thenReturn(0.1);
-        when(mockCell.averageRidges()).thenReturn(0.8);
-        when(mockCell.averageVegetation()).thenReturn(0.1);
-        when(mockCell.averageErosion()).thenReturn(0.5);
-        when(mockCell.hasInflowingNeighbor()).thenReturn(true);
-        when(mockCell.pos()).thenReturn(new CellPos(0, 0));
-        when(mockCell.feature()).thenReturn(Feature.NONE);
-        when(mockCell.withFeature(any())).thenReturn(mockCell);
-        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenReturn(mockCell);
+        originalConfig = CommonConfig.get();
+        CommonConfig.set(new CommonConfig(8, 1, 1, 10, 1, 3, 288, false));
+        RiverShaping.shutdown();
+        SampleCache.shutdown();
+        CellCache.shutdown();
+        RegionCache.shutdown();
+        RegionTypeCache.shutdown();
+        provider = new TestSampleProvider();
+        SampleCache.init(provider);
+        CellCache.init();
+        overworldState = mock(RandomState.class);
+        riverBiome = mock(Holder.class);
     }
 
     @AfterEach
     void tearDown() {
-        cellCacheStatic.close();
-        regionCacheStatic.close();
-        regionExplorerStatic.close();
-        coastalStatic.close();
-        fluvialStatic.close();
+        RiverShaping.shutdown();
+        CellCache.shutdown();
+        SampleCache.shutdown();
+        CommonConfig.set(originalConfig);
     }
 
     @Test
-    void emptyWorkingSetSkipsBoundaryDetection() {
-        ChunkAccess chunk = mockChunk(0, 0);
-        regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
-            .thenReturn(Set.of());
+    void initializationMakesRtfSeaLevelAvailableBeforeAnyChunk() {
+        RiverShaping.init(riverBiome, 78, overworldState);
 
-        RiverShaping.shape(chunk, 63, randomState);
-
-        coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
-        fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
+        assertEquals(78, RiverShaping.getSeaLevel());
+        assertSame(riverBiome, RiverShaping.getRiverBiome());
+        assertSame(overworldState, RiverShaping.getRandomState());
+        assertTrue(RiverShaping.isActive(overworldState));
     }
 
     @Test
-    void coastalRegionGetsCoastalBoundaryDetection() {
-        RegionPos pos = new RegionPos(0, 0);
-        Region coastal = new Region(pos, RegionType.COASTAL);
-        ChunkAccess chunk = mockChunk(0, 0);
+    void uninitializedWorldDoesNotSampleOrClassify() {
+        RiverShaping.shape(chunkAt(CENTER), 63, overworldState);
 
-        regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
-            .thenReturn(Set.of(coastal));
-
-        List<Boundary> boundaries = List.of(
-            new Boundary(new CellPos(0, 0), new CellPos(1, 0), BoundaryType.OCEAN),
-            new Boundary(new CellPos(1, 1), new CellPos(2, 1), BoundaryType.BASIN)
-        );
-        coastalStatic.when(() -> Coastal.boundaries(pos, cellCache)).thenReturn(boundaries);
-
-        RiverShaping.shape(chunk, 63, randomState);
-
-        coastalStatic.verify(() -> Coastal.boundaries(pos, cellCache));
-        fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
+        assertNull(CellCache.get().getIfPresent(CENTER));
+        assertTrue(provider.requested.isEmpty());
     }
 
     @Test
-    void fluvialRegionGetsFluvialBoundaryDetection() {
-        RegionPos pos = new RegionPos(0, 0);
-        Region fluvial = new Region(pos, RegionType.FLUVIAL);
-        ChunkAccess chunk = mockChunk(0, 0);
+    void foreignDimensionStateDoesNotSampleOrClassify() {
+        RiverShaping.init(riverBiome, 78, overworldState);
 
-        regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
-            .thenReturn(Set.of(fluvial));
+        RiverShaping.shape(chunkAt(CENTER), 32, mock(RandomState.class));
 
-        List<Boundary> boundaries = List.of(
-            new Boundary(new CellPos(1, 1), new CellPos(2, 1), BoundaryType.BASIN)
-        );
-        fluvialStatic.when(() -> Fluvial.boundaries(pos, cellCache)).thenReturn(boundaries);
-
-        RiverShaping.shape(chunk, 63, randomState);
-
-        coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
-        fluvialStatic.verify(() -> Fluvial.boundaries(pos, cellCache));
+        assertNull(CellCache.get().getIfPresent(CENTER));
+        assertTrue(provider.requested.isEmpty());
+        assertEquals(78, RiverShaping.getSeaLevel());
     }
 
     @Test
-    void oceanicRegionGetsNoBoundaryDetection() {
-        RegionPos pos = new RegionPos(0, 0);
-        Region oceanic = new Region(pos, RegionType.OCEANIC);
-        ChunkAccess chunk = mockChunk(0, 0);
+    void activeInlandChunkClassifiesOnlyItsCellWithoutRegionDiscovery() {
+        RiverShaping.init(riverBiome, 78, overworldState);
 
-        regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
-            .thenReturn(Set.of(oceanic));
+        RiverShaping.shape(chunkAt(CENTER), 63, overworldState);
 
-        RiverShaping.shape(chunk, 63, randomState);
-
-        coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
-        fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
+        Cell classified = CellCache.get().getIfPresent(CENTER);
+        assertEquals(Feature.SNOWMELT, classified.feature());
+        assertEquals(180, classified.averageEstimatedTerrainHeight());
+        assertEquals(78, RiverShaping.getSeaLevel());
+        for (FlowDirection direction : FlowDirection.D8) {
+            Cell neighbor = CellCache.get().getIfPresent(CENTER.relative(direction));
+            assertEquals(Feature.NONE, neighbor.feature());
+        }
+        assertTrue(provider.requested.stream().allMatch(pos -> Math.abs(pos.x - CENTER.x()) <= 2 && Math.abs(pos.z - CENTER.z()) <= 2));
     }
 
     @Test
-    void inlandRegionGetsNoBoundaryDetection() {
-        RegionPos pos = new RegionPos(0, 0);
-        Region inland = new Region(pos, RegionType.INLAND);
-        ChunkAccess chunk = mockChunk(0, 0);
+    void oceanChunkRemainsUnclassified() {
+        provider.ocean = true;
+        RiverShaping.init(riverBiome, 78, overworldState);
 
-        regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
-            .thenReturn(Set.of(inland));
+        RiverShaping.shape(chunkAt(CENTER), 63, overworldState);
 
-        RiverShaping.shape(chunk, 63, randomState);
-
-        coastalStatic.verify(() -> Coastal.boundaries(any(), any()), never());
-        fluvialStatic.verify(() -> Fluvial.boundaries(any(), any()), never());
+        Cell cell = CellCache.get().getIfPresent(CENTER);
+        assertTrue(cell.isOcean());
+        assertEquals(Feature.NONE, cell.feature());
+        assertTrue(cell.flowDirections().isEmpty());
     }
 
     @Test
-    void mixedWorkingSetCallsCorrectDetectors() {
-        RegionPos coastalPos = new RegionPos(0, 0);
-        RegionPos fluvialPos = new RegionPos(1, 0);
-        Region coastal = new Region(coastalPos, RegionType.COASTAL);
-        Region fluvial = new Region(fluvialPos, RegionType.FLUVIAL);
-        ChunkAccess chunk = mockChunk(0, 0);
+    void outOfBoundsChunkDoesNotSampleTerrain() {
+        RiverShaping.init(riverBiome, 78, overworldState);
 
-        regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
-            .thenReturn(Set.of(coastal, fluvial));
+        RiverShaping.shape(chunkAt(new CellPos(2_000_000, 0)), 63, overworldState);
 
-        List<Boundary> coastalBoundaries = List.of(
-            new Boundary(new CellPos(0, 0), new CellPos(1, 0), BoundaryType.OCEAN)
-        );
-        coastalStatic.when(() -> Coastal.boundaries(coastalPos, cellCache)).thenReturn(coastalBoundaries);
-        fluvialStatic.when(() -> Fluvial.boundaries(any(), any())).thenReturn(List.of());
-
-        RiverShaping.shape(chunk, 63, randomState);
-
-        coastalStatic.verify(() -> Coastal.boundaries(coastalPos, cellCache));
-        coastalStatic.verify(() -> Coastal.boundaries(fluvialPos, cellCache), never());
-        fluvialStatic.verify(() -> Fluvial.boundaries(coastalPos, cellCache), never());
-        fluvialStatic.verify(() -> Fluvial.boundaries(fluvialPos, cellCache));
+        assertTrue(provider.requested.isEmpty());
     }
 
     @Test
-    void enrichedRegionsStoredInCache() {
-        RegionPos pos = new RegionPos(0, 0);
-        Region coastal = new Region(pos, RegionType.COASTAL);
-        ChunkAccess chunk = mockChunk(0, 0);
+    void shutdownClearsWorldStateAndStopsClassification() {
+        RiverShaping.init(riverBiome, 78, overworldState);
+        RiverShaping.shutdown();
 
-        regionExplorerStatic.when(() -> RegionExplorer.discover(any(BlockPos.class)))
-            .thenReturn(Set.of(coastal));
+        RiverShaping.shape(chunkAt(CENTER), 63, overworldState);
 
-        List<Boundary> boundaries = List.of(
-            new Boundary(new CellPos(0, 0), new CellPos(1, 0), BoundaryType.OCEAN)
-        );
-        coastalStatic.when(() -> Coastal.boundaries(pos, cellCache)).thenReturn(boundaries);
-
-        RiverShaping.shape(chunk, 63, randomState);
-
-        verify(regionCache).put(any(Region.class));
+        assertFalse(RiverShaping.isActive(overworldState));
+        assertNull(RiverShaping.getRandomState());
+        assertNull(RiverShaping.getRiverBiome());
+        assertEquals(63, RiverShaping.getSeaLevel());
+        assertTrue(provider.requested.isEmpty());
     }
 
-    private ChunkAccess mockChunk(int chunkX, int chunkZ) {
+    private ChunkAccess chunkAt(CellPos pos) {
         ChunkAccess chunk = mock(ChunkAccess.class);
-        ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
-        when(chunk.getPos()).thenReturn(chunkPos);
+        when(chunk.getPos()).thenReturn(new ChunkPos(pos.x(), pos.z()));
         return chunk;
+    }
+
+    private static class TestSampleProvider implements SampleProvider {
+        private final Set<ChunkPos> requested = new HashSet<>();
+        private boolean ocean;
+
+        @Override
+        public Sample sampleCore(ChunkPos pos) {
+            requested.add(pos);
+            int height = pos.x == CENTER.x() && pos.z == CENTER.z() ? 180 : 120;
+            return new Sample(pos, 0.5, height, ocean, 0.5, 0.1, 0.1, 0.1);
+        }
+
+        @Override
+        public double sample(DensityField field, ChunkPos pos) {
+            throw new AssertionError("Fixture already supplies all terrain fields: " + field);
+        }
     }
 }

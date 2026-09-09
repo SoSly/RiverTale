@@ -17,12 +17,9 @@ public final class CarveConfig {
 
     // ==================== Elevation ====================
 
-    /** Base Y-level for rivers at the ocean (distance = 0). */
-    public static final int SEA_LEVEL = 63;
-
     /**
      * Y-level increase per cell of distance from ocean.
-     * Water surface Y = SEA_LEVEL + (distance * ELEVATION_PER_CELL)
+     * Water surface Y = generator sea level + (distance * ELEVATION_PER_CELL)
      */
     public static final int ELEVATION_PER_CELL = 4;
 

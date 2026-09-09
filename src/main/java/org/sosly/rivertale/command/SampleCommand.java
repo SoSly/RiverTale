@@ -18,13 +18,12 @@ import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
-import org.sosly.rivertale.density.CapturedDensityFunctions;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.RiverTale;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import org.sosly.rivertale.world.RiverShaping;
 
 public class SampleCommand {
 
@@ -90,33 +89,24 @@ public class SampleCommand {
         int y = pos.getY();
 
         player.sendSystemMessage(withTeleport("Sample " + chunk, sampleX, y, sampleZ));
-        player.sendSystemMessage(Component.literal("  ocean: " + sample.isOcean()
-            + " (threshold: " + format(CommonConfig.get().oceanThreshold()) + ")"));
+        player.sendSystemMessage(Component.literal("  ocean (RTF): " + sample.isOcean()));
         player.sendSystemMessage(Component.literal("  continents: " + format(sample.continents())));
-        player.sendSystemMessage(Component.literal("  depth: " + format(sample.depth())));
-        player.sendSystemMessage(Component.literal("  estimatedTerrainHeight: " + sample.estimatedTerrainHeight()));
+        player.sendSystemMessage(Component.literal("  RTF base terrain height (before erosion/smoothing): " + sample.terrainHeight()));
         player.sendSystemMessage(Component.literal("  erosion: " + formatNullable(sample.erosion())));
         player.sendSystemMessage(Component.literal("  ridges: " + formatNullable(sample.ridges())));
         player.sendSystemMessage(Component.literal("  ridgesFolded: " + (sample.ridges() != null ? format(sample.ridgesFolded()) : "null")));
         player.sendSystemMessage(Component.literal("  temperature: " + formatNullable(sample.temperature())));
         player.sendSystemMessage(Component.literal("  vegetation: " + formatNullable(sample.vegetation())));
-
-        DensityFunction riverValleys = CapturedDensityFunctions.get("river_valleys");
-        if (riverValleys != null) {
-            DensityFunction.SinglePointContext ctx = new DensityFunction.SinglePointContext(sampleX, y, sampleZ);
-            double riverValleysValue = riverValleys.compute(ctx);
-            player.sendSystemMessage(Component.literal("  riverValleys: " + format(riverValleysValue)));
-        }
     }
 
     private static void sendCellInfo(ServerPlayer player, BlockPos pos) {
         CellPos cellPos = new CellPos(pos);
-        Cell cell = CellCache.get().getOrCompute(cellPos);
+        Cell cell = RiverShaping.classify(cellPos);
         int y = pos.getY();
 
         player.sendSystemMessage(withTeleport("=== Cell at " + cellPos + " ===", cellPos.getMiddleBlockX(), y, cellPos.getMiddleBlockZ()));
         player.sendSystemMessage(Component.literal("  Samples: " + cell.samplePositions().size()));
-        player.sendSystemMessage(Component.literal("  Average depth: " + format(cell.averageDepth())));
+        player.sendSystemMessage(Component.literal("  Average RTF base terrain height (before erosion/smoothing): " + cell.averageEstimatedTerrainHeight()));
         player.sendSystemMessage(Component.literal("  Average continents: " + format(cell.averageContinents())));
         player.sendSystemMessage(Component.literal("  Feature: " + cell.feature().name()));
         player.sendSystemMessage(Component.literal("  Flow directions: " + cell.flowDirections() + " (sorted by steepness)"));
@@ -133,13 +123,6 @@ public class SampleCommand {
             player.sendSystemMessage(Component.literal("  Average vegetation: " + format(cell.averageVegetation())));
         } catch (IllegalStateException e) {
             player.sendSystemMessage(Component.literal("  (no enriched sample data)"));
-        }
-
-        DensityFunction riverValleys = CapturedDensityFunctions.get("river_valleys");
-        if (riverValleys != null) {
-            DensityFunction.SinglePointContext ctx = new DensityFunction.SinglePointContext(cellPos.getMiddleBlockX(), y, cellPos.getMiddleBlockZ());
-            double riverValleysValue = riverValleys.compute(ctx);
-            player.sendSystemMessage(Component.literal("  riverValleys: " + format(riverValleysValue)));
         }
     }
 

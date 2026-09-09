@@ -39,7 +39,7 @@ class CoastalTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(32, 2, 1, -0.17, 10, 1, 3, 288, false));
+        CommonConfig.set(new CommonConfig(32, 2, 1, 10, 1, 3, 288, false));
         SampleCache.shutdown();
         provider = new TestSampleProvider();
         SampleCache.init(provider);
@@ -156,21 +156,21 @@ class CoastalTest {
 
     private Cell createOceanCell(CellPos pos) {
         ChunkPos chunk = new ChunkPos(pos.x(), pos.z());
-        Sample sample = new Sample(chunk, -0.5, 0.5);
+        Sample sample = new Sample(chunk, -0.5, 142, true);
         provider.putSample(chunk, sample);
         return new Cell(pos, Set.of(chunk));
     }
 
     private Cell createLandCell(CellPos pos) {
         ChunkPos chunk = new ChunkPos(pos.x(), pos.z());
-        Sample sample = new Sample(chunk, 0.5, 0.5);
+        Sample sample = new Sample(chunk, 0.5, 142, false);
         provider.putSample(chunk, sample);
         return new Cell(pos, Set.of(chunk));
     }
 
     private Cell createBasinCell(CellPos pos) {
         ChunkPos chunk = new ChunkPos(pos.x(), pos.z());
-        Sample sample = new Sample(chunk, 0.5, -0.1);
+        Sample sample = new Sample(chunk, 0.5, 56, false);
         provider.putSample(chunk, sample);
         return new Cell(pos, Set.of(chunk));
     }
@@ -191,7 +191,7 @@ class CoastalTest {
             if (cached != null) {
                 return cached;
             }
-            return new Sample(pos, 0.0, 0.0);
+            return new Sample(pos, 0.0, 70, false);
         }
 
         @Override

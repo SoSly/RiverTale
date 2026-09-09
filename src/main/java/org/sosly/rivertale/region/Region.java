@@ -23,6 +23,9 @@ import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.river.WatershedCache;
+import org.sosly.rivertale.terrain.Coastal;
+import org.sosly.rivertale.terrain.Fluvial;
+import org.sosly.rivertale.world.RiverShaping;
 
 public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) {
 
@@ -30,9 +33,18 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
         this(pos, type, List.of());
     }
 
-    static Region createSkeleton(RegionPos pos, CellCache cellCache, SampleCache sampleCache) {
+    static Region create(RegionPos pos, CellCache cellCache, SampleCache sampleCache) {
         RegionType type = RegionTypeCache.get().getOrCompute(pos, sampleCache);
-        return new Region(pos, type);
+        Region region = new Region(pos, type);
+        for (CellPos cellPos : region.cells()) {
+            RiverShaping.classify(cellPos);
+        }
+        List<Boundary> boundaries = switch (type) {
+            case COASTAL -> Coastal.boundaries(pos, cellCache);
+            case FLUVIAL, INLAND -> Fluvial.boundaries(pos, cellCache);
+            default -> List.of();
+        };
+        return region.withBoundaries(boundaries);
     }
 
     public Region withBoundaries(List<Boundary> boundaries) {
@@ -65,7 +77,7 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
         CellCache cellCache = CellCache.get();
         ListTag cellList = new ListTag();
         for (CellPos cellPos : cells()) {
-            Cell cell = cellCache.getOrCompute(cellPos);
+            Cell cell = RiverShaping.classify(cellPos);
             CompoundTag cellTag = new CompoundTag();
             cellTag.putLong("pos", cellPos.toLong());
             cellTag.putString("feature", cell.feature().name());

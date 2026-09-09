@@ -1,20 +1,21 @@
 package org.sosly.rivertale.density;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.ChunkPos;
-import org.sosly.rivertale.config.CommonConfig;
 
 public record Sample(
         ChunkPos pos,
         double continents,
-        double depth,
+        int terrainHeight,
+        boolean ocean,
         Double erosion,
         Double ridges,
         Double temperature,
         Double vegetation
 ) {
-    public Sample(ChunkPos pos, double continents, double depth) {
-        this(pos, continents, depth, null, null, null, null);
+    public Sample(ChunkPos pos, double continents, int terrainHeight, boolean ocean) {
+        this(pos, continents, terrainHeight, ocean, null, null, null, null);
     }
 
     public boolean hasFullDensities() {
@@ -22,23 +23,23 @@ public record Sample(
     }
 
     public Sample withTemperature(double temperature) {
-        return new Sample(pos, continents, depth, erosion, ridges, temperature, vegetation);
+        return new Sample(pos, continents, terrainHeight, ocean, erosion, ridges, temperature, vegetation);
     }
 
     public Sample withErosion(double erosion) {
-        return new Sample(pos, continents, depth, erosion, ridges, temperature, vegetation);
+        return new Sample(pos, continents, terrainHeight, ocean, erosion, ridges, temperature, vegetation);
     }
 
     public Sample withRidges(double ridges) {
-        return new Sample(pos, continents, depth, erosion, ridges, temperature, vegetation);
+        return new Sample(pos, continents, terrainHeight, ocean, erosion, ridges, temperature, vegetation);
     }
 
     public Sample withVegetation(double vegetation) {
-        return new Sample(pos, continents, depth, erosion, ridges, temperature, vegetation);
+        return new Sample(pos, continents, terrainHeight, ocean, erosion, ridges, temperature, vegetation);
     }
 
     public boolean isOcean() {
-        return continents < CommonConfig.get().oceanThreshold();
+        return ocean;
     }
 
     public double ridgesFolded() {
@@ -49,14 +50,15 @@ public record Sample(
     }
 
     public int estimatedTerrainHeight() {
-        return (int) Math.round(70 + 144 * depth);
+        return terrainHeight;
     }
 
     public CompoundTag encode() {
         CompoundTag tag = new CompoundTag();
         tag.putLong("pos", pos.toLong());
         tag.putDouble("continents", continents);
-        tag.putDouble("depth", depth);
+        tag.putInt("terrainHeight", terrainHeight);
+        tag.putBoolean("ocean", ocean);
         if (erosion != null) {
             tag.putDouble("erosion", erosion);
         }
@@ -73,10 +75,14 @@ public record Sample(
     }
 
     public static Sample decode(CompoundTag tag) {
+        if (!tag.contains("terrainHeight", Tag.TAG_INT) || !tag.contains("ocean", Tag.TAG_BYTE)) {
+            throw new IllegalArgumentException("Sample is missing RTF terrain height or ocean data");
+        }
         return new Sample(
             new ChunkPos(tag.getLong("pos")),
             tag.getDouble("continents"),
-            tag.getDouble("depth"),
+            tag.getInt("terrainHeight"),
+            tag.getBoolean("ocean"),
             tag.contains("erosion") ? tag.getDouble("erosion") : null,
             tag.contains("ridges") ? tag.getDouble("ridges") : null,
             tag.contains("temperature") ? tag.getDouble("temperature") : null,

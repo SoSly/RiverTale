@@ -24,6 +24,7 @@ import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
 import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.client.ClientRegionCache;
+import org.sosly.rivertale.client.RegionRenderer;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
@@ -31,6 +32,7 @@ import org.sosly.rivertale.networking.Network;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.river.WatershedCache;
+import org.sosly.rivertale.world.RiverShaping;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID)
 public class VisCommand {
@@ -131,7 +133,8 @@ public class VisCommand {
 
     private static void sendUpdate(ServerPlayer player) {
         EnumSet<VisMode> modes = ENABLED_MODES.getOrDefault(player.getUUID(), EnumSet.noneOf(VisMode.class));
-        Network.sendToPlayer(new TogglePacket(modes), player);
+        int seaLevel = player.serverLevel().getChunkSource().getGenerator().getSeaLevel();
+        Network.sendToPlayer(new TogglePacket(modes, seaLevel), player);
     }
 
     private static void sendRegions(ServerPlayer player, RegionPos center) {
@@ -173,6 +176,20 @@ public class VisCommand {
     }
 
     @SubscribeEvent
+    public static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+
+        UUID id = player.getUUID();
+        if (ENABLED_MODES.remove(id) == null) {
+            return;
+        }
+        LAST_REGION.remove(id);
+        sendUpdate(player);
+    }
+
+    @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
             return;
@@ -186,9 +203,16 @@ public class VisCommand {
             return;
         }
 
-        for (UUID id : ENABLED_MODES.keySet()) {
+        for (UUID id : new HashSet<>(ENABLED_MODES.keySet())) {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             if (player == null) {
+                continue;
+            }
+
+            if (!RiverShaping.isActive(player.serverLevel().getChunkSource().randomState())) {
+                ENABLED_MODES.remove(id);
+                LAST_REGION.remove(id);
+                sendUpdate(player);
                 continue;
             }
 
@@ -204,11 +228,13 @@ public class VisCommand {
 
     public static class TogglePacket extends Message {
         private final EnumSet<VisMode> modes;
+        private final int seaLevel;
 
-        public TogglePacket(Set<VisMode> modes) {
+        public TogglePacket(Set<VisMode> modes, int seaLevel) {
             this.modes = modes.isEmpty()
                 ? EnumSet.noneOf(VisMode.class)
                 : EnumSet.copyOf(modes);
+            this.seaLevel = seaLevel;
         }
 
         public static TogglePacket decode(FriendlyByteBuf buf) {
@@ -220,7 +246,7 @@ public class VisCommand {
                 }
                 modes.add(mode);
             }
-            return new TogglePacket(modes);
+            return new TogglePacket(modes, buf.readInt());
         }
 
         public static void encode(TogglePacket msg, FriendlyByteBuf buf) {
@@ -232,12 +258,16 @@ public class VisCommand {
                 flags |= (1 << mode.ordinal());
             }
             buf.writeInt(flags);
+            buf.writeInt(msg.seaLevel);
         }
 
         public static void handle(TogglePacket msg, Supplier<NetworkEvent.Context> ctx) {
             NetworkEvent.Context context = ctx.get();
             if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
-                context.enqueueWork(() -> ClientRegionCache.setEnabledModes(msg.modes));
+                context.enqueueWork(() -> {
+                    RegionRenderer.setSeaLevel(msg.modes.isEmpty() ? null : msg.seaLevel);
+                    ClientRegionCache.setEnabledModes(msg.modes);
+                });
             }
             context.setPacketHandled(true);
         }

@@ -22,8 +22,12 @@ public class RegionExplorer {
         Region currentRegion = RegionCache.get().getOrCompute(regionPos);
         RegionType type = currentRegion.type();
 
-        if (type == RegionType.OCEANIC || type == RegionType.INLAND) {
+        if (type == RegionType.OCEANIC) {
             return Set.of();
+        }
+
+        if (type == RegionType.INLAND) {
+            return Set.of(currentRegion);
         }
 
         Set<Region> workingSet = new HashSet<>();

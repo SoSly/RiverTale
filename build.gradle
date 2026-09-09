@@ -85,6 +85,10 @@ minecraft {
 
         server {
             args '--nogui'
+            if (project.hasProperty('rtfSmoke')) {
+                property 'rivertale.rtfSmoke', 'true'
+                workingDirectory project.file(project.findProperty('runDirectory') ?: 'run/rtfSmoke')
+            }
         }
 
         data {
@@ -119,10 +123,10 @@ dependencies {
     testImplementation 'org.mockito:mockito-core:5.8.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.8.0'
 
+    // ReTerraForged remains a separate mod; deobfuscate its production JAR for development.
+    implementation fg.deobf("local.reterraforged:reterraforged:${reterraforged_version}-forge-${minecraft_version}")
+
     // Optional runtime dependencies for development and testing
-    if (lithosphere_enabled.toBoolean()) {
-        runtimeOnly files("libs/lithosphere-1.6.jar")
-    }
     if (journeymap_enabled.toBoolean()) {
         runtimeOnly fg.deobf("curse.maven:journeymap-${journeymap_projectId}:${journeymap_fileId}")
     }
@@ -141,7 +145,7 @@ tasks.withType(ProcessResources).configureEach {
             loader_version_range    : loader_version_range,
             mod_id                  : mod_id, mod_description: mod_description, mod_name: mod_name, mod_logo: mod_logo,
             mod_license             : mod_license, mod_version: mod_version, mod_authors: mod_authors,
-            mod_credits             : mod_credits
+            mod_credits             : mod_credits, reterraforged_version: reterraforged_version
     ]
     inputs.properties replaceProperties
     filesMatching(['META-INF/mods.toml']) {

@@ -15,7 +15,6 @@ import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.event.FluidHandler;
 import org.sosly.rivertale.event.ServerLifecycleHandler;
 import org.sosly.rivertale.networking.Network;
-import org.sosly.rivertale.world.RiverSuppression;
 
 @Mod(RiverTale.MOD_ID)
 public class RiverTale {
@@ -25,7 +24,6 @@ public class RiverTale {
     public RiverTale() {
         LOGGER.info("Loading RiverTale");
 
-        RiverSuppression.init();
 
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, CommonConfig.Spec.SPEC);
 

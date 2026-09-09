@@ -6,7 +6,6 @@ public record CommonConfig(
     int regionSize,
     int cellSize,
     int samplesPerCell,
-    double oceanThreshold,
     int mergeThreshold,
     int minSlope,
     int minPathLength,
@@ -16,7 +15,6 @@ public record CommonConfig(
     private static final int DEFAULT_REGION_SIZE = 32;
     private static final int DEFAULT_CELL_SIZE = 3;
     private static final int DEFAULT_SAMPLES_PER_CELL = 1;
-    private static final double DEFAULT_OCEAN_THRESHOLD = -0.17;
     private static final int DEFAULT_MERGE_THRESHOLD = 10;
     private static final int DEFAULT_MIN_SLOPE = 1;
     private static final int DEFAULT_MIN_PATH_LENGTH = 3;
@@ -24,7 +22,7 @@ public record CommonConfig(
     private static final boolean DEFAULT_ENABLE_METRICS = false;
 
     private static CommonConfig instance = new CommonConfig(
-        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_SAMPLES_PER_CELL, DEFAULT_OCEAN_THRESHOLD, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE, DEFAULT_MIN_PATH_LENGTH, DEFAULT_EMBANKMENT_RADIUS, DEFAULT_ENABLE_METRICS);
+        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_SAMPLES_PER_CELL, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE, DEFAULT_MIN_PATH_LENGTH, DEFAULT_EMBANKMENT_RADIUS, DEFAULT_ENABLE_METRICS);
 
     public CommonConfig {
         if (cellSize < 1 || cellSize > 8) {
@@ -63,7 +61,6 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue REGION_SIZE;
         public static final ForgeConfigSpec.IntValue CELL_SIZE;
         public static final ForgeConfigSpec.IntValue SAMPLES_PER_CELL;
-        public static final ForgeConfigSpec.DoubleValue OCEAN_THRESHOLD;
         public static final ForgeConfigSpec.IntValue MERGE_THRESHOLD;
         public static final ForgeConfigSpec.IntValue MIN_SLOPE;
         public static final ForgeConfigSpec.IntValue MIN_PATH_LENGTH;
@@ -84,10 +81,6 @@ public record CommonConfig(
             SAMPLES_PER_CELL = builder
                 .comment("Chunks sampled per cell (1 = center only)")
                 .defineInRange("samplesPerCell", DEFAULT_SAMPLES_PER_CELL, 1, 64);
-
-            OCEAN_THRESHOLD = builder
-                .comment("Continents density value below which terrain is considered ocean.")
-                .defineInRange("oceanThreshold", DEFAULT_OCEAN_THRESHOLD, -1.0, 0.0);
 
             MERGE_THRESHOLD = builder
                 .comment("Distance in cells from ocean at which rivers prioritize alignment over slope.")
@@ -117,7 +110,6 @@ public record CommonConfig(
                 REGION_SIZE.get(),
                 CELL_SIZE.get(),
                 SAMPLES_PER_CELL.get(),
-                OCEAN_THRESHOLD.get(),
                 MERGE_THRESHOLD.get(),
                 MIN_SLOPE.get(),
                 MIN_PATH_LENGTH.get(),

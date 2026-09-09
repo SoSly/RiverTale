@@ -4,12 +4,12 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.river.Watershed;
 
 public class Spring implements FeatureHandler {
-    private static final double DEPTH_THRESHOLD = 0.3;
+    private static final int HEIGHT_THRESHOLD = 113;
     private static final double RIDGES_THRESHOLD = 0.5;
 
     @Override
     public boolean classify(Cell cell, Watershed watershed) {
-        if (cell.averageDepth() <= DEPTH_THRESHOLD) {
+        if (cell.averageEstimatedTerrainHeight() <= HEIGHT_THRESHOLD) {
             return false;
         }
         if (cell.hasInflowingNeighbor()) {

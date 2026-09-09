@@ -16,13 +16,15 @@ public class RiverPathInterpolator {
     private final double slope;
     private final long seed;
 
-    public RiverPathInterpolator(int entryX, int entryZ, int exitX, int exitZ, int entryDist, int exitDist, CardinalDirection direction, int accumulation, long seed) {
+    public RiverPathInterpolator(int entryX, int entryZ, int exitX, int exitZ,
+                                 int entryDist, int exitDist, CardinalDirection direction,
+                                 int accumulation, long seed, int seaLevel) {
         this.entryX = entryX;
         this.entryZ = entryZ;
         this.exitX = exitX;
         this.exitZ = exitZ;
-        this.entryY = CarveConfig.SEA_LEVEL + entryDist * CarveConfig.ELEVATION_PER_CELL;
-        this.exitY = CarveConfig.SEA_LEVEL + exitDist * CarveConfig.ELEVATION_PER_CELL;
+        this.entryY = seaLevel + entryDist * CarveConfig.ELEVATION_PER_CELL;
+        this.exitY = seaLevel + exitDist * CarveConfig.ELEVATION_PER_CELL;
         this.seed = seed;
 
         double totalDist = Math.sqrt((exitX - entryX) * (exitX - entryX) + (exitZ - entryZ) * (exitZ - entryZ));

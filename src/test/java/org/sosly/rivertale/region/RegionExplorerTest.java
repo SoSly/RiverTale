@@ -49,7 +49,7 @@ class RegionExplorerTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(8, 2, 1, -0.17, 10, 1, 3, 288, false));
+        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false));
 
         cellCacheStatic = mockStatic(CellCache.class);
         regionCacheStatic = mockStatic(RegionCache.class);
@@ -80,7 +80,7 @@ class RegionExplorerTest {
     }
 
     @Test
-    void inlandCenterReturnsEmptySet() {
+    void inlandCenterRemainsAvailableForDiagnostics() {
         RegionPos centerPos = new RegionPos(0, 0);
         Region centerRegion = new Region(centerPos, RegionType.INLAND);
         when(regionCache.getOrCompute(any(RegionPos.class))).thenReturn(centerRegion);
@@ -88,7 +88,7 @@ class RegionExplorerTest {
         BlockPos blockPos = centerPos.getWorldPosition(0);
         Set<Region> result = RegionExplorer.discover(blockPos);
 
-        assertTrue(result.isEmpty());
+        assertEquals(Set.of(centerRegion), result);
     }
 
     @Test

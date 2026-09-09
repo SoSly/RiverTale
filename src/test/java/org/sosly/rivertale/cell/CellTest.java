@@ -39,7 +39,7 @@ class CellTest {
     @Test
     void minimalConstructionCreatesBasicCell() {
         ChunkPos chunkPos = new ChunkPos(0, 0);
-        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 142, false));
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
 
         CellPos pos = new CellPos(0, 0);
@@ -66,9 +66,9 @@ class CellTest {
         ChunkPos c0 = new ChunkPos(0, 0);
         ChunkPos c1 = new ChunkPos(1, 0);
         ChunkPos c2 = new ChunkPos(2, 0);
-        provider.putSample(c0, new Sample(c0, -0.1, 0.5));
-        provider.putSample(c1, new Sample(c1, -0.2, 0.5));
-        provider.putSample(c2, new Sample(c2, -0.3, 0.5));
+        provider.putSample(c0, new Sample(c0, -0.1, 142, false));
+        provider.putSample(c1, new Sample(c1, -0.2, 142, true));
+        provider.putSample(c2, new Sample(c2, -0.3, 142, true));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(c0, c1, c2);
@@ -78,25 +78,25 @@ class CellTest {
     }
 
     @Test
-    void averageDepthComputesMean() {
+    void averageEstimatedTerrainHeightAveragesNativeHeights() {
         ChunkPos c0 = new ChunkPos(0, 0);
         ChunkPos c1 = new ChunkPos(1, 0);
         ChunkPos c2 = new ChunkPos(2, 0);
-        provider.putSample(c0, new Sample(c0, 0.5, 0.3));
-        provider.putSample(c1, new Sample(c1, 0.5, 0.5));
-        provider.putSample(c2, new Sample(c2, 0.5, 0.7));
+        provider.putSample(c0, new Sample(c0, 0.5, 113, false));
+        provider.putSample(c1, new Sample(c1, 0.5, 142, false));
+        provider.putSample(c2, new Sample(c2, 0.5, 171, false));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(c0, c1, c2);
         Cell cell = new Cell(pos, samplePositions);
 
-        assertEquals(0.5, cell.averageDepth(), 0.0001);
+        assertEquals(142, cell.averageEstimatedTerrainHeight());
     }
 
     @Test
-    void averageEstimatedTerrainHeightUsesDepthFormula() {
+    void averageEstimatedTerrainHeightUsesNativeHeight() {
         ChunkPos chunkPos = new ChunkPos(0, 0);
-        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 142, false));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
@@ -110,9 +110,9 @@ class CellTest {
         ChunkPos c0 = new ChunkPos(0, 0);
         ChunkPos c1 = new ChunkPos(1, 0);
         ChunkPos c2 = new ChunkPos(2, 0);
-        provider.putSample(c0, new Sample(c0, -0.5, 0.5));
-        provider.putSample(c1, new Sample(c1, -0.5, 0.5));
-        provider.putSample(c2, new Sample(c2, -0.5, 0.5));
+        provider.putSample(c0, new Sample(c0, -0.5, 142, true));
+        provider.putSample(c1, new Sample(c1, -0.5, 142, true));
+        provider.putSample(c2, new Sample(c2, -0.5, 142, true));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(c0, c1, c2);
@@ -125,8 +125,8 @@ class CellTest {
     void isOceanReturnsFalseWhenMixed() {
         ChunkPos c0 = new ChunkPos(0, 0);
         ChunkPos c1 = new ChunkPos(1, 0);
-        provider.putSample(c0, new Sample(c0, -0.5, 0.5));
-        provider.putSample(c1, new Sample(c1, 0.5, 0.5));
+        provider.putSample(c0, new Sample(c0, -0.5, 142, true));
+        provider.putSample(c1, new Sample(c1, 0.5, 142, false));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(c0, c1);
@@ -138,7 +138,7 @@ class CellTest {
     @Test
     void isBasinReturnsTrueWhenBelowSeaLevelAndNotOcean() {
         ChunkPos chunkPos = new ChunkPos(0, 0);
-        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, -0.1));
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 56, false));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
@@ -153,7 +153,7 @@ class CellTest {
     @Test
     void isBasinReturnsFalseWhenOcean() {
         ChunkPos chunkPos = new ChunkPos(0, 0);
-        provider.putSample(chunkPos, new Sample(chunkPos, -0.5, -0.1));
+        provider.putSample(chunkPos, new Sample(chunkPos, -0.5, 56, true));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
@@ -167,8 +167,8 @@ class CellTest {
     void isBasinReturnsFalseWhenAnySampleIsOcean() {
         ChunkPos c0 = new ChunkPos(0, 0);
         ChunkPos c1 = new ChunkPos(1, 0);
-        provider.putSample(c0, new Sample(c0, 0.5, -0.1));
-        provider.putSample(c1, new Sample(c1, -0.5, -0.1));
+        provider.putSample(c0, new Sample(c0, 0.5, 56, false));
+        provider.putSample(c1, new Sample(c1, -0.5, 56, true));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(c0, c1);
@@ -181,7 +181,7 @@ class CellTest {
     @Test
     void withFlowDirectionsPreservesOtherFields() {
         ChunkPos chunkPos = new ChunkPos(0, 0);
-        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 142, false));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
@@ -200,7 +200,7 @@ class CellTest {
     @Test
     void withFeaturePreservesOtherFields() {
         ChunkPos chunkPos = new ChunkPos(0, 0);
-        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 142, false));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
@@ -219,7 +219,7 @@ class CellTest {
     @Test
     void withElevationsPreservesOtherFields() {
         ChunkPos chunkPos = new ChunkPos(0, 0);
-        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 0.5));
+        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 142, false));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
@@ -239,8 +239,8 @@ class CellTest {
     void averageErosionEnrichesSamplesLazily() {
         ChunkPos c0 = new ChunkPos(0, 0);
         ChunkPos c1 = new ChunkPos(1, 0);
-        provider.putSample(c0, new Sample(c0, 0.5, 0.5));
-        provider.putSample(c1, new Sample(c1, 0.5, 0.5));
+        provider.putSample(c0, new Sample(c0, 0.5, 142, false));
+        provider.putSample(c1, new Sample(c1, 0.5, 142, false));
         provider.setFieldValue(DensityField.EROSION, 0.3);
 
         CellPos pos = new CellPos(0, 0);
@@ -254,8 +254,8 @@ class CellTest {
     void averageErosionUsesEnrichedSamplesIfPresent() {
         ChunkPos c0 = new ChunkPos(0, 0);
         ChunkPos c1 = new ChunkPos(1, 0);
-        provider.putSample(c0, new Sample(c0, 0.5, 0.5, 0.2, 0.3, 0.4, 0.5));
-        provider.putSample(c1, new Sample(c1, 0.5, 0.5, 0.4, 0.3, 0.4, 0.5));
+        provider.putSample(c0, new Sample(c0, 0.5, 142, false, 0.2, 0.3, 0.4, 0.5));
+        provider.putSample(c1, new Sample(c1, 0.5, 142, false, 0.4, 0.3, 0.4, 0.5));
 
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(c0, c1);
@@ -355,7 +355,7 @@ class CellTest {
             if (cached != null) {
                 return cached;
             }
-            return new Sample(pos, 0.0, 0.0);
+            return new Sample(pos, 0.0, 70, false);
         }
 
         @Override
