@@ -22,10 +22,18 @@ public class Store {
         }
     };
 
+    private static final Distribution NOOP_DISTRIBUTION = new Distribution() {
+        @Override
+        public void record(double value) {
+        }
+    };
+
+    private final Map<String, Distribution> distributions;
     private final Map<String, Timer> timers;
     private final Map<String, Ratio> ratios;
 
     private Store() {
+        distributions = new ConcurrentHashMap<>();
         timers = new ConcurrentHashMap<>();
         ratios = new ConcurrentHashMap<>();
     }
@@ -46,6 +54,7 @@ public class Store {
     }
 
     public static void clear() {
+        getInstance().distributions.clear();
         getInstance().timers.clear();
         getInstance().ratios.clear();
     }
@@ -64,6 +73,18 @@ public class Store {
         }
         String metricName = clazz.getName() + "_" + name;
         return getInstance().ratios.computeIfAbsent(metricName, k -> new Ratio());
+    }
+
+    public static Distribution getDistribution(Class<?> clazz, String name) {
+        if (!isEnabled()) {
+            return NOOP_DISTRIBUTION;
+        }
+        String metricName = clazz.getName() + "_" + name;
+        return getInstance().distributions.computeIfAbsent(metricName, k -> new Distribution());
+    }
+
+    public static Map<String, Distribution> distributions() {
+        return Collections.unmodifiableMap(getInstance().distributions);
     }
 
     public static Map<String, Timer> timers() {

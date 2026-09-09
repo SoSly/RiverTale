@@ -1,7 +1,10 @@
 package org.sosly.rivertale.region;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,11 +18,15 @@ import org.mockito.quality.Strictness;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.core.Boundary;
+import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
+import org.sosly.rivertale.river.Flowline;
+import org.sosly.rivertale.river.FlowlineTracer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,7 +56,7 @@ class RegionExplorerTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false));
+        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false, false, 16));
 
         cellCacheStatic = mockStatic(CellCache.class);
         regionCacheStatic = mockStatic(RegionCache.class);
@@ -353,6 +360,104 @@ class RegionExplorerTest {
         assertFalse(result.contains(northRegion));
     }
 
+    @Test
+    void inlandWithoutFluvialStaysWithinOneEdgeNeighbor() {
+        Map<RegionPos, Region> regions = inlandMap();
+        RegionPos center = new RegionPos(0, 0);
+        regions.put(new RegionPos(1, 1), new Region(new RegionPos(1, 1), RegionType.FLUVIAL));
+
+        Set<Region> result = RegionExplorer.discover(center.getWorldPosition(0));
+
+        assertEquals(Set.of(center, new RegionPos(0, -1), new RegionPos(1, 0),
+            new RegionPos(0, 1), new RegionPos(-1, 0)),
+            result.stream().map(Region::pos).collect(Collectors.toSet()));
+    }
+
+    @Test
+    void inlandAdmitsFluvialAndItsCoastWithoutRequiringBorderFlow() {
+        Map<RegionPos, Region> regions = inlandMap();
+        RegionPos center = new RegionPos(0, 0);
+        Region fluvial = new Region(new RegionPos(1, 0), RegionType.FLUVIAL);
+        Region coastal = new Region(new RegionPos(2, 0), RegionType.COASTAL);
+        regions.put(fluvial.pos(), fluvial);
+        regions.put(coastal.pos(), coastal);
+        regions.put(new RegionPos(3, 0), new Region(new RegionPos(3, 0), RegionType.COASTAL));
+
+        Set<Region> result = RegionExplorer.discover(center.getWorldPosition(0));
+
+        assertEquals(Set.of(regions.get(center), fluvial, coastal), result);
+    }
+
+    @Test
+    void inlandPathCanCrossFluvialToReachTheSea() {
+        Map<RegionPos, Region> regions = inlandMap();
+        CellPos terminus = new CellPos(18, 2);
+        regions.put(new RegionPos(1, 0), new Region(new RegionPos(1, 0), RegionType.FLUVIAL));
+        regions.put(terminus.getRegion(), new Region(terminus.getRegion(), RegionType.COASTAL,
+            List.of(new Boundary(terminus, new CellPos(19, 2), BoundaryType.OCEAN))));
+        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
+            new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
+
+        Flowline path = new FlowlineTracer(RegionExplorer.discover(new BlockPos(0, 0, 0)))
+            .trace(new CellPos(1, 2));
+
+        assertTrue(path.isValid());
+        assertEquals(terminus, path.terminus());
+        assertTrue(path.cells().stream().anyMatch(pos -> pos.getRegion().equals(new RegionPos(1, 0))));
+    }
+
+    @Test
+    void inlandPathCanEndAtANearerBasinInItsFluvialCorridor() {
+        Map<RegionPos, Region> regions = inlandMap();
+        CellPos basin = new CellPos(10, 2);
+        CellPos ocean = new CellPos(18, 2);
+        regions.put(basin.getRegion(), new Region(basin.getRegion(), RegionType.FLUVIAL,
+            List.of(new Boundary(basin, new CellPos(11, 2), BoundaryType.BASIN))));
+        regions.put(ocean.getRegion(), new Region(ocean.getRegion(), RegionType.COASTAL,
+            List.of(new Boundary(ocean, new CellPos(19, 2), BoundaryType.OCEAN))));
+        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
+            new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
+
+        Flowline path = new FlowlineTracer(RegionExplorer.discover(new BlockPos(0, 0, 0)))
+            .trace(new CellPos(1, 2));
+
+        assertTrue(path.isValid());
+        assertEquals(basin, path.terminus());
+    }
+
+    @Test
+    void isolatedInlandCanReachNeighborBasinButCannotTargetTwoRegionsAway() {
+        Map<RegionPos, Region> regions = inlandMap();
+        CellPos basin = new CellPos(10, 2);
+        Region neighbor = new Region(basin.getRegion(), RegionType.INLAND,
+            List.of(new Boundary(basin, new CellPos(11, 2), BoundaryType.BASIN)));
+        regions.put(neighbor.pos(), neighbor);
+        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
+            new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
+
+        Flowline path = new FlowlineTracer(RegionExplorer.discover(new BlockPos(0, 0, 0)))
+            .trace(new CellPos(1, 2));
+        assertTrue(path.isValid());
+        assertEquals(basin, path.terminus());
+
+        regions.put(neighbor.pos(), new Region(neighbor.pos(), RegionType.INLAND));
+        CellPos distant = new CellPos(18, 2);
+        regions.put(distant.getRegion(), new Region(distant.getRegion(), RegionType.INLAND,
+            List.of(new Boundary(distant, new CellPos(19, 2), BoundaryType.BASIN))));
+        Flowline rejected = new FlowlineTracer(RegionExplorer.discover(new BlockPos(0, 0, 0)))
+            .trace(new CellPos(1, 2));
+        assertFalse(rejected.isValid());
+        assertEquals(List.of(new CellPos(1, 2)), rejected.cells());
+    }
+
+    private Map<RegionPos, Region> inlandMap() {
+        Map<RegionPos, Region> regions = new HashMap<>();
+        when(regionCache.getOrCompute(any(RegionPos.class))).thenAnswer(invocation -> {
+            RegionPos pos = invocation.getArgument(0);
+            return regions.computeIfAbsent(pos, key -> new Region(key, RegionType.INLAND));
+        });
+        return regions;
+    }
     private Cell mockCellWithFlow(CellPos pos, List<FlowDirection> flowDirections) {
         Cell cell = mock(Cell.class);
         when(cell.pos()).thenReturn(pos);

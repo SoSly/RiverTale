@@ -65,7 +65,7 @@ class WatershedTest {
         WorldSettings.init(63);
         WatershedCache.init();
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(32, 3, 1, 10, 1, 1, 288, false));
+        CommonConfig.set(new CommonConfig(32, 3, 1, 10, 1, 1, 288, false, false, 16));
         when(cellCache.getOrCompute(any(CellPos.class))).thenAnswer(inv -> {
             CellPos pos = inv.getArgument(0);
             return dummyCell(pos);

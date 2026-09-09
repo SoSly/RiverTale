@@ -39,7 +39,7 @@ class CoastalTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(32, 2, 1, 10, 1, 3, 288, false));
+        CommonConfig.set(new CommonConfig(32, 2, 1, 10, 1, 3, 288, false, false, 16));
         SampleCache.shutdown();
         provider = new TestSampleProvider();
         SampleCache.init(provider);

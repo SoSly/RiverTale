@@ -6,6 +6,7 @@ import java.util.Map;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import org.sosly.rivertale.metric.Distribution;
 import org.sosly.rivertale.metric.Ratio;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
@@ -22,8 +23,9 @@ public class MetricsCommand {
 
         Map<String, Timer> timers = Store.timers();
         Map<String, Ratio> ratios = Store.ratios();
+        Map<String, Distribution> distributions = Store.distributions();
 
-        if (timers.isEmpty() && ratios.isEmpty()) {
+        if (timers.isEmpty() && ratios.isEmpty() && distributions.isEmpty()) {
             source.sendSuccess(() -> Component.literal("No metrics recorded yet."), false);
             return 1;
         }
@@ -34,6 +36,12 @@ public class MetricsCommand {
             String name = simplifyName(entry.getKey());
             Timer timer = entry.getValue();
             source.sendSuccess(() -> formatTimer(name, timer), false);
+        }
+
+        for (Map.Entry<String, Distribution> entry : distributions.entrySet()) {
+            String name = simplifyName(entry.getKey());
+            Distribution.Snapshot snapshot = entry.getValue().snapshot();
+            source.sendSuccess(() -> formatDistribution(name, snapshot), false);
         }
 
         for (Map.Entry<String, Ratio> entry : ratios.entrySet()) {
@@ -56,6 +64,12 @@ public class MetricsCommand {
     private static Component formatTimer(String name, Timer timer) {
         String msg = String.format("%s: %d calls | avg=%.1fus min=%.1fus max=%.1fus med=%.1fus",
             name, timer.count(), timer.avg(), timer.min(), timer.max(), timer.median());
+        return Component.literal(msg);
+    }
+
+    private static Component formatDistribution(String name, Distribution.Snapshot snapshot) {
+        String msg = String.format("%s: %d samples | avg=%.1f min=%.1f max=%.1f med=%.1f",
+            name, snapshot.count(), snapshot.avg(), snapshot.min(), snapshot.max(), snapshot.median());
         return Component.literal(msg);
     }
 

@@ -10,7 +10,9 @@ public record CommonConfig(
     int minSlope,
     int minPathLength,
     int embankmentRadius,
-    boolean enableMetrics
+    boolean enableMetrics,
+    boolean enableNudging,
+    int nudgingLimit
 ) {
     private static final int DEFAULT_REGION_SIZE = 32;
     private static final int DEFAULT_CELL_SIZE = 3;
@@ -20,11 +22,16 @@ public record CommonConfig(
     private static final int DEFAULT_MIN_PATH_LENGTH = 3;
     private static final int DEFAULT_EMBANKMENT_RADIUS = 288;
     private static final boolean DEFAULT_ENABLE_METRICS = false;
+    private static final boolean DEFAULT_ENABLE_NUDGING = true;
+    private static final int DEFAULT_NUDGING_LIMIT = 16;
 
     private static CommonConfig instance = new CommonConfig(
-        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_SAMPLES_PER_CELL, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE, DEFAULT_MIN_PATH_LENGTH, DEFAULT_EMBANKMENT_RADIUS, DEFAULT_ENABLE_METRICS);
+        DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_SAMPLES_PER_CELL, DEFAULT_MERGE_THRESHOLD, DEFAULT_MIN_SLOPE, DEFAULT_MIN_PATH_LENGTH, DEFAULT_EMBANKMENT_RADIUS, DEFAULT_ENABLE_METRICS, DEFAULT_ENABLE_NUDGING, DEFAULT_NUDGING_LIMIT);
 
     public CommonConfig {
+        if (nudgingLimit < 0) {
+            throw new IllegalArgumentException("nudgingLimit must be nonnegative");
+        }
         if (cellSize < 1 || cellSize > 8) {
             throw new IllegalArgumentException("cellSize must be 1-8 chunks");
         }
@@ -66,6 +73,8 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue MIN_PATH_LENGTH;
         public static final ForgeConfigSpec.IntValue EMBANKMENT_RADIUS;
         public static final ForgeConfigSpec.BooleanValue ENABLE_METRICS;
+        public static final ForgeConfigSpec.BooleanValue ENABLE_NUDGING;
+        public static final ForgeConfigSpec.IntValue NUDGING_LIMIT;
 
         static {
             ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
@@ -102,6 +111,14 @@ public record CommonConfig(
                 .comment("Enable performance metrics collection. Useful for debugging but consumes memory.")
                 .define("enableMetrics", DEFAULT_ENABLE_METRICS);
 
+            ENABLE_NUDGING = builder
+                .comment("Allow river path previews to rotate downhill directions toward their destination. Nudged steps may go uphill.")
+                .define("enableNudging", DEFAULT_ENABLE_NUDGING);
+
+            NUDGING_LIMIT = builder
+                .comment("Maximum uphill rise in blocks per nudged step, measured between sampled average cell heights. Zero allows flat or downhill nudges. Direct approaches are unaffected.")
+                .defineInRange("nudgingLimit", DEFAULT_NUDGING_LIMIT, 0, Integer.MAX_VALUE);
+
             SPEC = builder.build();
         }
 
@@ -114,7 +131,9 @@ public record CommonConfig(
                 MIN_SLOPE.get(),
                 MIN_PATH_LENGTH.get(),
                 EMBANKMENT_RADIUS.get(),
-                ENABLE_METRICS.get()
+                ENABLE_METRICS.get(),
+                ENABLE_NUDGING.get(),
+                NUDGING_LIMIT.get()
             ));
         }
     }

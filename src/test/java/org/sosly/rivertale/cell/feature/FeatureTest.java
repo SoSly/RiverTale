@@ -24,7 +24,7 @@ class FeatureTest {
 
     @BeforeEach
     void setUp() {
-        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false));
+        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false, false, 16));
         SampleCache.shutdown();
         CellCache.shutdown();
         provider = new TestSampleProvider();

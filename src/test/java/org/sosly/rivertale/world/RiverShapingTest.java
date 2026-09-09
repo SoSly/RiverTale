@@ -42,7 +42,7 @@ class RiverShapingTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 10, 1, 3, 288, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, 10, 1, 3, 288, false, false, 16));
         RiverShaping.shutdown();
         SampleCache.shutdown();
         CellCache.shutdown();

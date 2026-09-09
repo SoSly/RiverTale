@@ -27,7 +27,7 @@ public class RegionExplorer {
         }
 
         if (type == RegionType.INLAND) {
-            return Set.of(currentRegion);
+            return discoverInland(currentRegion);
         }
 
         Set<Region> workingSet = new HashSet<>();
@@ -58,6 +58,43 @@ public class RegionExplorer {
         return workingSet;
     }
 
+    private static Set<Region> discoverInland(Region current) {
+        Set<Region> neighbors = adjacentRegions(current);
+        Set<Region> fluvial = new HashSet<>();
+        for (Region neighbor : neighbors) {
+            if (neighbor.type() == RegionType.FLUVIAL) {
+                fluvial.add(neighbor);
+            }
+        }
+
+        Set<Region> workingSet = new HashSet<>();
+        workingSet.add(current);
+        if (fluvial.isEmpty()) {
+            workingSet.addAll(neighbors);
+            return workingSet;
+        }
+
+        workingSet.addAll(fluvial);
+        for (Region region : fluvial) {
+            for (Region neighbor : adjacentRegions(region)) {
+                if (neighbor.type() == RegionType.COASTAL) {
+                    workingSet.add(neighbor);
+                }
+            }
+        }
+        return workingSet;
+    }
+
+    private static Set<Region> adjacentRegions(Region region) {
+        Set<Region> neighbors = new HashSet<>();
+        for (FlowDirection direction : FlowDirection.D4) {
+            RegionPos pos = region.pos().relative(direction);
+            if (!pos.containsOutOfBoundsCells()) {
+                neighbors.add(RegionCache.get().getOrCompute(pos));
+            }
+        }
+        return neighbors;
+    }
     private static boolean borderCellsFlowToward(Region source, Region target, FlowDirection edgeDirection) {
         List<CellPos> borderCells = source.pos().getBorderCells(edgeDirection);
         CellCache cellCache = CellCache.get();
