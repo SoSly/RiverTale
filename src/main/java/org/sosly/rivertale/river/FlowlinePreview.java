@@ -33,14 +33,18 @@ public final class FlowlinePreview {
                 return List.of();
             }
 
-            FlowlineTracer tracer = new FlowlineTracer(workingSet);
+            FlowlineTracer tracer = new FlowlineTracer(pos -> RegionExplorer.discover(pos.getWorldPosition(0)),
+                RiverShaping::classify, 5, 0);
+            if (!tracer.hasDestinations(region.pos())) {
+                return List.of();
+            }
             List<Flowline> paths = new ArrayList<>();
             for (CellPos pos : region.cells()) {
                 Cell source = RiverShaping.classify(pos);
                 if (source.feature().type != CellType.SOURCE) {
                     continue;
                 }
-                Flowline path = tracer.trace(pos);
+                Flowline path = traceSource(tracer, pos);
                 if (path.isValid()) {
                     paths.add(path);
                 }
@@ -49,5 +53,13 @@ public final class FlowlinePreview {
         } finally {
             timer.stop();
         }
+    }
+
+    private static Flowline traceSource(FlowlineTracer tracer, CellPos source) {
+        Timer regional = Store.getTimer(FlowlineTracer.class, "regionalRouting");
+        double before = regional.total();
+        Flowline path = tracer.trace(source);
+        Store.getTimer(FlowlineTracer.class, "regionalInsideTrace").record((long) ((regional.total() - before) * 1000));
+        return path;
     }
 }
