@@ -19,7 +19,14 @@ Nudging is enabled by default, with `nudgingLimit = 16` allowing at most 16 bloc
 
 Each source uses an iterative depth-first search with no search budget. Failed branches are retried in preference order, including backtracking to the source when necessary. Duplicate next steps are removed, and exhausted cells are remembered within that source's search. Every step must still move closer to the nearest destination and stay inside the permitted regions. Within 5 cells, only the direct step is considered. Failed previews retain the first failed branch for diagnostics and are not displayed.
 
+Before sending a preview, `/rivertale vis` prepares upstream contributors rooted in the player's current region. It checks every source region whose existing routing territory can include that region, traces its sources, and adds the regions traversed before those paths enter the target. It repeats this for newly included upstream regions until no contributors remain. Incoming paths may use the existing nudging and backtracking rules. A candidate is included when its selected successful path enters the set; permission to enter alone does not make it a contributor. Downstream-only routing regions and their unrelated tributaries do not become expansion roots.
+
+The candidate search covers up to two cardinal region steps from each target, matching the longest existing inland-to-fluvial-to-coastal routing corridor. This is a bound on where an individual source's permitted territory can reach, not a limit on the recursive upstream set. Preparation has no region-count budget, traces each candidate source region at most once per request, and preserves each source region's original routing rules and destinations. Region borders and cell overlays still cover the existing nine-region view; paths from more distant contributors are included in the current region's packet. The renderer displays each source's path once even if it is present in multiple cached packets.
+
 With metrics enabled, `/rivertale metrics` reports:
+
+- `FlowlinePreparation_prepare` measures the complete upstream preparation, including region discovery and source tracing.
+- `FlowlinePreparation_upstreamRegions`, `FlowlinePreparation_examinedRegions`, and `FlowlinePreparation_tracedRegions` report region counts per preparation. The first includes the current region; the latter counts include candidates that were checked but did not contribute. Existing tracer metrics include those candidate traces as well.
 
 - `FlowlineTracer_trace` measures the complete search for each source.
 - `FlowlineTracer_lengthBlocks` reports count, average, minimum, maximum, and median horizontal length along successful paths, in blocks. Diagonal steps count their actual horizontal distance. Failed branches are excluded; repeated successful traces are separate samples.

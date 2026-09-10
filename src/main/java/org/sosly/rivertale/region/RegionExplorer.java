@@ -1,5 +1,6 @@
 package org.sosly.rivertale.region;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -11,6 +12,23 @@ import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 
 public class RegionExplorer {
+
+    public static List<RegionPos> potentialSources(RegionPos target) {
+        List<RegionPos> sources = new ArrayList<>();
+        // The longest permitted region corridor is inland -> fluvial -> coastal: two cardinal steps.
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                if (Math.abs(dx) + Math.abs(dz) > 2) {
+                    continue;
+                }
+                RegionPos source = new RegionPos(target.x() + dx, target.z() + dz);
+                if (!source.containsOutOfBoundsCells()) {
+                    sources.add(source);
+                }
+            }
+        }
+        return List.copyOf(sources);
+    }
 
     public static Set<Region> discover(BlockPos blockPos) {
         RegionPos regionPos = new RegionPos(blockPos);

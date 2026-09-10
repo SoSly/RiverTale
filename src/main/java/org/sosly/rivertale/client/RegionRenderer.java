@@ -7,6 +7,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Set;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.world.phys.Vec3;
@@ -23,6 +25,7 @@ import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.FlowDirection;
+import org.sosly.rivertale.core.CellPos;
 
 @OnlyIn(Dist.CLIENT)
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
@@ -84,6 +87,7 @@ public class RegionRenderer {
 
         int cellBlocks = CommonConfig.get().cellBlocks();
 
+        Set<CellPos> renderedSources = new HashSet<>();
         for (ClientRegionCache.Region region : cache.getRegions()) {
             if (ClientRegionCache.isModeEnabled(VisMode.REGIONS)) {
                 renderRegionBorder(region, poseStack, buffer, camPos, seaLevel);
@@ -94,7 +98,7 @@ public class RegionRenderer {
             if (ClientRegionCache.isModeEnabled(VisMode.BOUNDARIES)) {
                 renderBoundaries(region, poseStack, buffer, camPos, seaLevel);
             }
-            renderFlowlines(region, poseStack, buffer, camPos);
+            renderFlowlines(region, poseStack, buffer, camPos, renderedSources);
         }
 
         tesselator.end();
@@ -200,8 +204,11 @@ public class RegionRenderer {
     }
 
     private static void renderFlowlines(ClientRegionCache.Region region, PoseStack poseStack,
-                                         BufferBuilder buffer, Vec3 camPos) {
+                                         BufferBuilder buffer, Vec3 camPos, Set<CellPos> renderedSources) {
         for (ClientRegionCache.Flowline path : region.paths()) {
+            if (path.points().isEmpty() || !renderedSources.add(path.points().get(0).pos())) {
+                continue;
+            }
             for (int i = 0; i < path.points().size(); i++) {
                 ClientRegionCache.Point point = path.points().get(i);
                 Vec3 start = new Vec3(point.pos().getMiddleBlockX(), point.y() + 2, point.pos().getMiddleBlockZ());

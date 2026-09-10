@@ -3,6 +3,7 @@ package org.sosly.rivertale.river;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.core.CellPos;
@@ -17,9 +18,17 @@ public final class FlowlinePreview {
     }
 
     public static List<Flowline> trace(Region region) {
+        return trace(region, () -> RegionExplorer.discover(region.pos().getWorldPosition(0)));
+    }
+
+    static List<Flowline> trace(Region region, Set<Region> workingSet) {
+        return trace(region, () -> workingSet);
+    }
+
+    private static List<Flowline> trace(Region region, Supplier<Set<Region>> regions) {
         Timer.Record timer = Store.getTimer(FlowlinePreview.class, "trace").start();
         try {
-            Set<Region> workingSet = RegionExplorer.discover(region.pos().getWorldPosition(0));
+            Set<Region> workingSet = regions.get();
             if (workingSet.stream().allMatch(candidate -> candidate.boundaries().isEmpty())) {
                 return List.of();
             }

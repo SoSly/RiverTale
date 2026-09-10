@@ -5,6 +5,8 @@ import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.nbt.CompoundTag;
@@ -118,6 +120,31 @@ class FlowlinePreviewTest {
     }
 
     @Test
+    void upstreamPreparationFindsTheSameDistantSourcesWithColdAndPrewarmedCaches() {
+        Region region = RegionCache.get().getOrCompute(source.getRegion());
+        FlowlinePreparation.Result cold = FlowlinePreparation.prepare(region);
+        CellPos distantSource = new CellPos(-9, 2);
+        assertTrue(cold.upstream().containsKey(distantSource.getRegion()));
+        assertTrue(cold.upstream().get(distantSource.getRegion()).stream()
+            .anyMatch(path -> path.cells().get(0).equals(distantSource)
+                && path.cells().stream().anyMatch(region.pos()::contains)));
+
+        RegionCache.get().clear();
+        RegionTypeCache.get().clear();
+        CellCache.get().clear();
+        SampleCache.get().clear();
+        List<RegionPos> regions = new ArrayList<>(cold.upstream().keySet());
+        Collections.reverse(regions);
+        for (RegionPos pos : regions) {
+            RegionCache.get().getOrCompute(pos);
+        }
+        FlowlinePreparation.Result warm = FlowlinePreparation.prepare(RegionCache.get().getOrCompute(source.getRegion()));
+
+        assertEquals(cold.upstream(), warm.upstream());
+        assertNull(WatershedCache.get());
+    }
+
+    @Test
     void previewPacketPreservesSeparatePathsAndTheirSampledHeights() {
         Region region = RegionCache.get().getOrCompute(source.getRegion());
         CellPos terminus = new CellPos(6, 2);
@@ -176,6 +203,7 @@ class FlowlinePreviewTest {
             assertEquals(1, VisCommand.register().build().getCommand().run(context));
             assertTrue(VisCommand.isEnabled(player));
             boolean foundPath = false;
+            Map<CellPos, Integer> sourceCounts = new HashMap<>();
             for (Message message : messages) {
                 if (!(message instanceof Region.Packet packet)) {
                     continue;
@@ -185,11 +213,14 @@ class FlowlinePreviewTest {
                     Region.Packet.encode(packet, buffer);
                     ClientRegionCache.Region region = ClientRegionCache.Region.decode(buffer.readNbt());
                     foundPath |= region.paths().stream().anyMatch(path -> path.points().get(0).pos().equals(source));
+                    region.paths().forEach(path -> sourceCounts.merge(path.points().get(0).pos(), 1, Integer::sum));
                 } finally {
                     buffer.release();
                 }
             }
             assertTrue(foundPath, "The existing vis command must send the source path to the client");
+            assertEquals(1, sourceCounts.get(new CellPos(-9, 2)), "The incoming source outside the visible ring must be sent");
+            assertTrue(sourceCounts.values().stream().allMatch(count -> count == 1));
             assertNull(WatershedCache.get());
 
             messages.clear();
@@ -216,6 +247,9 @@ class FlowlinePreviewTest {
             int height = ocean ? 40 : 200 - 15 * pos.x - 3 * Math.abs(pos.z - 2);
             if (pos.x == 1 && pos.z == 2) {
                 height = 250;
+            }
+            if (pos.x == -9 && pos.z == 2) {
+                height = 600;
             }
             return new Sample(pos, ocean ? -0.5 : 0.5, height, ocean, 0.5, 0.1, 0.1, 0.1);
         }

@@ -2,9 +2,11 @@ package org.sosly.rivertale.command;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -31,6 +33,8 @@ import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.networking.Network;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
+import org.sosly.rivertale.river.Flowline;
+import org.sosly.rivertale.river.FlowlinePreparation;
 import org.sosly.rivertale.river.FlowlinePreview;
 import org.sosly.rivertale.world.RiverShaping;
 
@@ -151,9 +155,24 @@ public class VisCommand {
             loadedRegions.add(neighbor);
         }
 
+        FlowlinePreparation.Result prepared = FlowlinePreparation.prepare(regionCache.getOrCompute(center));
+        List<Flowline> distantUpstreams = new ArrayList<>();
+        for (Map.Entry<RegionPos, List<Flowline>> entry : prepared.upstream().entrySet()) {
+            if (!loadedRegions.contains(entry.getKey())) {
+                distantUpstreams.addAll(entry.getValue());
+            }
+        }
         for (RegionPos pos : loadedRegions) {
             Region region = regionCache.getOrCompute(pos);
-            Network.sendToPlayer(new Region.Packet(region, FlowlinePreview.trace(region)), player);
+            List<Flowline> paths = prepared.traced().get(pos);
+            if (paths == null) {
+                paths = FlowlinePreview.trace(region);
+            }
+            if (pos.equals(center)) {
+                paths = new ArrayList<>(paths);
+                paths.addAll(distantUpstreams);
+            }
+            Network.sendToPlayer(new Region.Packet(region, paths), player);
         }
     }
 
