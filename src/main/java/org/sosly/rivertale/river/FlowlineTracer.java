@@ -26,8 +26,8 @@ import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.world.RiverShaping;
 
 public class FlowlineTracer {
-    private static final int DIRECT_APPROACH_CELLS = 5;
-    private static final int FALLBACK_APPROACH_CELLS = 10;
+    private static final int DIRECT_APPROACH_CELLS = 0;
+    private static final int FALLBACK_APPROACH_CELLS = 5;
 
     private final Set<RegionPos> allowedRegions = new HashSet<>();
     private final List<CellPos> termini;
