@@ -11,7 +11,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import org.sosly.rivertale.cell.Cell;
-import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Boundary;
@@ -39,7 +38,7 @@ public class FlowlineTracer {
     private final int nudgingLimit;
 
     public FlowlineTracer(Collection<Region> regions) {
-        this(regions, CellCache.get()::getOrComputeWithFlow, DIRECT_APPROACH_CELLS, FALLBACK_APPROACH_CELLS);
+        this(regions, RiverShaping::classify, DIRECT_APPROACH_CELLS, FALLBACK_APPROACH_CELLS);
     }
 
     FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int directThreshold, int fallbackThreshold) {
