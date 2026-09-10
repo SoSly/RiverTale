@@ -2,6 +2,7 @@ package org.sosly.rivertale.region;
 
 import com.mojang.logging.LogUtils;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -69,6 +70,20 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
     }
 
     public CompoundTag encode(List<Flowline> paths) {
+        Set<Watershed> watersheds = new HashSet<>();
+        WatershedCache cache = WatershedCache.get();
+        if (cache != null) {
+            for (CellPos cell : cells()) {
+                Watershed watershed = cache.getWatershed(cell);
+                if (watershed != null) {
+                    watersheds.add(watershed);
+                }
+            }
+        }
+        return encode(paths, watersheds);
+    }
+
+    public CompoundTag encode(List<Flowline> paths, Collection<Watershed> watersheds) {
         CompoundTag tag = new CompoundTag();
         tag.putLong("pos", pos.toLong());
         tag.putString("type", type.name());
@@ -96,24 +111,30 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
         tag.put("cells", cellList);
 
         ListTag watershedList = new ListTag();
-        WatershedCache watershedCache = WatershedCache.get();
-        if (watershedCache != null) {
-            Set<Watershed> seen = new HashSet<>();
-            for (CellPos cellPos : cells()) {
-                Watershed watershed = watershedCache.getWatershed(cellPos);
-                if (watershed != null && seen.add(watershed)) {
-                    ListTag edges = watershed.encode(cellCache);
-                    for (int i = 0; i < edges.size(); i++) {
-                        watershedList.add(edges.getCompound(i));
-                    }
+        ListTag outletList = new ListTag();
+        Set<CellPos> mergedCells = new HashSet<>();
+        for (Watershed watershed : watersheds) {
+            mergedCells.addAll(watershed.allCells());
+            ListTag edges = watershed.encode(cellCache);
+            for (int i = 0; i < edges.size(); i++) {
+                watershedList.add(edges.getCompound(i));
+            }
+            for (CellPos cell : watershed.allCells()) {
+                if (watershed.downstream(cell) == null) {
+                    CompoundTag outlet = new CompoundTag();
+                    outlet.putLong("pos", cell.toLong());
+                    outlet.putInt("y", cellCache.getOrCompute(cell).averageEstimatedTerrainHeight());
+                    outletList.add(outlet);
                 }
             }
         }
         tag.put("watershed", watershedList);
+        tag.put("outlets", outletList);
 
         ListTag pathList = new ListTag();
         for (Flowline path : paths) {
-            if (path.isValid()) {
+            boolean merged = !path.cells().isEmpty() && mergedCells.contains(path.cells().get(0));
+            if (path.isValid() && !merged) {
                 pathList.add(path.encode(cellCache));
             }
         }
@@ -131,6 +152,10 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
 
         public Packet(Region region, List<Flowline> paths) {
             this.data = region.encode(paths);
+        }
+
+        public Packet(Region region, List<Flowline> paths, Collection<Watershed> watersheds) {
+            this.data = region.encode(paths, watersheds);
         }
 
         private Packet(CompoundTag data) {

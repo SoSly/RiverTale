@@ -14,45 +14,69 @@ import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
-import org.sosly.rivertale.region.RegionExplorer;
 
 public final class FlowlinePreparation {
-    private final Map<RegionPos, Set<Region>> routing = new HashMap<>();
+    private final FlowlineTracer tracer;
+    private final UpstreamSearch search;
     private final Map<RegionPos, List<Flowline>> traced = new HashMap<>();
+    private final Map<RegionPos, Set<Flowline>> crossing = new HashMap<>();
     private final Set<RegionPos> upstream = new HashSet<>();
     private final Queue<RegionPos> pending = new ArrayDeque<>();
 
-    private FlowlinePreparation() {
+    private FlowlinePreparation(FlowlineTracer tracer) {
+        this.tracer = tracer;
+        this.search = new UpstreamSearch(tracer);
     }
 
     public static Result prepare(Region region) {
+        return prepare(region, new FlowlineTracer());
+    }
+
+    static Result prepare(Region region, FlowlineTracer tracer) {
         Timer.Record timer = Store.getTimer(FlowlinePreparation.class, "prepare").start();
         try {
-            FlowlinePreparation preparation = new FlowlinePreparation();
+            FlowlinePreparation preparation = new FlowlinePreparation(tracer);
             preparation.include(region.pos());
             preparation.discover();
             Store.getDistribution(FlowlinePreparation.class, "upstreamRegions").record(preparation.upstream.size());
-            Store.getDistribution(FlowlinePreparation.class, "examinedRegions").record(preparation.routing.size());
+            Store.getDistribution(FlowlinePreparation.class, "examinedRegions").record(preparation.search.regionCount());
+            Store.getDistribution(FlowlinePreparation.class, "upstreamCells").record(preparation.search.cellCount());
             Store.getDistribution(FlowlinePreparation.class, "tracedRegions").record(preparation.traced.size());
             Map<RegionPos, List<Flowline>> contributors = new LinkedHashMap<>();
             preparation.upstream.stream().sorted(FlowlinePreparation::compare).forEach(pos -> contributors.put(pos, preparation.paths(pos)));
-            return new Result(contributors, preparation.traced);
+            return new Result(contributors, preparation.traced, tracer);
         } finally {
             timer.stop();
         }
     }
 
+    FlowlinePreparation(Result prepared) {
+        this(prepared.tracer());
+        traced.putAll(prepared.traced());
+        traced.values().forEach(paths -> paths.forEach(this::index));
+    }
+
     private void discover() {
         while (!pending.isEmpty()) {
             RegionPos target = pending.remove();
+            Region region = RegionCache.get().getOrCompute(target);
+            for (RegionPos source : search.expand(region.cells()).stream().sorted(FlowlinePreparation::compare).toList()) {
+                paths(source);
+            }
             paths(target);
-            for (RegionPos source : RegionExplorer.potentialSources(target)) {
-                if (workingSet(source).stream().noneMatch(region -> region.pos().equals(target))) {
-                    continue;
-                }
-                for (Flowline path : paths(source)) {
-                    includeUpstream(path, target);
-                }
+            for (Flowline path : crossing.getOrDefault(target, Set.of())) {
+                includeUpstream(path, target);
+            }
+        }
+    }
+
+    private void index(Flowline path) {
+        Set<RegionPos> traversed = new HashSet<>();
+        path.cells().forEach(cell -> traversed.add(cell.getRegion()));
+        for (RegionPos region : traversed) {
+            crossing.computeIfAbsent(region, key -> new HashSet<>()).add(path);
+            if (upstream.contains(region)) {
+                includeUpstream(path, region);
             }
         }
     }
@@ -76,12 +100,12 @@ public final class FlowlinePreparation {
         }
     }
 
-    private Set<Region> workingSet(RegionPos pos) {
-        return routing.computeIfAbsent(pos, key -> RegionExplorer.discover(key.getWorldPosition(0)));
-    }
-
-    private List<Flowline> paths(RegionPos pos) {
-        return traced.computeIfAbsent(pos, key -> FlowlinePreview.trace(RegionCache.get().getOrCompute(key), workingSet(key)));
+    List<Flowline> paths(RegionPos pos) {
+        return traced.computeIfAbsent(pos, key -> {
+            List<Flowline> paths = FlowlinePreview.trace(RegionCache.get().getOrCompute(key), tracer);
+            paths.forEach(this::index);
+            return paths;
+        });
     }
 
     private static int compare(RegionPos first, RegionPos second) {
@@ -89,7 +113,11 @@ public final class FlowlinePreparation {
         return x == 0 ? Integer.compare(first.z(), second.z()) : x;
     }
 
-    public record Result(Map<RegionPos, List<Flowline>> upstream, Map<RegionPos, List<Flowline>> traced) {
+    public record Result(Map<RegionPos, List<Flowline>> upstream, Map<RegionPos, List<Flowline>> traced, FlowlineTracer tracer) {
+        public List<Flowline> trace(Region region) {
+            return FlowlinePreview.trace(region, tracer);
+        }
+
         public Result {
             upstream = Collections.unmodifiableMap(new LinkedHashMap<>(upstream));
             traced = Map.copyOf(traced);

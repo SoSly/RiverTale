@@ -76,7 +76,7 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
     }
 
     public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries, List<Cell> cells,
-                         List<Edge> edges, List<Flowline> paths) {
+                         List<Edge> edges, List<Flowline> paths, List<Point> outlets) {
         public static Region decode(CompoundTag tag) {
             RegionPos pos = new RegionPos(tag.getLong("pos"));
             RegionType type = RegionType.valueOf(tag.getString("type"));
@@ -105,7 +105,13 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
                 paths.add(Flowline.decode(pathList.getCompound(i)));
             }
 
-            return new Region(pos, type, boundaries, cells, edges, paths);
+            List<Point> outlets = new ArrayList<>();
+            ListTag outletList = tag.getList("outlets", Tag.TAG_COMPOUND);
+            for (int i = 0; i < outletList.size(); i++) {
+                CompoundTag outlet = outletList.getCompound(i);
+                outlets.add(new Point(new CellPos(outlet.getLong("pos")), outlet.getInt("y")));
+            }
+            return new Region(pos, type, boundaries, cells, edges, paths, outlets);
         }
     }
 

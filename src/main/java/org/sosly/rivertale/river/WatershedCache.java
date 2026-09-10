@@ -1,5 +1,6 @@
 package org.sosly.rivertale.river;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,7 +84,45 @@ public class WatershedCache {
         }
     }
 
-    public Watershed getWatershed(CellPos cell) {
+    public synchronized void replace(Collection<Watershed> watersheds) {
+        Set<CellPos> replaced = new HashSet<>();
+        for (Watershed watershed : watersheds) {
+            for (CellPos cell : watershed.allCells()) {
+                CellPos previous = cellToTerminus.get(cell);
+                if (previous != null) {
+                    replaced.add(previous);
+                }
+            }
+        }
+        replaced.forEach(this::remove);
+        for (Watershed watershed : watersheds) {
+            CellPos terminus = watershed.outletToSources().get(0);
+            finalized.put(terminus, watershed);
+            regionToTermini.computeIfAbsent(terminus.getRegion(), key -> new HashSet<>()).add(terminus);
+            for (CellPos cell : watershed.allCells()) {
+                cellToTerminus.put(cell, terminus);
+            }
+        }
+    }
+
+    private void remove(CellPos terminus) {
+        pending.remove(terminus);
+        Watershed watershed = finalized.remove(terminus);
+        if (watershed != null) {
+            for (CellPos cell : watershed.allCells()) {
+                cellToTerminus.remove(cell, terminus);
+            }
+        }
+        Set<CellPos> termini = regionToTermini.get(terminus.getRegion());
+        if (termini != null) {
+            termini.remove(terminus);
+            if (termini.isEmpty()) {
+                regionToTermini.remove(terminus.getRegion());
+            }
+        }
+    }
+
+    public synchronized Watershed getWatershed(CellPos cell) {
         CellPos terminus = cellToTerminus.get(cell);
         if (terminus == null) {
             return null;
@@ -91,7 +130,7 @@ public class WatershedCache {
         return finalized.get(terminus);
     }
 
-    public void evictForRegion(RegionPos region) {
+    public synchronized void evictForRegion(RegionPos region) {
         Set<CellPos> termini = regionToTermini.remove(region);
         if (termini == null) {
             return;

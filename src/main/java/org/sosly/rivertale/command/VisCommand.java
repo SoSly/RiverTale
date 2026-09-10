@@ -2,7 +2,6 @@ package org.sosly.rivertale.command;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,7 +34,10 @@ import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.river.Flowline;
 import org.sosly.rivertale.river.FlowlinePreparation;
-import org.sosly.rivertale.river.FlowlinePreview;
+import org.sosly.rivertale.river.Watershed;
+import org.sosly.rivertale.river.WatershedBuilder;
+import org.sosly.rivertale.river.WatershedCache;
+import org.sosly.rivertale.river.WatershedPreparation;
 import org.sosly.rivertale.world.RiverShaping;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID)
@@ -156,23 +158,19 @@ public class VisCommand {
         }
 
         FlowlinePreparation.Result prepared = FlowlinePreparation.prepare(regionCache.getOrCompute(center));
-        List<Flowline> distantUpstreams = new ArrayList<>();
-        for (Map.Entry<RegionPos, List<Flowline>> entry : prepared.upstream().entrySet()) {
-            if (!loadedRegions.contains(entry.getKey())) {
-                distantUpstreams.addAll(entry.getValue());
-            }
-        }
+        List<Watershed> watersheds = WatershedBuilder.build(WatershedPreparation.gather(prepared));
+        WatershedCache.init();
+        WatershedCache.get().replace(watersheds);
         for (RegionPos pos : loadedRegions) {
             Region region = regionCache.getOrCompute(pos);
             List<Flowline> paths = prepared.traced().get(pos);
             if (paths == null) {
-                paths = FlowlinePreview.trace(region);
+                paths = prepared.trace(region);
             }
-            if (pos.equals(center)) {
-                paths = new ArrayList<>(paths);
-                paths.addAll(distantUpstreams);
-            }
-            Network.sendToPlayer(new Region.Packet(region, paths), player);
+            Region.Packet packet = pos.equals(center)
+                ? new Region.Packet(region, paths, watersheds)
+                : new Region.Packet(region, paths);
+            Network.sendToPlayer(packet, player);
         }
     }
 

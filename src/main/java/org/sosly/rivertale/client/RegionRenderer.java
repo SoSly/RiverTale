@@ -87,7 +87,17 @@ public class RegionRenderer {
 
         int cellBlocks = CommonConfig.get().cellBlocks();
 
+        Set<CellPos> renderedEdges = new HashSet<>();
+        Set<CellPos> renderedOutlets = new HashSet<>();
         Set<CellPos> renderedSources = new HashSet<>();
+        for (ClientRegionCache.Region region : cache.getRegions()) {
+            renderPaths(region, poseStack, buffer, camPos, renderedEdges, renderedOutlets);
+            region.edges().forEach(edge -> {
+                renderedSources.add(edge.from());
+                renderedSources.add(edge.to());
+            });
+            region.outlets().forEach(outlet -> renderedSources.add(outlet.pos()));
+        }
         for (ClientRegionCache.Region region : cache.getRegions()) {
             if (ClientRegionCache.isModeEnabled(VisMode.REGIONS)) {
                 renderRegionBorder(region, poseStack, buffer, camPos, seaLevel);
@@ -229,17 +239,25 @@ public class RegionRenderer {
     }
 
     private static void renderPaths(ClientRegionCache.Region region, PoseStack poseStack,
-                                     BufferBuilder buffer, Vec3 camPos) {
+                                     BufferBuilder buffer, Vec3 camPos, Set<CellPos> renderedEdges, Set<CellPos> renderedOutlets) {
         for (ClientRegionCache.Edge edge : region.edges()) {
-            double fromX = edge.from().getMiddleBlockX();
-            double fromZ = edge.from().getMiddleBlockZ();
-            double toX = edge.to().getMiddleBlockX();
-            double toZ = edge.to().getMiddleBlockZ();
-
-            Vec3 start = new Vec3(fromX, edge.fromY(), fromZ);
-            Vec3 end = new Vec3(toX, edge.toY(), toZ);
-
+            if (!renderedEdges.add(edge.from())) {
+                continue;
+            }
+            Vec3 start = new Vec3(edge.from().getMiddleBlockX(), edge.fromY() + 2, edge.from().getMiddleBlockZ());
+            Vec3 end = new Vec3(edge.to().getMiddleBlockX(), edge.toY() + 2, edge.to().getMiddleBlockZ());
             drawLine(poseStack, buffer, start, end, camPos, COLOR_PATH);
+            Vec3[] arrowhead = calculateArrowhead(end, FlowDirection.toward(edge.from(), edge.to()));
+            drawLine(poseStack, buffer, end, arrowhead[0], camPos, COLOR_PATH);
+            drawLine(poseStack, buffer, end, arrowhead[1], camPos, COLOR_PATH);
+        }
+        for (ClientRegionCache.Point outlet : region.outlets()) {
+            if (!renderedOutlets.add(outlet.pos())) {
+                continue;
+            }
+            Vec3 point = new Vec3(outlet.pos().getMiddleBlockX(), outlet.y() + 2, outlet.pos().getMiddleBlockZ());
+            drawLine(poseStack, buffer, point.add(-2, 0, 0), point.add(2, 0, 0), camPos, COLOR_PATH);
+            drawLine(poseStack, buffer, point.add(0, 0, -2), point.add(0, 0, 2), camPos, COLOR_PATH);
         }
     }
 

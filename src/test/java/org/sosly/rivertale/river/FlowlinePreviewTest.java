@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.commands.CommandSourceStack;
@@ -43,6 +45,7 @@ import org.sosly.rivertale.world.RiverShaping;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -73,6 +76,7 @@ class FlowlinePreviewTest {
 
     @AfterEach
     void tearDown() {
+        WatershedCache.shutdown();
         RegionCache.shutdown();
         RegionTypeCache.shutdown();
         CellCache.shutdown();
@@ -123,6 +127,7 @@ class FlowlinePreviewTest {
     void upstreamPreparationFindsTheSameDistantSourcesWithColdAndPrewarmedCaches() {
         Region region = RegionCache.get().getOrCompute(source.getRegion());
         FlowlinePreparation.Result cold = FlowlinePreparation.prepare(region);
+        List<Watershed> coldWatersheds = WatershedBuilder.build(WatershedPreparation.gather(cold));
         CellPos distantSource = new CellPos(-9, 2);
         assertTrue(cold.upstream().containsKey(distantSource.getRegion()));
         assertTrue(cold.upstream().get(distantSource.getRegion()).stream()
@@ -141,7 +146,26 @@ class FlowlinePreviewTest {
         FlowlinePreparation.Result warm = FlowlinePreparation.prepare(RegionCache.get().getOrCompute(source.getRegion()));
 
         assertEquals(cold.upstream(), warm.upstream());
+        List<Watershed> warmWatersheds = WatershedBuilder.build(WatershedPreparation.gather(warm));
+        assertEquals(topology(coldWatersheds), topology(warmWatersheds));
         assertNull(WatershedCache.get());
+    }
+
+    @Test
+    void gatheringFromEitherEndProducesTheSameCompleteWatershed() {
+        Region root = RegionCache.get().getOrCompute(source.getRegion());
+        List<Watershed> coastal = WatershedBuilder.build(WatershedPreparation.gather(FlowlinePreparation.prepare(root)));
+        CellPos distant = new CellPos(-9, 2);
+        Watershed fromCoast = coastal.stream().filter(watershed -> watershed.contains(distant)).findFirst().orElseThrow();
+        RegionCache.get().clear();
+        RegionTypeCache.get().clear();
+        CellCache.get().clear();
+        SampleCache.get().clear();
+        Region upstream = RegionCache.get().getOrCompute(distant.getRegion());
+        List<Watershed> inland = WatershedBuilder.build(WatershedPreparation.gather(FlowlinePreparation.prepare(upstream)));
+        Watershed fromInland = inland.stream().filter(watershed -> watershed.contains(distant)).findFirst().orElseThrow();
+
+        assertEquals(topology(List.of(fromCoast)), topology(List.of(fromInland)));
     }
 
     @Test
@@ -181,7 +205,7 @@ class FlowlinePreviewTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void existingVisCommandSendsPathsAndTogglesTheWholeOverlayOff() throws Exception {
+    void existingVisCommandSendsMergedWatershedsAndTogglesTheWholeOverlayOff() throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
         ServerPlayer player = mock(ServerPlayer.class, RETURNS_DEEP_STUBS);
@@ -202,8 +226,8 @@ class FlowlinePreviewTest {
             });
             assertEquals(1, VisCommand.register().build().getCommand().run(context));
             assertTrue(VisCommand.isEnabled(player));
-            boolean foundPath = false;
-            Map<CellPos, Integer> sourceCounts = new HashMap<>();
+            Map<CellPos, Set<CellPos>> sentLinks = new HashMap<>();
+            Set<CellPos> sentOutlets = new HashSet<>();
             for (Message message : messages) {
                 if (!(message instanceof Region.Packet packet)) {
                     continue;
@@ -212,16 +236,25 @@ class FlowlinePreviewTest {
                 try {
                     Region.Packet.encode(packet, buffer);
                     ClientRegionCache.Region region = ClientRegionCache.Region.decode(buffer.readNbt());
-                    foundPath |= region.paths().stream().anyMatch(path -> path.points().get(0).pos().equals(source));
-                    region.paths().forEach(path -> sourceCounts.merge(path.points().get(0).pos(), 1, Integer::sum));
+                    region.edges().forEach(edge -> sentLinks.computeIfAbsent(edge.from(), key -> new HashSet<>()).add(edge.to()));
+                    region.outlets().forEach(outlet -> sentOutlets.add(outlet.pos()));
+                    region.edges().stream().filter(edge -> edge.from().equals(source))
+                        .forEach(edge -> assertEquals(250, edge.fromY()));
+                    assertTrue(region.paths().stream().noneMatch(path -> path.points().get(0).pos().equals(source)));
                 } finally {
                     buffer.release();
                 }
             }
-            assertTrue(foundPath, "The existing vis command must send the source path to the client");
-            assertEquals(1, sourceCounts.get(new CellPos(-9, 2)), "The incoming source outside the visible ring must be sent");
-            assertTrue(sourceCounts.values().stream().allMatch(count -> count == 1));
-            assertNull(WatershedCache.get());
+            assertTrue(sentLinks.containsKey(source), "The existing vis command must send the merged source branch");
+            assertTrue(sentLinks.containsKey(new CellPos(-9, 2)), "The incoming source outside the visible ring must be sent");
+            assertTrue(sentLinks.values().stream().allMatch(next -> next.size() == 1));
+            Watershed watershed = WatershedCache.get().getWatershed(source);
+            assertNotNull(watershed);
+            assertTrue(sentOutlets.contains(watershed.terminus(source).orElseThrow()));
+            for (CellPos cell : watershed.allCells()) {
+                assertNull(CellCache.get().getOrCompute(cell).entryY());
+                assertNull(CellCache.get().getOrCompute(cell).exitY());
+            }
 
             messages.clear();
             VisCommand.register().build().getCommand().run(context);
@@ -238,6 +271,16 @@ class FlowlinePreviewTest {
         } finally {
             VisCommand.onPlayerLogout(new PlayerEvent.PlayerLoggedOutEvent(player));
         }
+    }
+
+    private Map<CellPos, CellPos> topology(List<Watershed> watersheds) {
+        Map<CellPos, CellPos> links = new HashMap<>();
+        for (Watershed watershed : watersheds) {
+            for (CellPos cell : watershed.allCells()) {
+                links.put(cell, watershed.downstream(cell));
+            }
+        }
+        return links;
     }
 
     private static class SlopingTerrain implements SampleProvider {
