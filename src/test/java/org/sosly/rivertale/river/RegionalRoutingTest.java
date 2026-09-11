@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -105,6 +106,19 @@ class RegionalRoutingTest {
         assertEquals(secondShore, arriving.terminus());
         assertEquals(secondShore, local.terminus());
         assertEquals(arriving.cells().subList(1, arriving.cells().size()), local.cells());
+        assertEquals(3, routingLoads.get());
+    }
+
+    @Test
+    void concurrentColdSearchesShareRegionalRulesWithoutSharingActivePaths() {
+        addLoopWithExit();
+        FlowlineTracer tracer = tracer();
+        List<Flowline> paths = IntStream.range(0, 40).parallel()
+            .mapToObj(index -> tracer.trace(new CellPos(7, 2))).toList();
+
+        assertTrue(paths.get(0).isValid());
+        assertTrue(paths.stream().allMatch(paths.get(0)::equals));
+        assertEquals(3, routingLoads.get());
     }
 
     private void addLoopWithExit() {

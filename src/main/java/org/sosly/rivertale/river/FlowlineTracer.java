@@ -32,6 +32,7 @@ public class FlowlineTracer {
     private static final int AWAY_STEP_ALLOWANCE = 10;
 
     private final Function<RegionPos, Collection<Region>> regionProvider;
+    private final Map<RegionPos, Routing> routing = new ConcurrentHashMap<>();
     private final Map<CellPos, List<Step>> moves = new ConcurrentHashMap<>();
     private final Map<CellPos, Feature> features = new ConcurrentHashMap<>();
     private final Function<CellPos, Cell> cells;
@@ -69,20 +70,22 @@ public class FlowlineTracer {
     }
 
     private Routing routing(RegionPos pos) {
-        Collection<Region> regions = pos.containsOutOfBoundsCells() ? List.of() : regionProvider.apply(pos);
-        Set<RegionPos> allowed = new HashSet<>();
-        Set<CellPos> termini = new HashSet<>();
-        regions.forEach(region -> allowed.add(region.pos()));
-        for (Region region : regions) {
-            for (Boundary boundary : region.boundaries()) {
-                if (allowed.contains(boundary.land().getRegion())) {
-                    termini.add(boundary.land());
+        return routing.computeIfAbsent(pos, key -> {
+            Collection<Region> regions = key.containsOutOfBoundsCells() ? List.of() : regionProvider.apply(key);
+            Set<RegionPos> allowed = new HashSet<>();
+            Set<CellPos> termini = new HashSet<>();
+            regions.forEach(region -> allowed.add(region.pos()));
+            for (Region region : regions) {
+                for (Boundary boundary : region.boundaries()) {
+                    if (allowed.contains(boundary.land().getRegion())) {
+                        termini.add(boundary.land());
+                    }
                 }
             }
-        }
-        List<CellPos> ordered = termini.stream().sorted(Comparator.comparingInt(CellPos::x)
-            .thenComparingInt(CellPos::z)).toList();
-        return new Routing(Set.copyOf(allowed), ordered, Set.copyOf(termini));
+            List<CellPos> ordered = termini.stream().sorted(Comparator.comparingInt(CellPos::x)
+                .thenComparingInt(CellPos::z)).toList();
+            return new Routing(Set.copyOf(allowed), ordered, Set.copyOf(termini));
+        });
     }
 
     private boolean isDivide(CellPos pos) {
