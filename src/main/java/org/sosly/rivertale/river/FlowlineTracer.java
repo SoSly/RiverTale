@@ -27,9 +27,7 @@ import org.sosly.rivertale.world.RiverShaping;
 public class FlowlineTracer {
     private static final int FALLBACK_APPROACH_CELLS = 5;
 
-    private final Set<RegionPos> allowedRegions = new HashSet<>();
-    private final List<CellPos> termini;
-    private final Set<CellPos> terminusCells = new HashSet<>();
+    private final Routing routing;
     private final Function<CellPos, Cell> cells;
     private final long fallbackDistanceSquared;
     private final boolean enableNudging;
@@ -44,18 +42,42 @@ public class FlowlineTracer {
         this.enableNudging = CommonConfig.get().enableNudging();
         this.nudgingLimit = CommonConfig.get().nudgingLimit();
         this.fallbackDistanceSquared = (long) fallbackThreshold * fallbackThreshold;
-        for (Region region : regions) {
-            allowedRegions.add(region.pos());
-        }
+        Set<RegionPos> allowed = new HashSet<>();
+        Set<CellPos> termini = new HashSet<>();
+        regions.forEach(region -> allowed.add(region.pos()));
         for (Region region : regions) {
             for (Boundary boundary : region.boundaries()) {
-                if (allowedRegions.contains(boundary.land().getRegion())) {
-                    terminusCells.add(boundary.land());
+                if (allowed.contains(boundary.land().getRegion())) {
+                    termini.add(boundary.land());
                 }
             }
         }
-        termini = new ArrayList<>(terminusCells);
-        termini.sort(Comparator.comparingInt(CellPos::x).thenComparingInt(CellPos::z));
+        List<CellPos> ordered = termini.stream().sorted(Comparator.comparingInt(CellPos::x)
+            .thenComparingInt(CellPos::z)).toList();
+        this.routing = new Routing(Set.copyOf(allowed), ordered, Set.copyOf(termini));
+    }
+
+    private Routing routing(RegionPos pos) {
+        return routing;
+    }
+
+    private boolean isDivide(CellPos pos) {
+        return cells.apply(pos).feature() == Feature.DIVIDE;
+    }
+
+    private boolean isTerminus(CellPos pos) {
+        return routing(pos.getRegion()).terminusCells().contains(pos);
+    }
+
+    private List<Step> steps(CellPos pos) {
+        Routing local = routing(pos.getRegion());
+        if (!local.allowedRegions().contains(pos.getRegion()) || local.termini().isEmpty() || isTerminus(pos)) {
+            return List.of();
+        }
+        return candidates(pos, nearestTerminus(pos), local);
+    }
+
+    private record Routing(Set<RegionPos> allowedRegions, List<CellPos> termini, Set<CellPos> terminusCells) {
     }
 
     public Flowline trace(CellPos source) {
@@ -104,7 +126,8 @@ public class FlowlineTracer {
     }
 
     private Flowline traceSource(CellPos source) {
-        if (!allowedRegions.contains(source.getRegion()) || termini.isEmpty()) {
+        Routing local = routing(source.getRegion());
+        if (!local.allowedRegions().contains(source.getRegion()) || local.termini().isEmpty()) {
             return new Flowline(List.of(source), null, false);
         }
         Search search = new Search(source);
@@ -141,7 +164,7 @@ public class FlowlineTracer {
         private Flowline run() {
             while (!stack.isEmpty()) {
                 Frame current = stack.get(stack.size() - 1);
-                if (terminusCells.contains(current.pos)) {
+                if (isTerminus(current.pos)) {
                     recordNudgingRise();
                     return new Flowline(positions(), current.pos, true);
                 }
@@ -158,7 +181,7 @@ public class FlowlineTracer {
                 if (isExhausted(next)) {
                     continue;
                 }
-                if (cells.apply(next).feature() == Feature.DIVIDE) {
+                if (isDivide(next)) {
                     rememberFailure();
                     exhausted.add(next);
                     continue;
@@ -186,7 +209,7 @@ public class FlowlineTracer {
         }
 
         private Frame frame(CellPos pos) {
-            return new Frame(pos, terminusCells.contains(pos) ? List.of() : candidates(pos, nearestTerminus(pos)));
+            return new Frame(pos, steps(pos));
         }
 
         private boolean isExhausted(CellPos pos) {
@@ -227,7 +250,7 @@ public class FlowlineTracer {
     private CellPos nearestTerminus(CellPos from) {
         CellPos nearest = null;
         long bestDistance = Long.MAX_VALUE;
-        for (CellPos terminus : termini) {
+        for (CellPos terminus : routing(from.getRegion()).termini()) {
             long distance = distanceSquared(from, terminus);
             if (distance < bestDistance) {
                 nearest = terminus;
@@ -237,14 +260,14 @@ public class FlowlineTracer {
         return nearest;
     }
 
-    private List<Step> candidates(CellPos current, CellPos target) {
+    private List<Step> candidates(CellPos current, CellPos target, Routing local) {
         long distance = distanceSquared(current, target);
 
         Map<CellPos, Step> candidates = new LinkedHashMap<>();
         Cell cell = cells.apply(current);
         for (FlowDirection direction : cell.flowDirections()) {
             CellPos next = current.relative(direction);
-            if (makesProgress(next, target, distance)) {
+            if (makesProgress(next, target, distance, local)) {
                 candidates.put(next, new Step(next, 0));
             }
         }
@@ -254,7 +277,7 @@ public class FlowlineTracer {
             FlowDirection toward = FlowDirection.toward(current, target);
             for (FlowDirection direction : cell.flowDirections()) {
                 CellPos next = current.relative(direction.rotateToward(toward));
-                if (candidates.containsKey(next) || !makesProgress(next, target, distance)) {
+                if (candidates.containsKey(next) || !makesProgress(next, target, distance, local)) {
                     continue;
                 }
                 long rise = (long) cells.apply(next).averageEstimatedTerrainHeight() - currentHeight;
@@ -264,7 +287,7 @@ public class FlowlineTracer {
             }
         }
         if (distance <= fallbackDistanceSquared) {
-            CellPos direct = forceTowardTerminus(current, target, distance);
+            CellPos direct = forceTowardTerminus(current, target, distance, local);
             if (direct != null) {
                 candidates.putIfAbsent(direct, new Step(direct, 0));
             }
@@ -272,12 +295,12 @@ public class FlowlineTracer {
         return List.copyOf(candidates.values());
     }
 
-    private CellPos forceTowardTerminus(CellPos current, CellPos target, long distance) {
+    private CellPos forceTowardTerminus(CellPos current, CellPos target, long distance, Routing local) {
         CellPos nearest = null;
         long bestDistance = distance;
         for (FlowDirection direction : FlowDirection.D8) {
             CellPos next = current.relative(direction);
-            if (!makesProgress(next, target, bestDistance)) {
+            if (!makesProgress(next, target, bestDistance, local)) {
                 continue;
             }
             nearest = next;
@@ -286,10 +309,8 @@ public class FlowlineTracer {
         return nearest;
     }
 
-    // Minimum distance to the fixed set of termini strictly decreases, even when the nearest target changes.
-    // This prevents cycles and makes exhausted-cell results independent of the path used to reach a cell.
-    private boolean makesProgress(CellPos next, CellPos target, long distance) {
-        return allowedRegions.contains(next.getRegion()) && distanceSquared(next, target) < distance;
+    private boolean makesProgress(CellPos next, CellPos target, long distance, Routing local) {
+        return local.allowedRegions().contains(next.getRegion()) && distanceSquared(next, target) < distance;
     }
 
     private static long distanceSquared(CellPos from, CellPos to) {
