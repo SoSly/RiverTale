@@ -33,7 +33,8 @@ public final class FlowlinePreview {
                 return List.of();
             }
 
-            FlowlineTracer tracer = new FlowlineTracer(workingSet, RiverShaping::classify, 5, 0);
+            FlowlineTracer tracer = new FlowlineTracer(pos -> RegionExplorer.discover(pos.getWorldPosition(0)),
+                RiverShaping::classify, 5, 0);
             List<Flowline> paths = new ArrayList<>();
             for (CellPos pos : region.cells()) {
                 Cell source = RiverShaping.classify(pos);
@@ -50,4 +51,5 @@ public final class FlowlinePreview {
             timer.stop();
         }
     }
+
 }

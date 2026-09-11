@@ -24,13 +24,14 @@ import org.sosly.rivertale.metric.Ratio;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 import org.sosly.rivertale.region.Region;
+import org.sosly.rivertale.region.RegionExplorer;
 import org.sosly.rivertale.world.RiverShaping;
 
 public class FlowlineTracer {
     private static final int FALLBACK_APPROACH_CELLS = 5;
     private static final int AWAY_STEP_ALLOWANCE = 10;
 
-    private final Routing routing;
+    private final Function<RegionPos, Collection<Region>> regionProvider;
     private final Map<CellPos, List<Step>> moves = new ConcurrentHashMap<>();
     private final Map<CellPos, Feature> features = new ConcurrentHashMap<>();
     private final Function<CellPos, Cell> cells;
@@ -39,20 +40,36 @@ public class FlowlineTracer {
     private final boolean enableNudging;
     private final int nudgingLimit;
 
-    public FlowlineTracer(Collection<Region> regions) {
-        this(regions, RiverShaping::classify, FALLBACK_APPROACH_CELLS);
+    public FlowlineTracer() {
+        this(pos -> RegionExplorer.discover(pos.getWorldPosition(0)),
+            RiverShaping::classify, FALLBACK_APPROACH_CELLS);
     }
 
     FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallbackThreshold) {
-        this(regions, cells, fallbackThreshold, AWAY_STEP_ALLOWANCE);
+        this(pos -> regions, cells, fallbackThreshold);
     }
 
     FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallbackThreshold, int awayStepAllowance) {
+        this(pos -> regions, cells, fallbackThreshold, awayStepAllowance);
+    }
+
+    FlowlineTracer(Function<RegionPos, Collection<Region>> regionProvider, Function<CellPos, Cell> cells,
+                   int fallbackThreshold) {
+        this(regionProvider, cells, fallbackThreshold, AWAY_STEP_ALLOWANCE);
+    }
+
+    FlowlineTracer(Function<RegionPos, Collection<Region>> regionProvider, Function<CellPos, Cell> cells,
+                   int fallbackThreshold, int awayStepAllowance) {
+        this.regionProvider = regionProvider;
         this.awayStepAllowance = awayStepAllowance;
         this.cells = cells;
         this.enableNudging = CommonConfig.get().enableNudging();
         this.nudgingLimit = CommonConfig.get().nudgingLimit();
         this.fallbackDistanceSquared = (long) fallbackThreshold * fallbackThreshold;
+    }
+
+    private Routing routing(RegionPos pos) {
+        Collection<Region> regions = pos.containsOutOfBoundsCells() ? List.of() : regionProvider.apply(pos);
         Set<RegionPos> allowed = new HashSet<>();
         Set<CellPos> termini = new HashSet<>();
         regions.forEach(region -> allowed.add(region.pos()));
@@ -65,11 +82,7 @@ public class FlowlineTracer {
         }
         List<CellPos> ordered = termini.stream().sorted(Comparator.comparingInt(CellPos::x)
             .thenComparingInt(CellPos::z)).toList();
-        this.routing = new Routing(Set.copyOf(allowed), ordered, Set.copyOf(termini));
-    }
-
-    private Routing routing(RegionPos pos) {
-        return routing;
+        return new Routing(Set.copyOf(allowed), ordered, Set.copyOf(termini));
     }
 
     private boolean isDivide(CellPos pos) {

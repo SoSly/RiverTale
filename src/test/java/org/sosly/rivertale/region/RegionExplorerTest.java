@@ -398,7 +398,7 @@ class RegionExplorerTest {
         when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
             new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
 
-        Flowline path = new FlowlineTracer(RegionExplorer.discover(new BlockPos(0, 0, 0)))
+        Flowline path = new FlowlineTracer()
             .trace(new CellPos(1, 2));
 
         assertTrue(path.isValid());
@@ -418,7 +418,7 @@ class RegionExplorerTest {
         when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
             new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
 
-        Flowline path = new FlowlineTracer(RegionExplorer.discover(new BlockPos(0, 0, 0)))
+        Flowline path = new FlowlineTracer()
             .trace(new CellPos(1, 2));
 
         assertTrue(path.isValid());
@@ -435,7 +435,7 @@ class RegionExplorerTest {
         when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
             new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
 
-        Flowline path = new FlowlineTracer(RegionExplorer.discover(new BlockPos(0, 0, 0)))
+        Flowline path = new FlowlineTracer()
             .trace(new CellPos(1, 2));
         assertTrue(path.isValid());
         assertEquals(basin, path.terminus());
@@ -444,7 +444,7 @@ class RegionExplorerTest {
         CellPos distant = new CellPos(18, 2);
         regions.put(distant.getRegion(), new Region(distant.getRegion(), RegionType.INLAND,
             List.of(new Boundary(distant, new CellPos(19, 2), BoundaryType.BASIN))));
-        Flowline rejected = new FlowlineTracer(RegionExplorer.discover(new BlockPos(0, 0, 0)))
+        Flowline rejected = new FlowlineTracer()
             .trace(new CellPos(1, 2));
         assertFalse(rejected.isValid());
         assertEquals(List.of(new CellPos(1, 2)), rejected.cells());
