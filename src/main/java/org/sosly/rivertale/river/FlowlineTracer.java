@@ -1,5 +1,6 @@
 package org.sosly.rivertale.river;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -212,6 +213,9 @@ public class FlowlineTracer {
                 }
                 if (current.nextIndex == current.candidates.size()) {
                     rememberFailure();
+                    if (current.pathDependent && proveClosedBranch(current)) {
+                        current.pathDependent = false;
+                    }
                     if (!current.pathDependent) {
                         exhausted.merge(current.pos, current.awaySteps, Math::min);
                     } else {
@@ -253,6 +257,34 @@ public class FlowlineTracer {
                 active.add(next);
             }
             return new Flowline(firstFailure, null, false);
+        }
+
+        private boolean proveClosedBranch(Frame start) {
+            // Ignore active cells here: only independently unreachable branches may be cached.
+            Map<CellPos, Integer> visited = new HashMap<>();
+            ArrayDeque<SearchState> pending = new ArrayDeque<>();
+            pending.add(new SearchState(start.pos, start.awaySteps));
+            visited.put(start.pos, start.awaySteps);
+            while (!pending.isEmpty()) {
+                SearchState current = pending.remove();
+                if (visited.get(current.pos()) < current.awaySteps()) {
+                    continue;
+                }
+                if (isTerminus(current.pos())) {
+                    return false;
+                }
+                for (Step step : steps(current.pos())) {
+                    int awaySteps = step.approaching() ? 0 : current.awaySteps() + 1;
+                    if (awaySteps > awayStepAllowance || visited.getOrDefault(step.pos(), Integer.MAX_VALUE) <= awaySteps
+                        || exhausted.getOrDefault(step.pos(), Integer.MAX_VALUE) <= awaySteps || isDivide(step.pos())) {
+                        continue;
+                    }
+                    visited.put(step.pos(), awaySteps);
+                    pending.add(new SearchState(step.pos(), awaySteps));
+                }
+            }
+            visited.forEach((pos, awaySteps) -> exhausted.merge(pos, awaySteps, Math::min));
+            return true;
         }
 
         private void recordNudgingRise() {
@@ -312,6 +344,9 @@ public class FlowlineTracer {
         private List<CellPos> positions() {
             return stack.stream().map(frame -> frame.pos).toList();
         }
+    }
+
+    private record SearchState(CellPos pos, int awaySteps) {
     }
 
     private record Step(CellPos pos, long nudgingRise, boolean approaching) {
