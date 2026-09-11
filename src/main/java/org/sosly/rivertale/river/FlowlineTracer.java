@@ -89,6 +89,35 @@ public class FlowlineTracer {
         });
     }
 
+    List<CellPos> predecessors(CellPos target) {
+        if (target.getRegion().containsOutOfBoundsCells()) {
+            return List.of();
+        }
+        routing(target.getRegion());
+        if (isDivide(target)) {
+            return List.of();
+        }
+        List<CellPos> predecessors = new ArrayList<>();
+        for (FlowDirection direction : FlowDirection.D8) {
+            CellPos previous = target.relative(direction);
+            if (steps(previous).stream().noneMatch(step -> step.pos().equals(target))) {
+                continue;
+            }
+            if (!isDivide(previous)) {
+                predecessors.add(previous);
+            }
+        }
+        return predecessors;
+    }
+
+    int awayStepAllowance() {
+        return awayStepAllowance;
+    }
+
+    boolean movesAway(CellPos from, CellPos to) {
+        return steps(from).stream().anyMatch(step -> step.pos().equals(to) && !step.approaching());
+    }
+
     boolean hasDestinations(RegionPos pos) {
         return !routing(pos).termini().isEmpty();
     }
