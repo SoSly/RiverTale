@@ -115,6 +115,20 @@ class RegionalRoutingTest {
     }
 
     @Test
+    void reverseDiscoveryFollowsMovesAcrossRegionalDestinationChanges() {
+        addLoopWithExit();
+        FlowlineTracer tracer = tracer();
+        UpstreamSearch search = new UpstreamSearch(tracer);
+
+        assertTrue(tracer.predecessors(new CellPos(7, 2)).contains(new CellPos(8, 3)));
+        Set<RegionPos> found = search.expand(List.of(secondShore));
+
+        assertEquals(Set.of(first.pos(), middle.pos(), last.pos()), found);
+        assertEquals(6, search.cellCount());
+        assertTrue(search.expand(List.of(secondShore)).isEmpty());
+    }
+
+    @Test
     void concurrentColdSearchesShareRegionalRulesWithoutSharingActivePaths() {
         addLoopWithExit();
         FlowlineTracer tracer = tracer();

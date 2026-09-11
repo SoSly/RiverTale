@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.IntStream;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -397,6 +398,7 @@ class FlowlineTracerTest {
 
     @Test
     void longRoutesHaveNoSearchBudgetOrRecursiveStackLimit() {
+        setNudging(false);
         CellPos source = new CellPos(0, 2);
         CellPos terminus = new CellPos(4096, 2);
         List<Region> regions = new ArrayList<>();
@@ -405,8 +407,13 @@ class FlowlineTracerTest {
         }
         regions.add(region(terminus, BoundaryType.OCEAN));
 
-        Flowline path = tracer(regions, 0).trace(source);
+        FlowlineTracer tracer = tracer(regions, 0);
+        Flowline path = tracer.trace(source);
+        UpstreamSearch upstream = new UpstreamSearch(tracer);
+        Set<RegionPos> discovered = upstream.expand(List.of(terminus));
 
+        assertEquals(regions.stream().map(Region::pos).collect(Collectors.toSet()), discovered);
+        assertEquals(4097, upstream.cellCount());
         assertTrue(path.isValid());
         assertEquals(4097, path.cells().size());
         assertEquals(terminus, path.terminus());
