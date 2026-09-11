@@ -157,6 +157,7 @@ public class FlowlineTracer {
     private final class Search {
         private final List<Frame> stack = new ArrayList<>();
         private final Set<CellPos> exhausted = new HashSet<>();
+        private final Set<CellPos> active = new HashSet<>();
         private final Ratio deadEndHits = Store.getRatio(FlowlineTracer.class, "deadEndHits");
         private List<CellPos> firstFailure;
         private long failureStarted;
@@ -164,6 +165,7 @@ public class FlowlineTracer {
 
         private Search(CellPos source) {
             stack.add(frame(source));
+            active.add(source);
         }
 
         private Flowline run() {
@@ -175,14 +177,25 @@ public class FlowlineTracer {
                 }
                 if (current.nextIndex == current.candidates.size()) {
                     rememberFailure();
-                    exhausted.add(current.pos);
+                    if (!current.pathDependent) {
+                        exhausted.add(current.pos);
+                    }
+                    active.remove(current.pos);
                     stack.remove(stack.size() - 1);
+                    if (current.pathDependent && !stack.isEmpty()) {
+                        stack.get(stack.size() - 1).pathDependent = true;
+                    }
                     continue;
                 }
                 if (current.nextIndex > 0) {
                     retried = true;
                 }
                 CellPos next = current.candidates.get(current.nextIndex++).pos();
+                if (active.contains(next)) {
+                    rememberFailure();
+                    current.pathDependent = true;
+                    continue;
+                }
                 if (isExhausted(next)) {
                     continue;
                 }
@@ -192,6 +205,7 @@ public class FlowlineTracer {
                     continue;
                 }
                 stack.add(frame(next));
+                active.add(next);
             }
             return new Flowline(firstFailure, null, false);
         }
@@ -246,6 +260,7 @@ public class FlowlineTracer {
         private final CellPos pos;
         private final List<Step> candidates;
         private int nextIndex;
+        private boolean pathDependent;
 
         private Frame(CellPos pos, List<Step> candidates) {
             this.pos = pos;
