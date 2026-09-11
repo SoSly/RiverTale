@@ -177,6 +177,8 @@ public class FlowlineTracer {
             return path;
         } finally {
             Store.getDistribution(FlowlineTracer.class, "awayLimitRejections").record(search.awayLimitRejections);
+            Store.getDistribution(FlowlineTracer.class, "loopRejections").record(search.loopRejections);
+            Store.getDistribution(FlowlineTracer.class, "contextualFailures").record(search.contextualFailures);
             if (search.retried) {
                 Store.getTimer(FlowlineTracer.class, "backtracking").record(System.nanoTime() - search.failureStarted);
             }
@@ -188,6 +190,8 @@ public class FlowlineTracer {
         private final Map<CellPos, Integer> exhausted = new HashMap<>();
         private final Set<CellPos> active = new HashSet<>();
         private int awayLimitRejections;
+        private int loopRejections;
+        private int contextualFailures;
         private final Ratio deadEndHits = Store.getRatio(FlowlineTracer.class, "deadEndHits");
         private List<CellPos> firstFailure;
         private long failureStarted;
@@ -210,6 +214,8 @@ public class FlowlineTracer {
                     rememberFailure();
                     if (!current.pathDependent) {
                         exhausted.merge(current.pos, current.awaySteps, Math::min);
+                    } else {
+                        contextualFailures++;
                     }
                     active.remove(current.pos);
                     stack.remove(stack.size() - 1);
@@ -231,6 +237,7 @@ public class FlowlineTracer {
                 CellPos next = candidate.pos();
                 if (active.contains(next)) {
                     rememberFailure();
+                    loopRejections++;
                     current.pathDependent = true;
                     continue;
                 }

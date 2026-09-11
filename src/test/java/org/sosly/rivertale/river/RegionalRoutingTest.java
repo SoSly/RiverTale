@@ -60,6 +60,7 @@ class RegionalRoutingTest {
         assertEquals(List.of(new CellPos(7, 2), new CellPos(8, 3), new CellPos(9, 2),
             new CellPos(9, 1), new CellPos(9, 0), secondShore), path.cells());
         assertEquals(path.cells().size(), new HashSet<>(path.cells()).size());
+        assertEquals(1, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().max());
         assertEquals(1, Store.getRatio(FlowlineTracer.class, "retrySuccess").successes());
         assertTrue(path.cells().stream().anyMatch(cell -> last.pos().contains(cell)));
     }
@@ -77,6 +78,8 @@ class RegionalRoutingTest {
         assertFalse(secondAttempt.isValid());
         assertEquals(List.of(new CellPos(7, 2), new CellPos(8, 3)), firstAttempt.cells());
         assertEquals(List.of(new CellPos(8, 3), new CellPos(7, 2)), secondAttempt.cells());
+        assertEquals(2, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().count());
+        assertEquals(1, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().min());
     }
 
     @Test
@@ -92,6 +95,7 @@ class RegionalRoutingTest {
         assertEquals(firstShore, path.terminus());
         assertEquals(List.of(first.pos(), middle.pos(), first.pos(), middle.pos(), first.pos()),
             path.cells().stream().map(CellPos::getRegion).toList());
+        assertEquals(0, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().max());
     }
 
     @Test
