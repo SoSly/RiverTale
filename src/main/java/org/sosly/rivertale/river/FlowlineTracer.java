@@ -25,27 +25,24 @@ import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.world.RiverShaping;
 
 public class FlowlineTracer {
-    private static final int DIRECT_APPROACH_CELLS = 0;
     private static final int FALLBACK_APPROACH_CELLS = 5;
 
     private final Set<RegionPos> allowedRegions = new HashSet<>();
     private final List<CellPos> termini;
     private final Set<CellPos> terminusCells = new HashSet<>();
     private final Function<CellPos, Cell> cells;
-    private final long directDistanceSquared;
     private final long fallbackDistanceSquared;
     private final boolean enableNudging;
     private final int nudgingLimit;
 
     public FlowlineTracer(Collection<Region> regions) {
-        this(regions, RiverShaping::classify, DIRECT_APPROACH_CELLS, FALLBACK_APPROACH_CELLS);
+        this(regions, RiverShaping::classify, FALLBACK_APPROACH_CELLS);
     }
 
-    FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int directThreshold, int fallbackThreshold) {
+    FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallbackThreshold) {
         this.cells = cells;
         this.enableNudging = CommonConfig.get().enableNudging();
         this.nudgingLimit = CommonConfig.get().nudgingLimit();
-        this.directDistanceSquared = (long) directThreshold * directThreshold;
         this.fallbackDistanceSquared = (long) fallbackThreshold * fallbackThreshold;
         for (Region region : regions) {
             allowedRegions.add(region.pos());
@@ -242,10 +239,6 @@ public class FlowlineTracer {
 
     private List<Step> candidates(CellPos current, CellPos target) {
         long distance = distanceSquared(current, target);
-        if (distance <= directDistanceSquared) {
-            CellPos direct = forceTowardTerminus(current, target, distance);
-            return direct == null ? List.of() : List.of(new Step(direct, 0));
-        }
 
         Map<CellPos, Step> candidates = new LinkedHashMap<>();
         Cell cell = cells.apply(current);

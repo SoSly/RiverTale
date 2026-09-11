@@ -240,60 +240,60 @@ class FlowlineTracerTest {
     }
 
     @Test
-    void fiveCellApproachIgnoresAvailableLessDirectFlow() {
+    void fiveCellFallbackPrefersAvailableFlow() {
         CellPos source = new CellPos(1, 1);
         cells.put(source, cell(source, List.of(FlowDirection.SOUTH)));
-        Flowline path = tieredTracer(new CellPos(5, 4)).trace(source);
-
-        assertTrue(path.isValid());
-        assertEquals(new CellPos(2, 2), path.cells().get(1));
-    }
-
-    @Test
-    void middleApproachPrefersFlowOverADirectStep() {
-        CellPos source = new CellPos(1, 1);
-        cells.put(source, cell(source, List.of(FlowDirection.SOUTH)));
-        Flowline path = tieredTracer(new CellPos(7, 4)).trace(source);
+        Flowline path = fallbackTracer(new CellPos(5, 4)).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(new CellPos(1, 2), path.cells().get(1));
     }
 
     @Test
-    void middleApproachTriesNudgingBeforeGoingStraight() {
+    void outsideFallbackRadiusStillFollowsFlow() {
+        CellPos source = new CellPos(1, 1);
+        cells.put(source, cell(source, List.of(FlowDirection.SOUTH)));
+        Flowline path = fallbackTracer(new CellPos(7, 4)).trace(source);
+
+        assertTrue(path.isValid());
+        assertEquals(new CellPos(1, 2), path.cells().get(1));
+    }
+
+    @Test
+    void fiveCellFallbackTriesNudgingBeforeGoingStraight() {
         CellPos source = new CellPos(1, 2);
         cells.put(source, cell(source, List.of(FlowDirection.NORTH)));
-        Flowline path = tieredTracer(new CellPos(7, 2)).trace(source);
+        Flowline path = fallbackTracer(new CellPos(5, 2)).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(new CellPos(2, 1), path.cells().get(1));
     }
 
     @Test
-    void tenCellApproachEscapesAnEmptyFlowList() {
+    void fiveCellFallbackEscapesAnEmptyFlowList() {
         CellPos source = new CellPos(1, 2);
         cells.put(source, cell(source, List.of()));
-        Flowline path = tieredTracer(new CellPos(11, 2)).trace(source);
+        Flowline path = fallbackTracer(new CellPos(6, 2)).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(new CellPos(2, 2), path.cells().get(1));
     }
 
     @Test
-    void middleApproachGoesStraightWhenNudgingFails() {
+    void fiveCellFallbackGoesStraightWhenNudgingFails() {
         CellPos source = new CellPos(1, 2);
         cells.put(source, cell(source, List.of(FlowDirection.WEST)));
-        Flowline path = tieredTracer(new CellPos(7, 2)).trace(source);
+        Flowline path = fallbackTracer(new CellPos(6, 2)).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(new CellPos(2, 2), path.cells().get(1));
     }
 
     @Test
-    void beyondTenCellsDoesNotForceAnEscape() {
+    void beyondFiveCellsDoesNotForceAnEscape() {
         CellPos source = new CellPos(1, 2);
         cells.put(source, cell(source, List.of()));
-        Flowline path = tieredTracer(new CellPos(11, 3)).trace(source);
+        Flowline path = fallbackTracer(new CellPos(6, 3)).trace(source);
 
         assertFalse(path.isValid());
         assertEquals(List.of(source), path.cells());
@@ -339,7 +339,7 @@ class FlowlineTracerTest {
         FlowlineTracer tracer = new FlowlineTracer(List.of(region(new CellPos(6, 2), BoundaryType.OCEAN)), pos -> {
             visits.merge(pos, 1, Integer::sum);
             return cells.getOrDefault(pos, cell(pos, List.of()));
-        }, 0, 0);
+        }, 0);
 
         Flowline path = tracer.trace(source);
 
@@ -367,26 +367,28 @@ class FlowlineTracerTest {
     }
 
     @Test
-    void directApproachDoesNotExploreAnAlternativeWhenBlocked() {
+    void withinFiveCellsBacktracksAroundABlockedDirectStep() {
         enableMetrics();
         CellPos source = new CellPos(1, 2);
+        cells.put(source, cell(source, List.of(FlowDirection.EAST, FlowDirection.SOUTHEAST)));
         CellPos divide = new CellPos(2, 2);
         cells.put(divide, cell(divide, List.of()).withFeature(Feature.DIVIDE));
         Flowline path = tracer(List.of(region(new CellPos(5, 2), BoundaryType.OCEAN)), 5).trace(source);
 
-        assertFalse(path.isValid());
-        assertEquals(List.of(source), path.cells());
-        assertRatio("success", 0, 1);
-        assertFalse(Store.ratios().containsKey(FlowlineTracer.class.getName() + "_retrySuccess"));
+        assertTrue(path.isValid());
+        assertEquals(new CellPos(2, 3), path.cells().get(1));
+        assertFalse(path.cells().contains(divide));
+        assertRatio("success", 1, 1);
+        assertRatio("retrySuccess", 1, 1);
     }
 
     @Test
-    void middleApproachUsesDirectFallbackAfterItsNudgedBranchFails() {
+    void fiveCellFallbackRunsAfterItsNudgedBranchFails() {
         CellPos source = new CellPos(1, 2);
         CellPos divide = new CellPos(2, 1);
         cells.put(source, cell(source, List.of(FlowDirection.NORTH)));
         cells.put(divide, cell(divide, List.of()).withFeature(Feature.DIVIDE));
-        Flowline path = tieredTracer(new CellPos(7, 2)).trace(source);
+        Flowline path = fallbackTracer(new CellPos(6, 2)).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(new CellPos(2, 2), path.cells().get(1));
@@ -419,40 +421,40 @@ class FlowlineTracerTest {
         cells.put(source, cell(source, List.of(FlowDirection.NORTH)));
         setNudging(false);
 
-        Flowline disabled = tieredTracer(terminus).trace(source);
+        Flowline disabled = fallbackTracer(terminus).trace(source);
 
         assertFalse(disabled.isValid());
         assertEquals(List.of(source), disabled.cells());
 
         setNudging(true);
-        Flowline enabled = tieredTracer(terminus).trace(source);
+        Flowline enabled = fallbackTracer(terminus).trace(source);
 
         assertTrue(enabled.isValid());
         assertEquals(new CellPos(2, 1), enabled.cells().get(1));
     }
 
     @Test
-    void disablingNudgingPreservesTheTenCellFallback() {
+    void disablingNudgingPreservesTheFiveCellFallback() {
         setNudging(false);
         CellPos source = new CellPos(1, 2);
         cells.put(source, cell(source, List.of(FlowDirection.NORTH)));
 
-        Flowline path = tieredTracer(new CellPos(11, 2)).trace(source);
+        Flowline path = fallbackTracer(new CellPos(6, 2)).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(new CellPos(2, 2), path.cells().get(1));
     }
 
     @Test
-    void disablingNudgingPreservesTheFiveCellDirectApproach() {
+    void disablingNudgingStillPrefersDownhillWithinFiveCells() {
         setNudging(false);
         CellPos source = new CellPos(1, 1);
         cells.put(source, cell(source, List.of(FlowDirection.SOUTH)));
 
-        Flowline path = tieredTracer(new CellPos(5, 4)).trace(source);
+        Flowline path = fallbackTracer(new CellPos(5, 4)).trace(source);
 
         assertTrue(path.isValid());
-        assertEquals(new CellPos(2, 2), path.cells().get(1));
+        assertEquals(new CellPos(1, 2), path.cells().get(1));
     }
 
     @Test
@@ -485,15 +487,15 @@ class FlowlineTracerTest {
     }
 
     @Test
-    void nudgingLimitDoesNotRestrictEitherDirectApproach() {
+    void nudgingLimitDoesNotRestrictTheFiveCellFallback() {
         enableMetrics();
         CellPos source = new CellPos(1, 2);
         cells.put(source, cellAtHeight(100, List.of(FlowDirection.NORTH)));
         cells.put(new CellPos(2, 1), cellAtHeight(300, List.of()));
         cells.put(new CellPos(2, 2), cellAtHeight(300, List.of()));
 
-        for (CellPos terminus : List.of(new CellPos(5, 2), new CellPos(7, 2))) {
-            Flowline path = tieredTracer(terminus).trace(source);
+        for (CellPos terminus : List.of(new CellPos(5, 2), new CellPos(6, 2))) {
+            Flowline path = fallbackTracer(terminus).trace(source);
 
             assertTrue(path.isValid());
             assertEquals(new CellPos(2, 2), path.cells().get(1));
@@ -597,7 +599,7 @@ class FlowlineTracerTest {
         cells.put(new CellPos(2, 1), dividedFlow);
         cells.put(new CellPos(2, 2), cellAtHeight(112, List.of()));
 
-        Flowline path = tieredTracer(new CellPos(7, 2)).trace(source);
+        Flowline path = fallbackTracer(new CellPos(6, 2)).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(new CellPos(2, 2), path.cells().get(1));
@@ -613,7 +615,7 @@ class FlowlineTracerTest {
         CellPos terminus = new CellPos(5, 2);
         cells.put(source, cellAtHeight(100, List.of()));
         cells.put(terminus, cellAtHeight(300, List.of()));
-        FlowlineTracer tracer = tieredTracer(terminus);
+        FlowlineTracer tracer = fallbackTracer(terminus);
         try (MockedStatic<RiverShaping> shaping = mockStatic(RiverShaping.class)) {
             shaping.when(RiverShaping::getSeaLevel).thenReturn(63);
             assertTrue(tracer.trace(source).isValid());
@@ -635,7 +637,7 @@ class FlowlineTracerTest {
         cells.put(new CellPos(2, 2), cellAtHeight(65, List.of()));
         cells.put(new CellPos(3, 2), cellAtHeight(70, List.of()));
         cells.put(terminus, cellAtHeight(200, List.of()));
-        FlowlineTracer tracer = tieredTracer(terminus);
+        FlowlineTracer tracer = fallbackTracer(terminus);
         try (MockedStatic<RiverShaping> shaping = mockStatic(RiverShaping.class)) {
             shaping.when(RiverShaping::getSeaLevel).thenReturn(63);
             Flowline path = tracer.trace(source);
@@ -669,7 +671,7 @@ class FlowlineTracerTest {
         cells.put(new CellPos(2, 2), cellAtHeight(64, List.of()));
         cells.put(new CellPos(3, 2), cellAtHeight(90, List.of()));
         cells.put(terminus, cellAtHeight(200, List.of()));
-        FlowlineTracer tracer = tieredTracer(terminus);
+        FlowlineTracer tracer = fallbackTracer(terminus);
         try (MockedStatic<RiverShaping> shaping = mockStatic(RiverShaping.class)) {
             shaping.when(RiverShaping::getSeaLevel).thenReturn(63);
             assertTrue(tracer.trace(source).isValid());
@@ -693,7 +695,7 @@ class FlowlineTracerTest {
         CellPos source = new CellPos(1, 2);
         cells.put(source, cellAtHeight(sourceHeight, List.of(FlowDirection.NORTH)));
         cells.put(new CellPos(2, 1), cellAtHeight(nextHeight, List.of(FlowDirection.EAST)));
-        return tieredTracer(new CellPos(12, 2)).trace(source);
+        return fallbackTracer(new CellPos(12, 2)).trace(source);
     }
 
     private Cell cellAtHeight(int height, List<FlowDirection> directions) {
@@ -717,6 +719,10 @@ class FlowlineTracerTest {
     @Test
     void lengthMetricsIncludeOnlySuccessfulTracesInConfiguredBlockUnits() {
         enableMetrics();
+        for (int x = 1; x <= 5; x++) {
+            CellPos pos = new CellPos(x, x);
+            cells.put(pos, cell(pos, List.of()));
+        }
         CellPos terminus = new CellPos(5, 5);
         FlowlineTracer tracer = tracer(List.of(region(terminus, BoundaryType.OCEAN)), 10);
         Flowline cardinal = tracer.trace(new CellPos(1, 5));
@@ -756,16 +762,16 @@ class FlowlineTracerTest {
 
     private FlowlineTracer searchTracer(CellPos terminus) {
         return new FlowlineTracer(List.of(region(terminus, BoundaryType.OCEAN)),
-            pos -> cells.getOrDefault(pos, cell(pos, List.of())), 0, 0);
+            pos -> cells.getOrDefault(pos, cell(pos, List.of())), 0);
     }
-    private FlowlineTracer tieredTracer(CellPos terminus) {
+    private FlowlineTracer fallbackTracer(CellPos terminus) {
         return new FlowlineTracer(List.of(new Region(new RegionPos(0, 0), RegionType.INLAND),
             new Region(new RegionPos(1, 0), RegionType.FLUVIAL), region(terminus, BoundaryType.OCEAN)),
-            pos -> cells.getOrDefault(pos, cell(pos, List.of(FlowDirection.EAST))), 5, 10);
+            pos -> cells.getOrDefault(pos, cell(pos, List.of(FlowDirection.EAST))), 5);
     }
     private FlowlineTracer tracer(List<Region> regions, int threshold) {
         return new FlowlineTracer(regions,
-            pos -> cells.getOrDefault(pos, cell(pos, List.of(FlowDirection.EAST))), threshold, threshold);
+            pos -> cells.getOrDefault(pos, cell(pos, List.of(FlowDirection.EAST))), threshold);
     }
 
     private Region region(CellPos terminus, BoundaryType type) {
