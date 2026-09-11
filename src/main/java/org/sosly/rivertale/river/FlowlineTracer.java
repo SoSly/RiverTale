@@ -30,6 +30,7 @@ public class FlowlineTracer {
 
     private final Routing routing;
     private final Map<CellPos, List<Step>> moves = new ConcurrentHashMap<>();
+    private final Map<CellPos, Feature> features = new ConcurrentHashMap<>();
     private final Function<CellPos, Cell> cells;
     private final long fallbackDistanceSquared;
     private final boolean enableNudging;
@@ -64,7 +65,7 @@ public class FlowlineTracer {
     }
 
     private boolean isDivide(CellPos pos) {
-        return cells.apply(pos).feature() == Feature.DIVIDE;
+        return features.computeIfAbsent(pos, key -> cells.apply(key).feature()) == Feature.DIVIDE;
     }
 
     private boolean isTerminus(CellPos pos) {
