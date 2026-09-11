@@ -88,6 +88,10 @@ public class FlowlineTracer {
         });
     }
 
+    boolean hasDestinations(RegionPos pos) {
+        return !routing(pos).termini().isEmpty();
+    }
+
     private boolean isDivide(CellPos pos) {
         return features.computeIfAbsent(pos, key -> cells.apply(key).feature()) == Feature.DIVIDE;
     }

@@ -35,6 +35,9 @@ public final class FlowlinePreview {
 
             FlowlineTracer tracer = new FlowlineTracer(pos -> RegionExplorer.discover(pos.getWorldPosition(0)),
                 RiverShaping::classify, 5, 0);
+            if (!tracer.hasDestinations(region.pos())) {
+                return List.of();
+            }
             List<Flowline> paths = new ArrayList<>();
             for (CellPos pos : region.cells()) {
                 Cell source = RiverShaping.classify(pos);
