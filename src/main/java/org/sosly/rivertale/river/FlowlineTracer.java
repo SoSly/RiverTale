@@ -3,6 +3,7 @@ package org.sosly.rivertale.river;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,12 +28,14 @@ import org.sosly.rivertale.world.RiverShaping;
 
 public class FlowlineTracer {
     private static final int FALLBACK_APPROACH_CELLS = 5;
+    private static final int AWAY_STEP_ALLOWANCE = 10;
 
     private final Routing routing;
     private final Map<CellPos, List<Step>> moves = new ConcurrentHashMap<>();
     private final Map<CellPos, Feature> features = new ConcurrentHashMap<>();
     private final Function<CellPos, Cell> cells;
     private final long fallbackDistanceSquared;
+    private final int awayStepAllowance;
     private final boolean enableNudging;
     private final int nudgingLimit;
 
@@ -41,6 +44,11 @@ public class FlowlineTracer {
     }
 
     FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallbackThreshold) {
+        this(regions, cells, fallbackThreshold, AWAY_STEP_ALLOWANCE);
+    }
+
+    FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallbackThreshold, int awayStepAllowance) {
+        this.awayStepAllowance = awayStepAllowance;
         this.cells = cells;
         this.enableNudging = CommonConfig.get().enableNudging();
         this.nudgingLimit = CommonConfig.get().nudgingLimit();
@@ -156,7 +164,7 @@ public class FlowlineTracer {
 
     private final class Search {
         private final List<Frame> stack = new ArrayList<>();
-        private final Set<CellPos> exhausted = new HashSet<>();
+        private final Map<CellPos, Integer> exhausted = new HashMap<>();
         private final Set<CellPos> active = new HashSet<>();
         private final Ratio deadEndHits = Store.getRatio(FlowlineTracer.class, "deadEndHits");
         private List<CellPos> firstFailure;
@@ -164,7 +172,7 @@ public class FlowlineTracer {
         private boolean retried;
 
         private Search(CellPos source) {
-            stack.add(frame(source));
+            stack.add(frame(source, 0));
             active.add(source);
         }
 
@@ -178,7 +186,7 @@ public class FlowlineTracer {
                 if (current.nextIndex == current.candidates.size()) {
                     rememberFailure();
                     if (!current.pathDependent) {
-                        exhausted.add(current.pos);
+                        exhausted.merge(current.pos, current.awaySteps, Math::min);
                     }
                     active.remove(current.pos);
                     stack.remove(stack.size() - 1);
@@ -190,21 +198,27 @@ public class FlowlineTracer {
                 if (current.nextIndex > 0) {
                     retried = true;
                 }
-                CellPos next = current.candidates.get(current.nextIndex++).pos();
+                Step candidate = current.candidates.get(current.nextIndex++);
+                int awaySteps = candidate.approaching() ? 0 : current.awaySteps + 1;
+                if (awaySteps > awayStepAllowance) {
+                    rememberFailure();
+                    continue;
+                }
+                CellPos next = candidate.pos();
                 if (active.contains(next)) {
                     rememberFailure();
                     current.pathDependent = true;
                     continue;
                 }
-                if (isExhausted(next)) {
+                if (isExhausted(next, awaySteps)) {
                     continue;
                 }
                 if (isDivide(next)) {
                     rememberFailure();
-                    exhausted.add(next);
+                    exhausted.put(next, 0);
                     continue;
                 }
-                stack.add(frame(next));
+                stack.add(frame(next, awaySteps));
                 active.add(next);
             }
             return new Flowline(firstFailure, null, false);
@@ -227,12 +241,12 @@ public class FlowlineTracer {
             Store.getDistribution(FlowlineTracer.class, "nudgingRiseBlocks").record(total);
         }
 
-        private Frame frame(CellPos pos) {
-            return new Frame(pos, steps(pos));
+        private Frame frame(CellPos pos, int awaySteps) {
+            return new Frame(pos, steps(pos), awaySteps);
         }
 
-        private boolean isExhausted(CellPos pos) {
-            if (exhausted.contains(pos)) {
+        private boolean isExhausted(CellPos pos, int awaySteps) {
+            if (exhausted.getOrDefault(pos, Integer.MAX_VALUE) <= awaySteps) {
                 deadEndHits.success();
                 return true;
             }
@@ -253,18 +267,20 @@ public class FlowlineTracer {
         }
     }
 
-    private record Step(CellPos pos, long nudgingRise) {
+    private record Step(CellPos pos, long nudgingRise, boolean approaching) {
     }
 
     private static final class Frame {
         private final CellPos pos;
         private final List<Step> candidates;
+        private final int awaySteps;
         private int nextIndex;
         private boolean pathDependent;
 
-        private Frame(CellPos pos, List<Step> candidates) {
+        private Frame(CellPos pos, List<Step> candidates, int awaySteps) {
             this.pos = pos;
             this.candidates = candidates;
+            this.awaySteps = awaySteps;
         }
     }
     private CellPos nearestTerminus(CellPos from) {
@@ -287,8 +303,8 @@ public class FlowlineTracer {
         Cell cell = cells.apply(current);
         for (FlowDirection direction : cell.flowDirections()) {
             CellPos next = current.relative(direction);
-            if (makesProgress(next, target, distance, local)) {
-                candidates.put(next, new Step(next, 0));
+            if (local.allowedRegions().contains(next.getRegion())) {
+                candidates.put(next, new Step(next, 0, distanceSquared(next, target) < distance));
             }
         }
 
@@ -302,14 +318,14 @@ public class FlowlineTracer {
                 }
                 long rise = (long) cells.apply(next).averageEstimatedTerrainHeight() - currentHeight;
                 if (rise <= nudgingLimit) {
-                    candidates.put(next, new Step(next, Math.max(0, rise)));
+                    candidates.put(next, new Step(next, Math.max(0, rise), true));
                 }
             }
         }
         if (distance <= fallbackDistanceSquared) {
             CellPos direct = forceTowardTerminus(current, target, distance, local);
             if (direct != null) {
-                candidates.putIfAbsent(direct, new Step(direct, 0));
+                candidates.putIfAbsent(direct, new Step(direct, 0, true));
             }
         }
         return List.copyOf(candidates.values());

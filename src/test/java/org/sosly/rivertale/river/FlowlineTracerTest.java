@@ -339,7 +339,7 @@ class FlowlineTracerTest {
         FlowlineTracer tracer = new FlowlineTracer(List.of(region(new CellPos(6, 2), BoundaryType.OCEAN)), pos -> {
             visits.merge(pos, 1, Integer::sum);
             return cells.getOrDefault(pos, cell(pos, List.of()));
-        }, 0);
+        }, 0, 0);
 
         Flowline path = tracer.trace(source);
 
@@ -762,16 +762,16 @@ class FlowlineTracerTest {
 
     private FlowlineTracer searchTracer(CellPos terminus) {
         return new FlowlineTracer(List.of(region(terminus, BoundaryType.OCEAN)),
-            pos -> cells.getOrDefault(pos, cell(pos, List.of())), 0);
+            pos -> cells.getOrDefault(pos, cell(pos, List.of())), 0, 0);
     }
     private FlowlineTracer fallbackTracer(CellPos terminus) {
         return new FlowlineTracer(List.of(new Region(new RegionPos(0, 0), RegionType.INLAND),
             new Region(new RegionPos(1, 0), RegionType.FLUVIAL), region(terminus, BoundaryType.OCEAN)),
-            pos -> cells.getOrDefault(pos, cell(pos, List.of(FlowDirection.EAST))), 5);
+            pos -> cells.getOrDefault(pos, cell(pos, List.of(FlowDirection.EAST))), 5, 0);
     }
     private FlowlineTracer tracer(List<Region> regions, int threshold) {
         return new FlowlineTracer(regions,
-            pos -> cells.getOrDefault(pos, cell(pos, List.of(FlowDirection.EAST))), threshold);
+            pos -> cells.getOrDefault(pos, cell(pos, List.of(FlowDirection.EAST))), threshold, 0);
     }
 
     private Region region(CellPos terminus, BoundaryType type) {
