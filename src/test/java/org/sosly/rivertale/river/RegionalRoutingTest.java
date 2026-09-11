@@ -80,6 +80,7 @@ class RegionalRoutingTest {
         assertEquals(List.of(new CellPos(8, 3), new CellPos(7, 2)), secondAttempt.cells());
         assertEquals(2, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().count());
         assertEquals(1, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().min());
+        assertEquals(2, Store.getRatio(FlowlineTracer.class, "closedBranchChecks").successes());
     }
 
     @Test

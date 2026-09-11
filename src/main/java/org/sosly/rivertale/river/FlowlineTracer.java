@@ -260,31 +260,39 @@ public class FlowlineTracer {
         }
 
         private boolean proveClosedBranch(Frame start) {
-            // Ignore active cells here: only independently unreachable branches may be cached.
-            Map<CellPos, Integer> visited = new HashMap<>();
-            ArrayDeque<SearchState> pending = new ArrayDeque<>();
-            pending.add(new SearchState(start.pos, start.awaySteps));
-            visited.put(start.pos, start.awaySteps);
-            while (!pending.isEmpty()) {
-                SearchState current = pending.remove();
-                if (visited.get(current.pos()) < current.awaySteps()) {
-                    continue;
-                }
-                if (isTerminus(current.pos())) {
-                    return false;
-                }
-                for (Step step : steps(current.pos())) {
-                    int awaySteps = step.approaching() ? 0 : current.awaySteps() + 1;
-                    if (awaySteps > awayStepAllowance || visited.getOrDefault(step.pos(), Integer.MAX_VALUE) <= awaySteps
-                        || exhausted.getOrDefault(step.pos(), Integer.MAX_VALUE) <= awaySteps || isDivide(step.pos())) {
+            Timer.Record timer = Store.getTimer(FlowlineTracer.class, "closedBranchSearch").start();
+            Ratio checks = Store.getRatio(FlowlineTracer.class, "closedBranchChecks");
+            try {
+                // Ignore active cells here: only independently unreachable branches may be cached.
+                Map<CellPos, Integer> visited = new HashMap<>();
+                ArrayDeque<SearchState> pending = new ArrayDeque<>();
+                pending.add(new SearchState(start.pos, start.awaySteps));
+                visited.put(start.pos, start.awaySteps);
+                while (!pending.isEmpty()) {
+                    SearchState current = pending.remove();
+                    if (visited.get(current.pos()) < current.awaySteps()) {
                         continue;
                     }
-                    visited.put(step.pos(), awaySteps);
-                    pending.add(new SearchState(step.pos(), awaySteps));
+                    if (isTerminus(current.pos())) {
+                        checks.failure();
+                        return false;
+                    }
+                    for (Step step : steps(current.pos())) {
+                        int awaySteps = step.approaching() ? 0 : current.awaySteps() + 1;
+                        if (awaySteps > awayStepAllowance || visited.getOrDefault(step.pos(), Integer.MAX_VALUE) <= awaySteps
+                            || exhausted.getOrDefault(step.pos(), Integer.MAX_VALUE) <= awaySteps || isDivide(step.pos())) {
+                            continue;
+                        }
+                        visited.put(step.pos(), awaySteps);
+                        pending.add(new SearchState(step.pos(), awaySteps));
+                    }
                 }
+                visited.forEach((pos, awaySteps) -> exhausted.merge(pos, awaySteps, Math::min));
+                checks.success();
+                return true;
+            } finally {
+                timer.stop();
             }
-            visited.forEach((pos, awaySteps) -> exhausted.merge(pos, awaySteps, Math::min));
-            return true;
         }
 
         private void recordNudgingRise() {
