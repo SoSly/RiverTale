@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.concurrent.ConcurrentHashMap;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
@@ -28,6 +29,7 @@ public class FlowlineTracer {
     private static final int FALLBACK_APPROACH_CELLS = 5;
 
     private final Routing routing;
+    private final Map<CellPos, List<Step>> moves = new ConcurrentHashMap<>();
     private final Function<CellPos, Cell> cells;
     private final long fallbackDistanceSquared;
     private final boolean enableNudging;
@@ -70,11 +72,13 @@ public class FlowlineTracer {
     }
 
     private List<Step> steps(CellPos pos) {
-        Routing local = routing(pos.getRegion());
-        if (!local.allowedRegions().contains(pos.getRegion()) || local.termini().isEmpty() || isTerminus(pos)) {
-            return List.of();
-        }
-        return candidates(pos, nearestTerminus(pos), local);
+        return moves.computeIfAbsent(pos, key -> {
+            Routing local = routing(key.getRegion());
+            if (!local.allowedRegions().contains(key.getRegion()) || local.termini().isEmpty() || isTerminus(key)) {
+                return List.of();
+            }
+            return candidates(key, nearestTerminus(key), local);
+        });
     }
 
     private record Routing(Set<RegionPos> allowedRegions, List<CellPos> termini, Set<CellPos> terminusCells) {
