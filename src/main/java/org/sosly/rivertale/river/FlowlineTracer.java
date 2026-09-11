@@ -176,6 +176,7 @@ public class FlowlineTracer {
             }
             return path;
         } finally {
+            Store.getDistribution(FlowlineTracer.class, "awayLimitRejections").record(search.awayLimitRejections);
             if (search.retried) {
                 Store.getTimer(FlowlineTracer.class, "backtracking").record(System.nanoTime() - search.failureStarted);
             }
@@ -186,6 +187,7 @@ public class FlowlineTracer {
         private final List<Frame> stack = new ArrayList<>();
         private final Map<CellPos, Integer> exhausted = new HashMap<>();
         private final Set<CellPos> active = new HashSet<>();
+        private int awayLimitRejections;
         private final Ratio deadEndHits = Store.getRatio(FlowlineTracer.class, "deadEndHits");
         private List<CellPos> firstFailure;
         private long failureStarted;
@@ -201,6 +203,7 @@ public class FlowlineTracer {
                 Frame current = stack.get(stack.size() - 1);
                 if (isTerminus(current.pos)) {
                     recordNudgingRise();
+                    recordAwaySteps();
                     return new Flowline(positions(), current.pos, true);
                 }
                 if (current.nextIndex == current.candidates.size()) {
@@ -222,6 +225,7 @@ public class FlowlineTracer {
                 int awaySteps = candidate.approaching() ? 0 : current.awaySteps + 1;
                 if (awaySteps > awayStepAllowance) {
                     rememberFailure();
+                    awayLimitRejections++;
                     continue;
                 }
                 CellPos next = candidate.pos();
@@ -259,6 +263,22 @@ public class FlowlineTracer {
                 }
             }
             Store.getDistribution(FlowlineTracer.class, "nudgingRiseBlocks").record(total);
+        }
+
+        private void recordAwaySteps() {
+            if (!CommonConfig.get().enableMetrics()) {
+                return;
+            }
+            int total = 0;
+            int longestRun = 0;
+            for (Frame frame : stack) {
+                if (frame.awaySteps > 0) {
+                    total++;
+                    longestRun = Math.max(longestRun, frame.awaySteps);
+                }
+            }
+            Store.getDistribution(FlowlineTracer.class, "awaySteps").record(total);
+            Store.getDistribution(FlowlineTracer.class, "maxConsecutiveAwaySteps").record(longestRun);
         }
 
         private Frame frame(CellPos pos, int awaySteps) {
