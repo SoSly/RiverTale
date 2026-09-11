@@ -72,20 +72,25 @@ public class FlowlineTracer {
 
     private Routing routing(RegionPos pos) {
         return routing.computeIfAbsent(pos, key -> {
-            Collection<Region> regions = key.containsOutOfBoundsCells() ? List.of() : regionProvider.apply(key);
-            Set<RegionPos> allowed = new HashSet<>();
-            Set<CellPos> termini = new HashSet<>();
-            regions.forEach(region -> allowed.add(region.pos()));
-            for (Region region : regions) {
-                for (Boundary boundary : region.boundaries()) {
-                    if (allowed.contains(boundary.land().getRegion())) {
-                        termini.add(boundary.land());
+            Timer.Record timer = Store.getTimer(FlowlineTracer.class, "regionalRouting").start();
+            try {
+                Collection<Region> regions = key.containsOutOfBoundsCells() ? List.of() : regionProvider.apply(key);
+                Set<RegionPos> allowed = new HashSet<>();
+                Set<CellPos> termini = new HashSet<>();
+                regions.forEach(region -> allowed.add(region.pos()));
+                for (Region region : regions) {
+                    for (Boundary boundary : region.boundaries()) {
+                        if (allowed.contains(boundary.land().getRegion())) {
+                            termini.add(boundary.land());
+                        }
                     }
                 }
+                List<CellPos> ordered = termini.stream().sorted(Comparator.comparingInt(CellPos::x)
+                    .thenComparingInt(CellPos::z)).toList();
+                return new Routing(Set.copyOf(allowed), ordered, Set.copyOf(termini));
+            } finally {
+                timer.stop();
             }
-            List<CellPos> ordered = termini.stream().sorted(Comparator.comparingInt(CellPos::x)
-                .thenComparingInt(CellPos::z)).toList();
-            return new Routing(Set.copyOf(allowed), ordered, Set.copyOf(termini));
         });
     }
 
