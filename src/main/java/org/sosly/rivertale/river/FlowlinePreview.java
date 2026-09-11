@@ -44,7 +44,7 @@ public final class FlowlinePreview {
                 if (source.feature().type != CellType.SOURCE) {
                     continue;
                 }
-                Flowline path = tracer.trace(pos);
+                Flowline path = traceSource(tracer, pos);
                 if (path.isValid()) {
                     paths.add(path);
                 }
@@ -55,4 +55,11 @@ public final class FlowlinePreview {
         }
     }
 
+    private static Flowline traceSource(FlowlineTracer tracer, CellPos source) {
+        Timer regional = Store.getTimer(FlowlineTracer.class, "regionalRouting");
+        double before = regional.total();
+        Flowline path = tracer.trace(source);
+        Store.getTimer(FlowlineTracer.class, "regionalInsideTrace").record((long) ((regional.total() - before) * 1000));
+        return path;
+    }
 }
