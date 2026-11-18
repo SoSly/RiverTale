@@ -13,6 +13,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.metric.Distribution;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.river.FlowlineTracer;
@@ -35,7 +37,7 @@ class MetricsCommandTest {
         originalConfig = CommonConfig.get();
         originalLocale = Locale.getDefault();
         Locale.setDefault(Locale.ROOT);
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, true, true, 16));
+        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, true, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         Store.clear();
     }
 
@@ -110,7 +112,7 @@ class MetricsCommandTest {
 
     @Test
     void disabledMetricsDoNotStoreLengthSamples() {
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, true, 16));
+        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         Distribution lengths = Store.getDistribution(FlowlineTracer.class, "lengthBlocks");
         lengths.record(1234);
 

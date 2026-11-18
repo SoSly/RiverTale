@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.cell.feature.Spring;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.DensityField;
@@ -31,7 +33,7 @@ class CellFlowTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 10, 1, 3, 288, false, false, 16));
+        CommonConfig.set(new CommonConfig(8, 1, 1, 10, 1, 3, 288, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         SampleCache.shutdown();
         CellCache.shutdown();
         RegionTypeCache.shutdown();

@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
@@ -34,7 +36,7 @@ class AwayStepTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(64, 1, 1, 0, 1, 3, 288, true, false, 12));
+        CommonConfig.set(new CommonConfig(64, 1, 1, 0, 1, 3, 288, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         Store.clear();
     }
 
@@ -168,7 +170,7 @@ class AwayStepTest {
 
     @Test
     void nudgesStillCannotMoveAwayEvenWhenTheirClimbWouldBeAllowed() {
-        CommonConfig.set(new CommonConfig(64, 1, 1, 0, 1, 3, 288, true, true, 12));
+        CommonConfig.set(new CommonConfig(64, 1, 1, 0, 1, 3, 288, true, true, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         CellPos source = new CellPos(20, 20);
         List<CellPos> nudgedRoute = new ArrayList<>();
         nudgedRoute.add(new CellPos(19, 19));
@@ -188,18 +190,17 @@ class AwayStepTest {
     void crossingARegionBorderDoesNotResetTheAllowance() {
         List<CellPos> expected = new ArrayList<>();
         expected.add(new CellPos(70, 20));
-        move(expected, FlowDirection.WEST, 11);
-        move(expected, FlowDirection.NORTHEAST, 1);
-        move(expected, FlowDirection.EAST, 30);
-        move(expected, FlowDirection.SOUTH, 1);
+        move(expected, FlowDirection.SOUTHWEST, 11);
+        move(expected, FlowDirection.NORTH, 31);
+        move(expected, FlowDirection.EAST, 4);
         connect(expected);
-        Region destination = new Region(new RegionPos(1, 0), RegionType.COASTAL,
+        Region destination = new Region(new RegionPos(0, 0), RegionType.COASTAL,
             List.of(new Boundary(last(expected), last(expected).relative(FlowDirection.SOUTH), BoundaryType.OCEAN)));
-        Region inland = new Region(new RegionPos(0, 0), RegionType.INLAND);
+        Region fluvial = new Region(new RegionPos(1, 0), RegionType.FLUVIAL);
         Cell empty = mock(Cell.class);
         when(empty.flowDirections()).thenReturn(List.of());
         when(empty.feature()).thenReturn(Feature.NONE);
-        FlowlineTracer tracer = new FlowlineTracer(List.of(destination, inland), pos -> cells.getOrDefault(pos, empty), 0);
+        FlowlineTracer tracer = new FlowlineTracer(List.of(destination, fluvial), pos -> cells.getOrDefault(pos, empty), 0);
 
         Flowline path = tracer.trace(expected.get(0));
 

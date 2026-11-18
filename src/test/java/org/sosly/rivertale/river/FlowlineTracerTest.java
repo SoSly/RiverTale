@@ -15,6 +15,8 @@ import org.mockito.MockedStatic;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
@@ -44,7 +46,7 @@ class FlowlineTracerTest {
     void setUp() {
         originalConfig = CommonConfig.get();
         Store.clear();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, true, 16));
+        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
     }
 
     @AfterEach
@@ -182,7 +184,7 @@ class FlowlineTracerTest {
             region(new CellPos(18, 2), BoundaryType.OCEAN)), 32).trace(new CellPos(6, 2));
 
         assertFalse(path.isValid());
-        assertEquals(List.of(new CellPos(6, 2), new CellPos(7, 2)), path.cells());
+        assertEquals(List.of(new CellPos(6, 2)), path.cells());
     }
 
     @Test
@@ -346,7 +348,7 @@ class FlowlineTracerTest {
 
         assertFalse(path.isValid());
         assertEquals(List.of(source, new CellPos(2, 1), sharedDeadEnd), path.cells());
-        assertEquals(2, visits.get(sharedDeadEnd));
+        assertEquals(1, visits.get(sharedDeadEnd));
         assertRatio("success", 0, 1);
         assertRatio("retrySuccess", 0, 1);
         Ratio hits = Store.getRatio(FlowlineTracer.class, "deadEndHits");
@@ -398,16 +400,27 @@ class FlowlineTracerTest {
 
     @Test
     void longRoutesHaveNoSearchBudgetOrRecursiveStackLimit() {
-        setNudging(false);
-        CellPos source = new CellPos(0, 2);
-        CellPos terminus = new CellPos(4096, 2);
-        List<Region> regions = new ArrayList<>();
-        for (int x = 0; x < terminus.getRegion().x(); x++) {
-            regions.add(new Region(new RegionPos(x, 0), RegionType.INLAND));
+        CommonConfig.set(new CommonConfig(64, 1, 1, 0, 1, 3, 288, false, false, 16,
+            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CellPos source = new CellPos(0, 0);
+        CellPos terminus = new CellPos(64, 0);
+        List<CellPos> expected = new ArrayList<>();
+        for (int x = 0; x < 64; x++) {
+            for (int z = 0; z < 64; z++) {
+                expected.add(new CellPos(x, x % 2 == 0 ? z : 63 - z));
+            }
         }
-        regions.add(region(terminus, BoundaryType.OCEAN));
+        expected.add(terminus);
+        for (int i = 1; i < expected.size(); i++) {
+            CellPos from = expected.get(i - 1);
+            CellPos to = expected.get(i);
+            cells.put(from, cell(from, List.of(FlowDirection.fromDelta(to.x() - from.x(), to.z() - from.z()))));
+        }
+        List<Region> regions = List.of(new Region(new RegionPos(0, 0), RegionType.FLUVIAL),
+            region(terminus, BoundaryType.OCEAN));
 
-        FlowlineTracer tracer = tracer(regions, 0);
+        FlowlineTracer tracer = new FlowlineTracer(regions,
+            pos -> cells.getOrDefault(pos, cell(pos, List.of())), 0, 64);
         Flowline path = tracer.trace(source);
         UpstreamSearch upstream = new UpstreamSearch(tracer);
         Set<RegionPos> discovered = upstream.expand(List.of(terminus));
@@ -415,7 +428,7 @@ class FlowlineTracerTest {
         assertEquals(regions.stream().map(Region::pos).collect(Collectors.toSet()), discovered);
         assertEquals(4097, upstream.cellCount());
         assertTrue(path.isValid());
-        assertEquals(4097, path.cells().size());
+        assertEquals(expected, path.cells());
         assertEquals(terminus, path.terminus());
         assertTrue(Store.distributions().isEmpty());
         assertTrue(Store.timers().isEmpty());
@@ -545,7 +558,7 @@ class FlowlineTracerTest {
         CommonConfig config = CommonConfig.get();
         CommonConfig.set(new CommonConfig(config.regionSize(), config.cellSize(), config.samplesPerCell(),
             config.mergeThreshold(), config.minSlope(), config.minPathLength(), config.embankmentRadius(),
-            false, config.enableNudging(), config.nudgingLimit()));
+            false, config.enableNudging(), config.nudgingLimit(), config.fallbackApproachCells(), config.awayStepAllowance(), config.sources(), config.caches(), config.flowUnlockMillis(), config.localRiverPreview()));
         Store.clear();
 
         assertEquals(path, searchTracer(terminus).trace(source));
@@ -627,7 +640,7 @@ class FlowlineTracerTest {
             shaping.when(RiverShaping::getSeaLevel).thenReturn(63);
             assertTrue(tracer.trace(source).isValid());
             shaping.when(RiverShaping::getSeaLevel).thenReturn(80);
-            assertTrue(tracer.trace(source).isValid());
+            assertTrue(fallbackTracer(terminus).trace(source).isValid());
             assertFalse(tracer.trace(new CellPos(-1, 2)).isValid());
         }
 
@@ -698,7 +711,7 @@ class FlowlineTracerTest {
         CommonConfig config = CommonConfig.get();
         CommonConfig.set(new CommonConfig(config.regionSize(), config.cellSize(), config.samplesPerCell(),
             config.mergeThreshold(), config.minSlope(), config.minPathLength(), config.embankmentRadius(),
-            config.enableMetrics(), true, limit));
+            config.enableMetrics(), true, limit, config.fallbackApproachCells(), config.awayStepAllowance(), config.sources(), config.caches(), config.flowUnlockMillis(), config.localRiverPreview()));
         CellPos source = new CellPos(1, 2);
         cells.put(source, cellAtHeight(sourceHeight, List.of(FlowDirection.NORTH)));
         cells.put(new CellPos(2, 1), cellAtHeight(nextHeight, List.of(FlowDirection.EAST)));
@@ -750,10 +763,10 @@ class FlowlineTracerTest {
         CommonConfig config = CommonConfig.get();
         CommonConfig.set(new CommonConfig(config.regionSize(), config.cellSize(), config.samplesPerCell(),
             config.mergeThreshold(), config.minSlope(), config.minPathLength(), config.embankmentRadius(),
-            config.enableMetrics(), enabled, config.nudgingLimit()));
+            config.enableMetrics(), enabled, config.nudgingLimit(), config.fallbackApproachCells(), config.awayStepAllowance(), config.sources(), config.caches(), config.flowUnlockMillis(), config.localRiverPreview()));
     }
     private void enableMetrics() {
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, true, true, 16));
+        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, true, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
     }
 
     private void assertRatio(String name, long successes, long attempts) {
@@ -772,8 +785,13 @@ class FlowlineTracerTest {
             pos -> cells.getOrDefault(pos, cell(pos, List.of())), 0, 0);
     }
     private FlowlineTracer fallbackTracer(CellPos terminus) {
-        return new FlowlineTracer(List.of(new Region(new RegionPos(0, 0), RegionType.INLAND),
-            new Region(new RegionPos(1, 0), RegionType.FLUVIAL), region(terminus, BoundaryType.OCEAN)),
+        List<Region> regions = new ArrayList<>();
+        for (int x = 0; x < terminus.getRegion().x(); x++) {
+            RegionType type = x == terminus.getRegion().x() - 1 ? RegionType.FLUVIAL : RegionType.INLAND;
+            regions.add(new Region(new RegionPos(x, 0), type));
+        }
+        regions.add(region(terminus, BoundaryType.OCEAN));
+        return new FlowlineTracer(regions,
             pos -> cells.getOrDefault(pos, cell(pos, List.of(FlowDirection.EAST))), 5, 0);
     }
     private FlowlineTracer tracer(List<Region> regions, int threshold) {

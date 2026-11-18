@@ -3,116 +3,57 @@ package org.sosly.rivertale.river;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.concurrent.ConcurrentHashMap;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
-import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Distribution;
 import org.sosly.rivertale.metric.Ratio;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 import org.sosly.rivertale.region.Region;
-import org.sosly.rivertale.region.RegionExplorer;
-import org.sosly.rivertale.world.RiverShaping;
+import org.sosly.rivertale.river.PreparedRiverData.Routing;
+import org.sosly.rivertale.river.PreparedRiverData.Step;
 
 public class FlowlineTracer {
-    private static final int FALLBACK_APPROACH_CELLS = 5;
-    private static final int AWAY_STEP_ALLOWANCE = 10;
-
-    private final Function<RegionPos, Collection<Region>> regionProvider;
-    private final Map<RegionPos, Routing> routing = new ConcurrentHashMap<>();
-    private final Map<CellPos, List<Step>> moves = new ConcurrentHashMap<>();
-    private final Map<CellPos, Feature> features = new ConcurrentHashMap<>();
-    private final Function<CellPos, Cell> cells;
-    private final long fallbackDistanceSquared;
+    private final PreparedRiverData data;
     private final int awayStepAllowance;
-    private final boolean enableNudging;
-    private final int nudgingLimit;
 
-    public FlowlineTracer() {
-        this(pos -> RegionExplorer.discover(pos.getWorldPosition(0)),
-            RiverShaping::classify, FALLBACK_APPROACH_CELLS);
+    public FlowlineTracer(PreparedRiverData data) {
+        this.data = data;
+        this.awayStepAllowance = data.awayStepAllowance();
     }
 
-    FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallbackThreshold) {
-        this(pos -> regions, cells, fallbackThreshold);
+    FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallback) {
+        this(regions, cells, fallback, CommonConfig.get().awayStepAllowance());
     }
 
-    FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallbackThreshold, int awayStepAllowance) {
-        this(pos -> regions, cells, fallbackThreshold, awayStepAllowance);
+    FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallback, int away) {
+        this(RiverPreparation.forRegions(regions, pos -> regions, cells, fallback, away));
     }
 
-    FlowlineTracer(Function<RegionPos, Collection<Region>> regionProvider, Function<CellPos, Cell> cells,
-                   int fallbackThreshold) {
-        this(regionProvider, cells, fallbackThreshold, AWAY_STEP_ALLOWANCE);
+    PreparedRiverData data() {
+        return data;
     }
 
-    FlowlineTracer(Function<RegionPos, Collection<Region>> regionProvider, Function<CellPos, Cell> cells,
-                   int fallbackThreshold, int awayStepAllowance) {
-        this.regionProvider = regionProvider;
-        this.awayStepAllowance = awayStepAllowance;
-        this.cells = cells;
-        this.enableNudging = CommonConfig.get().enableNudging();
-        this.nudgingLimit = CommonConfig.get().nudgingLimit();
-        this.fallbackDistanceSquared = (long) fallbackThreshold * fallbackThreshold;
+    Region region(RegionPos pos) {
+        return data.region(pos);
     }
 
-    private Routing routing(RegionPos pos) {
-        return routing.computeIfAbsent(pos, key -> {
-            Timer.Record timer = Store.getTimer(FlowlineTracer.class, "regionalRouting").start();
-            try {
-                Collection<Region> regions = key.containsOutOfBoundsCells() ? List.of() : regionProvider.apply(key);
-                Set<RegionPos> allowed = new HashSet<>();
-                Set<CellPos> termini = new HashSet<>();
-                regions.forEach(region -> allowed.add(region.pos()));
-                for (Region region : regions) {
-                    for (Boundary boundary : region.boundaries()) {
-                        if (allowed.contains(boundary.land().getRegion())) {
-                            termini.add(boundary.land());
-                        }
-                    }
-                }
-                List<CellPos> ordered = termini.stream().sorted(Comparator.comparingInt(CellPos::x)
-                    .thenComparingInt(CellPos::z)).toList();
-                return new Routing(Set.copyOf(allowed), ordered, Set.copyOf(termini));
-            } finally {
-                timer.stop();
-            }
-        });
+    List<CellPos> sources(RegionPos pos) {
+        return data.sources(pos);
     }
 
-    List<CellPos> predecessors(CellPos target) {
-        if (target.getRegion().containsOutOfBoundsCells()) {
-            return List.of();
-        }
-        routing(target.getRegion());
-        if (isDivide(target)) {
-            return List.of();
-        }
-        List<CellPos> predecessors = new ArrayList<>();
-        for (FlowDirection direction : FlowDirection.D8) {
-            CellPos previous = target.relative(direction);
-            if (steps(previous).stream().noneMatch(step -> step.pos().equals(target))) {
-                continue;
-            }
-            if (!isDivide(previous)) {
-                predecessors.add(previous);
-            }
-        }
-        return predecessors;
+    List<CellPos> predecessors(CellPos pos) {
+        return data.predecessors(pos);
     }
 
     int awayStepAllowance() {
@@ -127,25 +68,20 @@ public class FlowlineTracer {
         return !routing(pos).termini().isEmpty();
     }
 
+    private Routing routing(RegionPos pos) {
+        return data.routing(pos);
+    }
+
+    private List<Step> steps(CellPos pos) {
+        return data.steps(pos);
+    }
+
     private boolean isDivide(CellPos pos) {
-        return features.computeIfAbsent(pos, key -> cells.apply(key).feature()) == Feature.DIVIDE;
+        return data.cell(pos).feature() == Feature.DIVIDE;
     }
 
     private boolean isTerminus(CellPos pos) {
         return routing(pos.getRegion()).terminusCells().contains(pos);
-    }
-
-    private List<Step> steps(CellPos pos) {
-        return moves.computeIfAbsent(pos, key -> {
-            Routing local = routing(key.getRegion());
-            if (!local.allowedRegions().contains(key.getRegion()) || local.termini().isEmpty() || isTerminus(key)) {
-                return List.of();
-            }
-            return candidates(key, nearestTerminus(key), local);
-        });
-    }
-
-    private record Routing(Set<RegionPos> allowedRegions, List<CellPos> termini, Set<CellPos> terminusCells) {
     }
 
     public Flowline trace(CellPos source) {
@@ -170,8 +106,8 @@ public class FlowlineTracer {
             return;
         }
         Store.getDistribution(FlowlineTracer.class, "lengthBlocks").record(path.lengthBlocks(CommonConfig.get().cellBlocks()));
-        int[] heights = path.cells().stream().mapToInt(pos -> cells.apply(pos).averageEstimatedTerrainHeight()).toArray();
-        int outlet = RiverShaping.getSeaLevel();
+        int[] heights = path.cells().stream().mapToInt(pos -> data.cell(pos).height()).toArray();
+        int outlet = data.seaLevel();
         Store.getDistribution(FlowlineTracer.class, "netFallBlocks").record((long) heights[0] - outlet);
         if (heights.length < 2) {
             return;
@@ -195,7 +131,7 @@ public class FlowlineTracer {
 
     private Flowline traceSource(CellPos source) {
         Routing local = routing(source.getRegion());
-        if (!local.allowedRegions().contains(source.getRegion()) || local.termini().isEmpty()) {
+        if (!local.allows(source) || local.termini().isEmpty()) {
             return new Flowline(List.of(source), null, false);
         }
         Search search = new Search(source);
@@ -391,9 +327,6 @@ public class FlowlineTracer {
     private record SearchState(CellPos pos, int awaySteps) {
     }
 
-    private record Step(CellPos pos, long nudgingRise, boolean approaching) {
-    }
-
     private static final class Frame {
         private final CellPos pos;
         private final List<Step> candidates;
@@ -406,76 +339,5 @@ public class FlowlineTracer {
             this.candidates = candidates;
             this.awaySteps = awaySteps;
         }
-    }
-    private CellPos nearestTerminus(CellPos from) {
-        CellPos nearest = null;
-        long bestDistance = Long.MAX_VALUE;
-        for (CellPos terminus : routing(from.getRegion()).termini()) {
-            long distance = distanceSquared(from, terminus);
-            if (distance < bestDistance) {
-                nearest = terminus;
-                bestDistance = distance;
-            }
-        }
-        return nearest;
-    }
-
-    private List<Step> candidates(CellPos current, CellPos target, Routing local) {
-        long distance = distanceSquared(current, target);
-
-        Map<CellPos, Step> candidates = new LinkedHashMap<>();
-        Cell cell = cells.apply(current);
-        for (FlowDirection direction : cell.flowDirections()) {
-            CellPos next = current.relative(direction);
-            if (local.allowedRegions().contains(next.getRegion())) {
-                candidates.put(next, new Step(next, 0, distanceSquared(next, target) < distance));
-            }
-        }
-
-        if (enableNudging) {
-            int currentHeight = cell.averageEstimatedTerrainHeight();
-            FlowDirection toward = FlowDirection.toward(current, target);
-            for (FlowDirection direction : cell.flowDirections()) {
-                CellPos next = current.relative(direction.rotateToward(toward));
-                if (candidates.containsKey(next) || !makesProgress(next, target, distance, local)) {
-                    continue;
-                }
-                long rise = (long) cells.apply(next).averageEstimatedTerrainHeight() - currentHeight;
-                if (rise <= nudgingLimit) {
-                    candidates.put(next, new Step(next, Math.max(0, rise), true));
-                }
-            }
-        }
-        if (distance <= fallbackDistanceSquared) {
-            CellPos direct = forceTowardTerminus(current, target, distance, local);
-            if (direct != null) {
-                candidates.putIfAbsent(direct, new Step(direct, 0, true));
-            }
-        }
-        return List.copyOf(candidates.values());
-    }
-
-    private CellPos forceTowardTerminus(CellPos current, CellPos target, long distance, Routing local) {
-        CellPos nearest = null;
-        long bestDistance = distance;
-        for (FlowDirection direction : FlowDirection.D8) {
-            CellPos next = current.relative(direction);
-            if (!makesProgress(next, target, bestDistance, local)) {
-                continue;
-            }
-            nearest = next;
-            bestDistance = distanceSquared(next, target);
-        }
-        return nearest;
-    }
-
-    private boolean makesProgress(CellPos next, CellPos target, long distance, Routing local) {
-        return local.allowedRegions().contains(next.getRegion()) && distanceSquared(next, target) < distance;
-    }
-
-    private static long distanceSquared(CellPos from, CellPos to) {
-        long dx = (long) to.x() - from.x();
-        long dz = (long) to.z() - from.z();
-        return dx * dx + dz * dz;
     }
 }

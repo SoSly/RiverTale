@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.sosly.rivertale.cell.CellCache;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
@@ -11,7 +12,6 @@ import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.river.WatershedCache;
 
 public class RegionCache implements Cache<Region> {
-    private static final int DEFAULT_CAPACITY = 100;
 
     private static volatile RegionCache instance;
 
@@ -39,7 +39,7 @@ public class RegionCache implements Cache<Region> {
         if (instance != null) {
             return;
         }
-        instance = new RegionCache(DEFAULT_CAPACITY);
+        instance = new RegionCache(CommonConfig.get().caches().regions());
     }
 
     public static RegionCache get() {

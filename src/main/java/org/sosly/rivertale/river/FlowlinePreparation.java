@@ -13,7 +13,6 @@ import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 import org.sosly.rivertale.region.Region;
-import org.sosly.rivertale.region.RegionCache;
 
 public final class FlowlinePreparation {
     private final FlowlineTracer tracer;
@@ -29,7 +28,7 @@ public final class FlowlinePreparation {
     }
 
     public static Result prepare(Region region) {
-        return prepare(region, new FlowlineTracer());
+        return prepare(region, new FlowlineTracer(RiverPreparation.prepare(region.pos(), Set.of(region.pos()), false)));
     }
 
     static Result prepare(Region region, FlowlineTracer tracer) {
@@ -59,7 +58,7 @@ public final class FlowlinePreparation {
     private void discover() {
         while (!pending.isEmpty()) {
             RegionPos target = pending.remove();
-            Region region = RegionCache.get().getOrCompute(target);
+            Region region = tracer.region(target);
             for (RegionPos source : search.expand(region.cells()).stream().sorted(FlowlinePreparation::compare).toList()) {
                 paths(source);
             }
@@ -102,7 +101,7 @@ public final class FlowlinePreparation {
 
     List<Flowline> paths(RegionPos pos) {
         return traced.computeIfAbsent(pos, key -> {
-            List<Flowline> paths = FlowlinePreview.trace(RegionCache.get().getOrCompute(key), tracer);
+            List<Flowline> paths = SourceTrace.trace(tracer.region(key), tracer);
             paths.forEach(this::index);
             return paths;
         });
@@ -115,7 +114,7 @@ public final class FlowlinePreparation {
 
     public record Result(Map<RegionPos, List<Flowline>> upstream, Map<RegionPos, List<Flowline>> traced, FlowlineTracer tracer) {
         public List<Flowline> trace(Region region) {
-            return FlowlinePreview.trace(region, tracer);
+            return SourceTrace.trace(region, tracer);
         }
 
         public Result {

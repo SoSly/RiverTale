@@ -5,17 +5,30 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
+import java.util.function.BiPredicate;
+import java.util.function.Function;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 
 final class UpstreamSearch {
-    private final FlowlineTracer tracer;
+    private final Function<CellPos, List<CellPos>> predecessors;
+    private final BiPredicate<CellPos, CellPos> movesAway;
+    private final int allowance;
     private final Map<CellPos, Integer> visited = new HashMap<>();
     private final Set<RegionPos> regions = new HashSet<>();
 
     UpstreamSearch(FlowlineTracer tracer) {
-        this.tracer = tracer;
+        this.predecessors = tracer::predecessors;
+        this.movesAway = tracer::movesAway;
+        this.allowance = tracer.awayStepAllowance();
+    }
+
+    UpstreamSearch(RiverGraph graph) {
+        this.predecessors = graph::predecessors;
+        this.movesAway = graph::movesAway;
+        this.allowance = graph.awayStepAllowance();
     }
 
     Set<RegionPos> expand(Collection<CellPos> targets) {
@@ -32,9 +45,9 @@ final class UpstreamSearch {
             if (regions.add(current.pos().getRegion())) {
                 discovered.add(current.pos().getRegion());
             }
-            for (CellPos previous : tracer.predecessors(current.pos())) {
-                int awaySteps = tracer.movesAway(previous, current.pos()) ? current.awaySteps() + 1 : 0;
-                if (awaySteps <= tracer.awayStepAllowance()) {
+            for (CellPos previous : predecessors.apply(current.pos())) {
+                int awaySteps = movesAway.test(previous, current.pos()) ? current.awaySteps() + 1 : 0;
+                if (awaySteps <= allowance) {
                     include(previous, awaySteps, pending);
                 }
             }

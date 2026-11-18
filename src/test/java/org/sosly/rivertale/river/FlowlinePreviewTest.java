@@ -28,6 +28,8 @@ import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.command.VisCommand;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.networking.Network;
@@ -61,7 +63,7 @@ class FlowlinePreviewTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, false, 16));
+        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         RiverShaping.shutdown();
         WatershedCache.shutdown();
         RegionCache.shutdown();
@@ -87,7 +89,7 @@ class FlowlinePreviewTest {
     @Test
     void tracesClassifiedSourcesWithoutBuildingWatershedsOrAssigningElevations() {
         Region region = RegionCache.get().getOrCompute(source.getRegion());
-        List<Flowline> paths = FlowlinePreview.trace(region);
+        List<Flowline> paths = preparedPreview(region);
 
         assertFalse(paths.isEmpty());
         Flowline path = paths.stream().filter(candidate -> candidate.cells().get(0).equals(source)).findFirst().orElseThrow();
@@ -108,7 +110,7 @@ class FlowlinePreviewTest {
         Region region = RegionCache.get().getOrCompute(source.getRegion());
         CellCache.get().clear();
         SampleCache.get().clear();
-        List<Flowline> cold = FlowlinePreview.trace(region);
+        List<Flowline> cold = preparedPreview(region);
         assertFalse(cold.isEmpty());
 
         CellCache.get().clear();
@@ -118,7 +120,7 @@ class FlowlinePreviewTest {
         for (CellPos pos : positions) {
             CellCache.get().getOrComputeWithFlow(pos);
         }
-        List<Flowline> warm = FlowlinePreview.trace(region);
+        List<Flowline> warm = preparedPreview(region);
 
         assertEquals(cold, warm);
     }
@@ -200,7 +202,7 @@ class FlowlinePreviewTest {
     void regionWithoutBoundariesHasNoPreviewPaths() {
         Region region = RegionCache.get().getOrCompute(new RegionPos(-8, 0));
 
-        assertTrue(FlowlinePreview.trace(region).isEmpty());
+        assertTrue(preparedPreview(region).isEmpty());
     }
 
     @Test
@@ -271,6 +273,11 @@ class FlowlinePreviewTest {
         } finally {
             VisCommand.onPlayerLogout(new PlayerEvent.PlayerLoggedOutEvent(player));
         }
+    }
+
+    private List<Flowline> preparedPreview(Region region) {
+        PreparedRiverData data = RiverPreparation.prepare(region.pos(), Set.of(region.pos()), true);
+        return SourceTrace.trace(region, new FlowlineTracer(data));
     }
 
     private Map<CellPos, CellPos> topology(List<Watershed> watersheds) {

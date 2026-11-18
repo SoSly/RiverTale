@@ -15,6 +15,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.command.VisMode;
 import org.sosly.rivertale.core.Boundary;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
@@ -23,7 +24,6 @@ import org.sosly.rivertale.region.RegionType;
 
 @OnlyIn(Dist.CLIENT)
 public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
-    private static final int DEFAULT_CAPACITY = 100;
 
     private static ClientRegionCache instance;
     private static EnumSet<VisMode> enabledModes = EnumSet.noneOf(VisMode.class);
@@ -133,7 +133,7 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
     }
 
     public static void init() {
-        instance = new ClientRegionCache(DEFAULT_CAPACITY);
+        instance = new ClientRegionCache(CommonConfig.get().caches().clientRegions());
     }
 
     public static void shutdown() {

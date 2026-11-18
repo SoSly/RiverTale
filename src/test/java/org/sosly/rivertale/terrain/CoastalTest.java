@@ -13,6 +13,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
@@ -39,7 +41,7 @@ class CoastalTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(32, 2, 1, 10, 1, 3, 288, false, false, 16));
+        CommonConfig.set(new CommonConfig(32, 2, 1, 10, 1, 3, 288, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         SampleCache.shutdown();
         provider = new TestSampleProvider();
         SampleCache.init(provider);

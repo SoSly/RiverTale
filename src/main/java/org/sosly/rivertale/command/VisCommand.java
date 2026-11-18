@@ -31,13 +31,9 @@ import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.networking.Network;
 import org.sosly.rivertale.region.Region;
-import org.sosly.rivertale.region.RegionCache;
-import org.sosly.rivertale.river.Flowline;
-import org.sosly.rivertale.river.FlowlinePreparation;
 import org.sosly.rivertale.river.Watershed;
-import org.sosly.rivertale.river.WatershedBuilder;
 import org.sosly.rivertale.river.WatershedCache;
-import org.sosly.rivertale.river.WatershedPreparation;
+import org.sosly.rivertale.river.WatershedPreview;
 import org.sosly.rivertale.world.RiverShaping;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID)
@@ -144,32 +140,21 @@ public class VisCommand {
     }
 
     private static void sendRegions(ServerPlayer player, RegionPos center) {
-        RegionCache regionCache = RegionCache.get();
-
         Set<RegionPos> loadedRegions = new HashSet<>();
 
-        regionCache.getOrCompute(center);
         loadedRegions.add(center);
 
         for (FlowDirection dir : FlowDirection.D8) {
             RegionPos neighbor = center.relative(dir);
-            regionCache.getOrCompute(neighbor);
             loadedRegions.add(neighbor);
         }
 
-        FlowlinePreparation.Result prepared = FlowlinePreparation.prepare(regionCache.getOrCompute(center));
-        List<Watershed> watersheds = WatershedBuilder.build(WatershedPreparation.gather(prepared));
+        WatershedPreview.Result prepared = WatershedPreview.prepare(center, loadedRegions);
+        List<Watershed> watersheds = prepared.watersheds();
         WatershedCache.init();
         WatershedCache.get().replace(watersheds);
         for (RegionPos pos : loadedRegions) {
-            Region region = regionCache.getOrCompute(pos);
-            List<Flowline> paths = prepared.traced().get(pos);
-            if (paths == null) {
-                paths = prepared.trace(region);
-            }
-            Region.Packet packet = pos.equals(center)
-                ? new Region.Packet(region, paths, watersheds)
-                : new Region.Packet(region, paths);
+            Region.Packet packet = new Region.Packet(prepared.encode(pos));
             Network.sendToPlayer(packet, player);
         }
     }

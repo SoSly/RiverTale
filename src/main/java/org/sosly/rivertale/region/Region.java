@@ -158,7 +158,7 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
             this.data = region.encode(paths, watersheds);
         }
 
-        private Packet(CompoundTag data) {
+        public Packet(CompoundTag data) {
             this.data = data;
         }
 

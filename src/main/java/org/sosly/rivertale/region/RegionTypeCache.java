@@ -3,13 +3,13 @@ package org.sosly.rivertale.region;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
 
 public class RegionTypeCache implements Cache<RegionType> {
-    private static final int DEFAULT_CAPACITY = 100;
 
     private static volatile RegionTypeCache instance;
 
@@ -30,7 +30,7 @@ public class RegionTypeCache implements Cache<RegionType> {
         if (instance != null) {
             return;
         }
-        instance = new RegionTypeCache(DEFAULT_CAPACITY);
+        instance = new RegionTypeCache(CommonConfig.get().caches().regionTypes());
     }
 
     public static RegionTypeCache get() {

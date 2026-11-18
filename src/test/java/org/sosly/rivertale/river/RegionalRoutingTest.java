@@ -13,6 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
@@ -29,8 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RegionalRoutingTest {
     private final CellPos firstShore = new CellPos(7, 7);
     private final CellPos secondShore = new CellPos(8, -1);
-    private final Region first = new Region(new RegionPos(0, 0), RegionType.COASTAL,
-        List.of(new Boundary(firstShore, firstShore.relative(FlowDirection.SOUTH), BoundaryType.OCEAN)));
+    private final Region first = new Region(new RegionPos(0, 0), RegionType.INLAND,
+        List.of(new Boundary(firstShore, firstShore.relative(FlowDirection.SOUTH), BoundaryType.BASIN)));
     private final Region middle = new Region(new RegionPos(1, 0), RegionType.FLUVIAL);
     private final Region last = new Region(new RegionPos(1, -1), RegionType.COASTAL,
         List.of(new Boundary(secondShore, secondShore.relative(FlowDirection.NORTH), BoundaryType.OCEAN)));
@@ -41,7 +43,7 @@ class RegionalRoutingTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, true, false, 12));
+        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         Store.clear();
     }
 
@@ -57,7 +59,7 @@ class RegionalRoutingTest {
         Flowline path = tracer().trace(new CellPos(7, 2));
 
         assertTrue(path.isValid());
-        assertEquals(List.of(new CellPos(7, 2), new CellPos(8, 3), new CellPos(9, 2),
+        assertEquals(List.of(new CellPos(7, 2), new CellPos(8, 3), new CellPos(8, 2),
             new CellPos(9, 1), new CellPos(9, 0), secondShore), path.cells());
         assertEquals(path.cells().size(), new HashSet<>(path.cells()).size());
         assertEquals(1, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().max());
@@ -67,24 +69,24 @@ class RegionalRoutingTest {
 
     @Test
     void aLoopWithoutAnExitFailsWithoutPoisoningOtherSourceSearches() {
-        flow(7, 2, FlowDirection.SOUTHEAST);
-        flow(8, 3, FlowDirection.NORTHWEST);
+        flow(8, 3, FlowDirection.NORTH);
+        flow(8, 2, FlowDirection.SOUTH);
         FlowlineTracer tracer = tracer();
 
-        Flowline firstAttempt = tracer.trace(new CellPos(7, 2));
-        Flowline secondAttempt = tracer.trace(new CellPos(8, 3));
+        Flowline firstAttempt = tracer.trace(new CellPos(8, 3));
+        Flowline secondAttempt = tracer.trace(new CellPos(8, 2));
 
         assertFalse(firstAttempt.isValid());
         assertFalse(secondAttempt.isValid());
-        assertEquals(List.of(new CellPos(7, 2), new CellPos(8, 3)), firstAttempt.cells());
-        assertEquals(List.of(new CellPos(8, 3), new CellPos(7, 2)), secondAttempt.cells());
+        assertEquals(List.of(new CellPos(8, 3), new CellPos(8, 2)), firstAttempt.cells());
+        assertEquals(List.of(new CellPos(8, 2), new CellPos(8, 3)), secondAttempt.cells());
         assertEquals(2, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().count());
         assertEquals(1, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().min());
         assertEquals(2, Store.getRatio(FlowlineTracer.class, "closedBranchChecks").successes());
     }
 
     @Test
-    void revisitsRegionsAtDifferentCellsOnTheWayToTheCoast() {
+    void cannotReturnToAnUpstreamRegionAtADifferentCell() {
         flow(7, 3, FlowDirection.SOUTHEAST);
         flow(8, 4, FlowDirection.SOUTHWEST);
         flow(7, 5, FlowDirection.SOUTHEAST);
@@ -92,10 +94,8 @@ class RegionalRoutingTest {
 
         Flowline path = tracer().trace(new CellPos(7, 3));
 
-        assertTrue(path.isValid());
-        assertEquals(firstShore, path.terminus());
-        assertEquals(List.of(first.pos(), middle.pos(), first.pos(), middle.pos(), first.pos()),
-            path.cells().stream().map(CellPos::getRegion).toList());
+        assertFalse(path.isValid());
+        assertEquals(List.of(new CellPos(7, 3), new CellPos(8, 4)), path.cells());
         assertEquals(0, Store.getDistribution(FlowlineTracer.class, "loopRejections").snapshot().max());
     }
 
@@ -111,7 +111,7 @@ class RegionalRoutingTest {
         assertEquals(secondShore, arriving.terminus());
         assertEquals(secondShore, local.terminus());
         assertEquals(arriving.cells().subList(1, arriving.cells().size()), local.cells());
-        assertEquals(3, routingLoads.get());
+        assertEquals(0, routingLoads.get());
     }
 
     @Test
@@ -120,7 +120,8 @@ class RegionalRoutingTest {
         FlowlineTracer tracer = tracer();
         UpstreamSearch search = new UpstreamSearch(tracer);
 
-        assertTrue(tracer.predecessors(new CellPos(7, 2)).contains(new CellPos(8, 3)));
+        assertTrue(tracer.predecessors(new CellPos(8, 3)).contains(new CellPos(7, 2)));
+        assertFalse(tracer.predecessors(new CellPos(7, 2)).contains(new CellPos(8, 3)));
         Set<RegionPos> found = search.expand(List.of(secondShore));
 
         assertEquals(Set.of(first.pos(), middle.pos(), last.pos()), found);
@@ -137,13 +138,13 @@ class RegionalRoutingTest {
 
         assertTrue(paths.get(0).isValid());
         assertTrue(paths.stream().allMatch(paths.get(0)::equals));
-        assertEquals(3, routingLoads.get());
+        assertEquals(0, routingLoads.get());
     }
 
     private void addLoopWithExit() {
         flow(7, 2, FlowDirection.SOUTHEAST);
-        flow(8, 3, FlowDirection.NORTHWEST, FlowDirection.NORTHEAST);
-        flow(9, 2, FlowDirection.NORTH);
+        flow(8, 3, FlowDirection.NORTH);
+        flow(8, 2, FlowDirection.SOUTH, FlowDirection.NORTHEAST);
         flow(9, 1, FlowDirection.NORTH);
         flow(9, 0, FlowDirection.NORTHWEST);
     }
@@ -154,7 +155,10 @@ class RegionalRoutingTest {
     }
 
     private FlowlineTracer tracer() {
-        return new FlowlineTracer(this::regions, pos -> cells.getOrDefault(pos, new Cell(pos, Set.of())), 0, 0);
+        PreparedRiverData data = RiverPreparation.forRegions(List.of(first, middle, last), this::regions,
+            pos -> cells.getOrDefault(pos, new Cell(pos, Set.of())), 0, 10);
+        routingLoads.set(0);
+        return new FlowlineTracer(data);
     }
 
     private Collection<Region> regions(RegionPos pos) {

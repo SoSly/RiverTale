@@ -18,10 +18,10 @@ import net.minecraft.world.phys.Vec3;
 import org.sosly.rivertale.capability.FlowDirectionCapability;
 import org.sosly.rivertale.capability.FlowDirectionData;
 import org.sosly.rivertale.client.FlowDirectionClientCache;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.FlowDirection;
 
 public class FluidFlow {
-    private static final long UNLOCK_EXPIRY_MS = 5000;
     private static final Map<BlockPos, Long> PLAYER_UNLOCKED = new ConcurrentHashMap<>();
 
     public static boolean allowSpread(LevelAccessor level,
@@ -38,7 +38,7 @@ public class FluidFlow {
         FlowDirection sourceFlow = getFlowDirection(sourceChunk, sourcePos);
 
         Long unlockTime = PLAYER_UNLOCKED.remove(targetPos);
-        if (unlockTime != null && System.currentTimeMillis() - unlockTime < UNLOCK_EXPIRY_MS) {
+        if (unlockTime != null && System.currentTimeMillis() - unlockTime < CommonConfig.get().flowUnlockMillis()) {
             return true;
         }
 
@@ -101,6 +101,6 @@ public class FluidFlow {
     public static void unlock(BlockPos pos) {
         long now = System.currentTimeMillis();
         PLAYER_UNLOCKED.put(pos.immutable(), now);
-        PLAYER_UNLOCKED.entrySet().removeIf(e -> now - e.getValue() > UNLOCK_EXPIRY_MS);
+        PLAYER_UNLOCKED.entrySet().removeIf(e -> now - e.getValue() > CommonConfig.get().flowUnlockMillis());
     }
 }

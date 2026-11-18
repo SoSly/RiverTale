@@ -5,11 +5,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.metric.Store;
 
 public class SampleCache implements Cache<Sample> {
-    private static final int DEFAULT_CAPACITY = 1_000_000;
     private static final int SAMPLE_Y = 63;
 
     private static volatile SampleCache instance;
@@ -33,7 +33,7 @@ public class SampleCache implements Cache<Sample> {
         if (instance != null) {
             return;
         }
-        instance = new SampleCache(sampler, DEFAULT_CAPACITY);
+        instance = new SampleCache(sampler, CommonConfig.get().caches().samples());
     }
 
     public static SampleCache get() {

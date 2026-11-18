@@ -11,6 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
@@ -30,7 +32,7 @@ class WatershedPreparationTest {
     private CommonConfig originalConfig;
     private MockedStatic<RegionCache> cacheStatic;
     private FlowlineTracer tracer;
-    private MockedStatic<FlowlinePreview> preview;
+    private MockedStatic<SourceTrace> preview;
     private final Map<CellPos, List<CellPos>> incoming = new HashMap<>();
     private final Map<RegionPos, List<Flowline>> paths = new HashMap<>();
     private final Map<RegionPos, Integer> traceCounts = new HashMap<>();
@@ -38,16 +40,17 @@ class WatershedPreparationTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 10, 1, 3, 288, true, true, 16));
+        CommonConfig.set(new CommonConfig(8, 1, 1, 10, 1, 3, 288, true, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         Store.clear();
         RegionCache cache = mock(RegionCache.class);
         when(cache.getOrCompute(any(RegionPos.class))).thenAnswer(call -> region(call.getArgument(0)));
         cacheStatic = mockStatic(RegionCache.class);
         cacheStatic.when(RegionCache::get).thenReturn(cache);
         tracer = mock(FlowlineTracer.class);
+        when(tracer.region(any(RegionPos.class))).thenAnswer(call -> region(call.getArgument(0)));
         when(tracer.predecessors(any(CellPos.class))).thenAnswer(call -> incoming.getOrDefault(call.getArgument(0), List.of()));
-        preview = mockStatic(FlowlinePreview.class);
-        preview.when(() -> FlowlinePreview.trace(any(Region.class), any(FlowlineTracer.class))).thenAnswer(call -> {
+        preview = mockStatic(SourceTrace.class);
+        preview.when(() -> SourceTrace.trace(any(Region.class), any(FlowlineTracer.class))).thenAnswer(call -> {
             RegionPos pos = ((Region) call.getArgument(0)).pos();
             traceCounts.merge(pos, 1, Integer::sum);
             return paths.getOrDefault(pos, List.of());

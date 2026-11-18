@@ -17,7 +17,6 @@ import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.metric.Store;
 
 public class CellCache implements Cache<Cell> {
-    private static final int DEFAULT_CAPACITY = 50_000;
 
     private static volatile CellCache instance;
 
@@ -43,7 +42,7 @@ public class CellCache implements Cache<Cell> {
         if (instance != null) {
             return;
         }
-        instance = new CellCache(DEFAULT_CAPACITY);
+        instance = new CellCache(CommonConfig.get().caches().cells());
     }
 
     public static CellCache get() {

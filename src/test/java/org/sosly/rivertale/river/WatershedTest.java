@@ -16,6 +16,8 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.DensityField;
@@ -65,7 +67,7 @@ class WatershedTest {
         WorldSettings.init(63);
         WatershedCache.init();
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(32, 3, 1, 10, 1, 1, 288, false, false, 16));
+        CommonConfig.set(new CommonConfig(32, 3, 1, 10, 1, 1, 288, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
         when(cellCache.getOrCompute(any(CellPos.class))).thenAnswer(inv -> {
             CellPos pos = inv.getArgument(0);
             return dummyCell(pos);

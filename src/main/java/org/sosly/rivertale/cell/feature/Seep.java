@@ -1,21 +1,22 @@
 package org.sosly.rivertale.cell.feature;
 
 import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.river.Watershed;
 
 public class Seep implements FeatureHandler {
-    private static final double VEGETATION_THRESHOLD = 0.4;
-    private static final double EROSION_THRESHOLD = 0.3;
 
     @Override
     public boolean classify(Cell cell, Watershed watershed) {
+        SourceConfig config = CommonConfig.get().sources();
         if (cell.hasInflowingNeighbor()) {
             return false;
         }
-        if (cell.averageVegetation() <= VEGETATION_THRESHOLD) {
+        if (cell.averageVegetation() <= config.seepMinVegetation()) {
             return false;
         }
-        if (cell.averageErosion() >= EROSION_THRESHOLD) {
+        if (cell.averageErosion() >= config.seepMaxErosion()) {
             return false;
         }
         return true;

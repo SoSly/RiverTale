@@ -18,6 +18,8 @@ import org.mockito.quality.Strictness;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
+import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
@@ -27,6 +29,7 @@ import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.river.Flowline;
 import org.sosly.rivertale.river.FlowlineTracer;
+import org.sosly.rivertale.river.RiverPreparation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -52,11 +55,13 @@ class RegionExplorerTest {
     private MockedStatic<CellCache> cellCacheStatic;
     private MockedStatic<RegionCache> regionCacheStatic;
     private MockedStatic<SampleCache> sampleCacheStatic;
+    private MockedStatic<RegionTypeCache> typeCacheStatic;
+    private RegionTypeCache typeCache;
 
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false, false, 16));
+        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
 
         cellCacheStatic = mockStatic(CellCache.class);
         regionCacheStatic = mockStatic(RegionCache.class);
@@ -65,6 +70,11 @@ class RegionExplorerTest {
         cellCacheStatic.when(CellCache::get).thenReturn(cellCache);
         regionCacheStatic.when(RegionCache::get).thenReturn(regionCache);
         sampleCacheStatic.when(SampleCache::get).thenReturn(sampleCache);
+        typeCache = mock(RegionTypeCache.class);
+        when(typeCache.getOrCompute(any(RegionPos.class), any(SampleCache.class)))
+            .thenAnswer(call -> regionCache.getOrCompute((RegionPos) call.getArgument(0)).type());
+        typeCacheStatic = mockStatic(RegionTypeCache.class);
+        typeCacheStatic.when(RegionTypeCache::get).thenReturn(typeCache);
     }
 
     @AfterEach
@@ -72,6 +82,7 @@ class RegionExplorerTest {
         cellCacheStatic.close();
         regionCacheStatic.close();
         sampleCacheStatic.close();
+        typeCacheStatic.close();
     }
 
     @Test
@@ -398,7 +409,7 @@ class RegionExplorerTest {
         when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
             new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
 
-        Flowline path = new FlowlineTracer()
+        Flowline path = new FlowlineTracer(RiverPreparation.forCells(List.of(new CellPos(1, 2))))
             .trace(new CellPos(1, 2));
 
         assertTrue(path.isValid());
@@ -418,7 +429,7 @@ class RegionExplorerTest {
         when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
             new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
 
-        Flowline path = new FlowlineTracer()
+        Flowline path = new FlowlineTracer(RiverPreparation.forCells(List.of(new CellPos(1, 2))))
             .trace(new CellPos(1, 2));
 
         assertTrue(path.isValid());
@@ -426,7 +437,7 @@ class RegionExplorerTest {
     }
 
     @Test
-    void isolatedInlandCanReachNeighborBasinButCannotTargetTwoRegionsAway() {
+    void isolatedInlandCannotReachNeighborOrDistantBasins() {
         Map<RegionPos, Region> regions = inlandMap();
         CellPos basin = new CellPos(10, 2);
         Region neighbor = new Region(basin.getRegion(), RegionType.INLAND,
@@ -435,19 +446,43 @@ class RegionExplorerTest {
         when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
             new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
 
-        Flowline path = new FlowlineTracer()
+        Flowline path = new FlowlineTracer(RiverPreparation.forCells(List.of(new CellPos(1, 2))))
             .trace(new CellPos(1, 2));
-        assertTrue(path.isValid());
-        assertEquals(basin, path.terminus());
+        assertFalse(path.isValid());
+        assertEquals(List.of(new CellPos(1, 2)), path.cells());
 
         regions.put(neighbor.pos(), new Region(neighbor.pos(), RegionType.INLAND));
         CellPos distant = new CellPos(18, 2);
         regions.put(distant.getRegion(), new Region(distant.getRegion(), RegionType.INLAND,
             List.of(new Boundary(distant, new CellPos(19, 2), BoundaryType.BASIN))));
-        Flowline rejected = new FlowlineTracer()
+        Flowline rejected = new FlowlineTracer(RiverPreparation.forCells(List.of(new CellPos(1, 2))))
             .trace(new CellPos(1, 2));
         assertFalse(rejected.isValid());
         assertEquals(List.of(new CellPos(1, 2)), rejected.cells());
+    }
+
+    @Test
+    void fluvialDiscoveryDoesNotPrepareNonCoastalNeighbors() {
+        RegionPos center = new RegionPos(0, 0);
+        RegionPos coast = new RegionPos(1, 0);
+        Region origin = new Region(center, RegionType.FLUVIAL);
+        Region outlet = new Region(coast, RegionType.COASTAL);
+        when(typeCache.getOrCompute(any(RegionPos.class), any(SampleCache.class))).thenAnswer(call ->
+            coast.equals(call.getArgument(0)) ? RegionType.COASTAL : RegionType.INLAND);
+        when(regionCache.getOrCompute(any(RegionPos.class))).thenAnswer(call -> {
+            RegionPos pos = call.getArgument(0);
+            if (pos.equals(center)) {
+                return origin;
+            }
+            if (pos.equals(coast)) {
+                return outlet;
+            }
+            throw new AssertionError("Non-coastal region was fully prepared: " + pos);
+        });
+        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(call ->
+            new Cell(call.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
+
+        assertEquals(Set.of(origin, outlet), RegionExplorer.discover(center.getWorldPosition(0)));
     }
 
     private Map<RegionPos, Region> inlandMap() {

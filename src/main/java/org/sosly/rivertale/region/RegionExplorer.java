@@ -9,6 +9,7 @@ import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.density.SampleCache;
 
 public class RegionExplorer {
 
@@ -36,6 +37,11 @@ public class RegionExplorer {
         for (FlowDirection dir : FlowDirection.D4) {
             RegionPos neighborPos = regionPos.relative(dir);
             if (neighborPos.containsOutOfBoundsCells()) {
+                continue;
+            }
+
+            if (type == RegionType.FLUVIAL
+                && RegionTypeCache.get().getOrCompute(neighborPos, SampleCache.get()) != RegionType.COASTAL) {
                 continue;
             }
 
