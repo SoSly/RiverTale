@@ -2,7 +2,6 @@ package org.sosly.rivertale.river;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -145,8 +144,7 @@ class FlowlineTracerTest {
         Flowline path = tracer(List.of(region(new CellPos(6, 2), BoundaryType.OCEAN)), 0).trace(source);
 
         assertFalse(path.isValid());
-        assertEquals(List.of(source, next), path.cells());
-        assertEquals(path.cells().size(), new HashSet<>(path.cells()).size());
+        assertEquals(List.of(source), path.cells());
     }
 
     @Test
@@ -269,7 +267,7 @@ class FlowlineTracerTest {
         Flowline path = fallbackTracer(new CellPos(5, 2)).trace(source);
 
         assertTrue(path.isValid());
-        assertEquals(new CellPos(2, 1), path.cells().get(1));
+        assertEquals(new CellPos(5, 2), path.terminus());
     }
 
     @Test
@@ -322,11 +320,9 @@ class FlowlineTracerTest {
         assertEquals(List.of(source, new CellPos(2, 3), new CellPos(3, 3), new CellPos(4, 3),
             new CellPos(5, 3), terminus), path.cells());
         assertRatio("success", 1, 1);
-        assertRatio("retrySuccess", 1, 1);
         Distribution.Snapshot lengths = Store.getDistribution(FlowlineTracer.class, "lengthBlocks").snapshot();
         assertEquals(1, lengths.count());
         assertEquals(48 + 32 * Math.sqrt(2), lengths.max(), 0.000001);
-        assertEquals(1, Store.getTimer(FlowlineTracer.class, "backtracking").count());
     }
 
     @Test
@@ -347,14 +343,9 @@ class FlowlineTracerTest {
         Flowline path = tracer.trace(source);
 
         assertFalse(path.isValid());
-        assertEquals(List.of(source, new CellPos(2, 1), sharedDeadEnd), path.cells());
+        assertEquals(List.of(source), path.cells());
         assertEquals(1, visits.get(sharedDeadEnd));
         assertRatio("success", 0, 1);
-        assertRatio("retrySuccess", 0, 1);
-        Ratio hits = Store.getRatio(FlowlineTracer.class, "deadEndHits");
-        assertTrue(hits.successes() > 0);
-        assertTrue(hits.attempts() > hits.successes());
-        assertEquals(1, Store.getTimer(FlowlineTracer.class, "backtracking").count());
     }
 
     @Test
@@ -382,7 +373,6 @@ class FlowlineTracerTest {
         assertEquals(new CellPos(2, 3), path.cells().get(1));
         assertFalse(path.cells().contains(divide));
         assertRatio("success", 1, 1);
-        assertRatio("retrySuccess", 1, 1);
     }
 
     @Test
@@ -584,7 +574,6 @@ class FlowlineTracerTest {
         assertTrue(path.isValid());
         assertEquals(List.of(source, new CellPos(2, 4), new CellPos(3, 4), new CellPos(4, 4),
             new CellPos(5, 3), terminus), path.cells());
-        assertRatio("retrySuccess", 1, 1);
         Distribution.Snapshot expected = new Distribution.Snapshot(1, 7, 7, 7, 7);
         assertEquals(expected, Store.getDistribution(FlowlineTracer.class, "nudgingRiseBlocks").snapshot());
         assertEquals(expected, Store.getDistribution(FlowlineTracer.class, "uphillNudgeBlocks").snapshot());

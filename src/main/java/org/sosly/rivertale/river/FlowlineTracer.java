@@ -1,6 +1,5 @@
 package org.sosly.rivertale.river;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -8,7 +7,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
@@ -26,6 +27,7 @@ import org.sosly.rivertale.river.PreparedRiverData.Step;
 public class FlowlineTracer {
     private final PreparedRiverData data;
     private final int awayStepAllowance;
+    private final Map<Arrival, Step> outlets = new ConcurrentHashMap<>();
 
     public FlowlineTracer(PreparedRiverData data) {
         this.data = data;
@@ -134,210 +136,211 @@ public class FlowlineTracer {
         if (!local.allows(source) || local.termini().isEmpty()) {
             return new Flowline(List.of(source), null, false);
         }
-        Search search = new Search(source);
-        try {
-            Flowline path = search.run();
-            if (search.retried) {
-                Ratio successes = Store.getRatio(FlowlineTracer.class, "retrySuccess");
-                if (path.isValid()) {
-                    successes.success();
-                } else {
-                    successes.failure();
-                }
-            }
-            return path;
-        } finally {
-            Store.getDistribution(FlowlineTracer.class, "awayLimitRejections").record(search.awayLimitRejections);
-            Store.getDistribution(FlowlineTracer.class, "loopRejections").record(search.loopRejections);
-            Store.getDistribution(FlowlineTracer.class, "contextualFailures").record(search.contextualFailures);
-            if (search.retried) {
-                Store.getTimer(FlowlineTracer.class, "backtracking").record(System.nanoTime() - search.failureStarted);
-            }
+        if (isTerminus(source)) {
+            return new Flowline(List.of(source), source, true);
         }
+        return new Notes(source).find();
     }
 
-    private final class Search {
-        private final List<Frame> stack = new ArrayList<>();
-        private final Map<CellPos, Integer> exhausted = new HashMap<>();
-        private final Set<CellPos> active = new HashSet<>();
-        private int awayLimitRejections;
-        private int loopRejections;
-        private int contextualFailures;
-        private final Ratio deadEndHits = Store.getRatio(FlowlineTracer.class, "deadEndHits");
-        private List<CellPos> firstFailure;
-        private long failureStarted;
-        private boolean retried;
-
-        private Search(CellPos source) {
-            stack.add(frame(source, 0));
-            active.add(source);
+    private void recordChosen(List<Step> chosen, List<Integer> awayAtCell) {
+        if (!CommonConfig.get().enableMetrics()) {
+            return;
         }
-
-        private Flowline run() {
-            while (!stack.isEmpty()) {
-                Frame current = stack.get(stack.size() - 1);
-                if (isTerminus(current.pos)) {
-                    recordNudgingRise();
-                    recordAwaySteps();
-                    return new Flowline(positions(), current.pos, true);
-                }
-                if (current.nextIndex == current.candidates.size()) {
-                    rememberFailure();
-                    if (current.pathDependent && proveClosedBranch(current)) {
-                        current.pathDependent = false;
-                    }
-                    if (!current.pathDependent) {
-                        exhausted.merge(current.pos, current.awaySteps, Math::min);
-                    } else {
-                        contextualFailures++;
-                    }
-                    active.remove(current.pos);
-                    stack.remove(stack.size() - 1);
-                    if (current.pathDependent && !stack.isEmpty()) {
-                        stack.get(stack.size() - 1).pathDependent = true;
-                    }
-                    continue;
-                }
-                if (current.nextIndex > 0) {
-                    retried = true;
-                }
-                Step candidate = current.candidates.get(current.nextIndex++);
-                int awaySteps = candidate.approaching() ? 0 : current.awaySteps + 1;
-                if (awaySteps > awayStepAllowance) {
-                    rememberFailure();
-                    awayLimitRejections++;
-                    continue;
-                }
-                CellPos next = candidate.pos();
-                if (active.contains(next)) {
-                    rememberFailure();
-                    loopRejections++;
-                    current.pathDependent = true;
-                    continue;
-                }
-                if (isExhausted(next, awaySteps)) {
-                    continue;
-                }
-                if (isDivide(next)) {
-                    rememberFailure();
-                    exhausted.put(next, 0);
-                    continue;
-                }
-                stack.add(frame(next, awaySteps));
-                active.add(next);
+        long total = 0;
+        Distribution rises = Store.getDistribution(FlowlineTracer.class, "uphillNudgeBlocks");
+        for (Step step : chosen) {
+            if (step.nudgingRise() > 0) {
+                total += step.nudgingRise();
+                rises.record(step.nudgingRise());
             }
-            return new Flowline(firstFailure, null, false);
+        }
+        Store.getDistribution(FlowlineTracer.class, "nudgingRiseBlocks").record(total);
+        int awayTotal = 0;
+        int longestRun = 0;
+        for (int away : awayAtCell) {
+            if (away > 0) {
+                awayTotal++;
+                longestRun = Math.max(longestRun, away);
+            }
+        }
+        Store.getDistribution(FlowlineTracer.class, "awaySteps").record(awayTotal);
+        Store.getDistribution(FlowlineTracer.class, "maxConsecutiveAwaySteps").record(longestRun);
+    }
+
+    private record Arrival(CellPos cell, int awaySteps) {
+    }
+
+    private final class Notes {
+        private final CellPos source;
+        private final Map<Arrival, Arrival> parents = new HashMap<>();
+        private final Map<Arrival, Step> taken = new HashMap<>();
+        private final Set<Arrival> expanded = new HashSet<>();
+        private final PriorityQueue<Node> pending = new PriorityQueue<>(FlowlineTracer::byPreference);
+        private int order;
+
+        private Notes(CellPos source) {
+            this.source = source;
         }
 
-        private boolean proveClosedBranch(Frame start) {
-            Timer.Record timer = Store.getTimer(FlowlineTracer.class, "closedBranchSearch").start();
-            Ratio checks = Store.getRatio(FlowlineTracer.class, "closedBranchChecks");
-            try {
-                // Ignore active cells here: only independently unreachable branches may be cached.
-                Map<CellPos, Integer> visited = new HashMap<>();
-                ArrayDeque<SearchState> pending = new ArrayDeque<>();
-                pending.add(new SearchState(start.pos, start.awaySteps));
-                visited.put(start.pos, start.awaySteps);
-                while (!pending.isEmpty()) {
-                    SearchState current = pending.remove();
-                    if (visited.get(current.pos()) < current.awaySteps()) {
+        private Flowline find() {
+            Arrival start = new Arrival(source, 0);
+            List<CellPos> stored = follow(start, new HashSet<>());
+            if (stored != null) {
+                return finish(stored, stepsBetween(stored));
+            }
+            pending.add(new Node(start, EMPTY_CHOICES, order++, null, null));
+            while (!pending.isEmpty()) {
+                Node current = pending.poll();
+                if (!expanded.add(current.arrival)) {
+                    continue;
+                }
+                if (current.step != null) {
+                    parents.put(current.arrival, current.parent);
+                    taken.put(current.arrival, current.step);
+                }
+                if (isTerminus(current.arrival.cell)) {
+                    List<CellPos> cells = path(current.arrival, List.of());
+                    publish(cells);
+                    return finish(cells, stepsBetween(cells));
+                }
+                Set<CellPos> ancestors = used(current.arrival);
+                ancestors.remove(current.arrival.cell);
+                List<CellPos> joined = follow(current.arrival, ancestors);
+                if (joined != null && joined.size() > 1) {
+                    List<CellPos> cells = path(current.arrival, joined.subList(1, joined.size()));
+                    publish(cells);
+                    return finish(cells, stepsBetween(cells));
+                }
+                List<Step> candidates = steps(current.arrival.cell);
+                for (int index = 0; index < candidates.size(); index++) {
+                    Step step = candidates.get(index);
+                    int away = step.approaching() ? 0 : current.arrival.awaySteps + 1;
+                    if (away > awayStepAllowance || isDivide(step.pos()) || used(current.arrival).contains(step.pos())) {
                         continue;
                     }
-                    if (isTerminus(current.pos())) {
-                        checks.failure();
-                        return false;
+                    Arrival next = new Arrival(step.pos(), away);
+                    if (expanded.contains(next)) {
+                        continue;
                     }
-                    for (Step step : steps(current.pos())) {
-                        int awaySteps = step.approaching() ? 0 : current.awaySteps() + 1;
-                        if (awaySteps > awayStepAllowance || visited.getOrDefault(step.pos(), Integer.MAX_VALUE) <= awaySteps
-                            || exhausted.getOrDefault(step.pos(), Integer.MAX_VALUE) <= awaySteps || isDivide(step.pos())) {
-                            continue;
-                        }
-                        visited.put(step.pos(), awaySteps);
-                        pending.add(new SearchState(step.pos(), awaySteps));
+                    pending.add(new Node(next, extend(current.choices, index), order++, current.arrival, step));
+                }
+            }
+            return new Flowline(List.of(source), null, false);
+        }
+
+        private Flowline finish(List<CellPos> cells, List<Step> chosen) {
+            List<Integer> away = new ArrayList<>();
+            away.add(0);
+            for (Step step : chosen) {
+                int previous = away.get(away.size() - 1);
+                away.add(step.approaching() ? 0 : previous + 1);
+            }
+            recordChosen(chosen, away);
+            return new Flowline(cells, cells.get(cells.size() - 1), true);
+        }
+
+        private void publish(List<CellPos> cells) {
+            List<Step> chosen = stepsBetween(cells);
+            int away = 0;
+            for (int i = 0; i < chosen.size(); i++) {
+                outlets.putIfAbsent(new Arrival(cells.get(i), away), chosen.get(i));
+                away = chosen.get(i).approaching() ? 0 : away + 1;
+            }
+        }
+
+        private List<Step> stepsBetween(List<CellPos> cells) {
+            List<Step> chosen = new ArrayList<>();
+            for (int i = 0; i < cells.size() - 1; i++) {
+                CellPos from = cells.get(i);
+                CellPos to = cells.get(i + 1);
+                Step match = null;
+                for (Step step : steps(from)) {
+                    if (step.pos().equals(to)) {
+                        match = step;
+                        break;
                     }
                 }
-                visited.forEach((pos, awaySteps) -> exhausted.merge(pos, awaySteps, Math::min));
-                checks.success();
-                return true;
-            } finally {
-                timer.stop();
-            }
-        }
-
-        private void recordNudgingRise() {
-            if (!CommonConfig.get().enableMetrics()) {
-                return;
-            }
-            long total = 0;
-            Distribution steps = Store.getDistribution(FlowlineTracer.class, "uphillNudgeBlocks");
-            for (int i = 0; i < stack.size() - 1; i++) {
-                Frame frame = stack.get(i);
-                long rise = frame.candidates.get(frame.nextIndex - 1).nudgingRise();
-                if (rise > 0) {
-                    total += rise;
-                    steps.record(rise);
+                if (match == null) {
+                    throw new IllegalStateException("Stored river step is no longer legal at " + from);
                 }
+                chosen.add(match);
             }
-            Store.getDistribution(FlowlineTracer.class, "nudgingRiseBlocks").record(total);
+            return chosen;
         }
 
-        private void recordAwaySteps() {
-            if (!CommonConfig.get().enableMetrics()) {
-                return;
+        private List<CellPos> path(Arrival end, List<CellPos> tail) {
+            List<CellPos> cells = new ArrayList<>();
+            Arrival cursor = end;
+            while (cursor != null) {
+                cells.add(cursor.cell);
+                cursor = parents.get(cursor);
             }
-            int total = 0;
-            int longestRun = 0;
-            for (Frame frame : stack) {
-                if (frame.awaySteps > 0) {
-                    total++;
-                    longestRun = Math.max(longestRun, frame.awaySteps);
+            java.util.Collections.reverse(cells);
+            cells.addAll(tail);
+            return cells;
+        }
+
+        private Set<CellPos> used(Arrival end) {
+            Set<CellPos> cells = new HashSet<>();
+            Arrival cursor = end;
+            while (cursor != null) {
+                cells.add(cursor.cell);
+                cursor = parents.get(cursor);
+            }
+            return cells;
+        }
+
+        private List<CellPos> follow(Arrival start, Set<CellPos> used) {
+            if (!outlets.containsKey(start) && !isTerminus(start.cell)) {
+                return null;
+            }
+            List<CellPos> tail = new ArrayList<>();
+            Arrival cursor = start;
+            while (cursor != null) {
+                if (!used.add(cursor.cell)) {
+                    return null;
                 }
+                tail.add(cursor.cell);
+                if (isTerminus(cursor.cell)) {
+                    return tail;
+                }
+                Step step = outlets.get(cursor);
+                if (step == null) {
+                    return null;
+                }
+                int away = step.approaching() ? 0 : cursor.awaySteps + 1;
+                if (away > awayStepAllowance || isDivide(step.pos())) {
+                    return null;
+                }
+                cursor = new Arrival(step.pos(), away);
             }
-            Store.getDistribution(FlowlineTracer.class, "awaySteps").record(total);
-            Store.getDistribution(FlowlineTracer.class, "maxConsecutiveAwaySteps").record(longestRun);
-        }
-
-        private Frame frame(CellPos pos, int awaySteps) {
-            return new Frame(pos, steps(pos), awaySteps);
-        }
-
-        private boolean isExhausted(CellPos pos, int awaySteps) {
-            if (exhausted.getOrDefault(pos, Integer.MAX_VALUE) <= awaySteps) {
-                deadEndHits.success();
-                return true;
-            }
-            deadEndHits.failure();
-            return false;
-        }
-
-        private void rememberFailure() {
-            if (firstFailure != null) {
-                return;
-            }
-            firstFailure = positions();
-            failureStarted = System.nanoTime();
-        }
-
-        private List<CellPos> positions() {
-            return stack.stream().map(frame -> frame.pos).toList();
+            return null;
         }
     }
 
-    private record SearchState(CellPos pos, int awaySteps) {
+    private static final int[] EMPTY_CHOICES = new int[0];
+
+    private static int[] extend(int[] prefix, int index) {
+        int[] choices = new int[prefix.length + 1];
+        System.arraycopy(prefix, 0, choices, 0, prefix.length);
+        choices[prefix.length] = index;
+        return choices;
     }
 
-    private static final class Frame {
-        private final CellPos pos;
-        private final List<Step> candidates;
-        private final int awaySteps;
-        private int nextIndex;
-        private boolean pathDependent;
-
-        private Frame(CellPos pos, List<Step> candidates, int awaySteps) {
-            this.pos = pos;
-            this.candidates = candidates;
-            this.awaySteps = awaySteps;
+    private static int byPreference(Node left, Node right) {
+        int length = Math.min(left.choices.length, right.choices.length);
+        for (int i = 0; i < length; i++) {
+            if (left.choices[i] != right.choices[i]) {
+                return Integer.compare(left.choices[i], right.choices[i]);
+            }
         }
+        int byLength = Integer.compare(left.choices.length, right.choices.length);
+        if (byLength != 0) {
+            return byLength;
+        }
+        return Integer.compare(left.order, right.order);
+    }
+
+    private record Node(Arrival arrival, int[] choices, int order, Arrival parent, Step step) {
     }
 }

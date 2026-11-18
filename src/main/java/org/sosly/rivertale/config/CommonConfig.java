@@ -21,9 +21,9 @@ public record CommonConfig(
     int flowUnlockMillis,
     boolean localRiverPreview
 ) {
-    private static final int DEFAULT_REGION_SIZE = 32;
-    private static final int DEFAULT_CELL_SIZE = 3;
-    private static final int DEFAULT_SAMPLES_PER_CELL = 1;
+    private static final int DEFAULT_REGION_SIZE = 24;
+    private static final int DEFAULT_CELL_SIZE = 4;
+    private static final int DEFAULT_SAMPLES_PER_CELL = 5;
     private static final int DEFAULT_MERGE_THRESHOLD = 10;
     private static final int DEFAULT_MIN_SLOPE = 1;
     private static final int DEFAULT_MIN_PATH_LENGTH = 3;

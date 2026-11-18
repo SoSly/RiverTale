@@ -28,17 +28,13 @@ class CommonConfigTest {
     @Test
     void partialTomlRetainsCustomValuesAndUsesTuningDefaults() {
         load("""
-            regionSize = 24
-            cellSize = 4
-            samplesPerCell = 5
-            enableMetrics = true
             nudgingLimit = 12
             """);
         CommonConfig config = CommonConfig.get();
         assertEquals(24, config.regionSize());
         assertEquals(4, config.cellSize());
         assertEquals(5, config.samplesPerCell());
-        assertTrue(config.enableMetrics());
+        assertFalse(config.enableMetrics());
         assertEquals(12, config.nudgingLimit());
         assertEquals(5, config.fallbackApproachCells());
         assertEquals(1, config.awayStepAllowance());

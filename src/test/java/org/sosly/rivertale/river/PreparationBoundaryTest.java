@@ -116,7 +116,6 @@ class PreparationBoundaryTest {
         Flowline path = result.paths().get(source.getRegion()).get(0);
         assertEquals(new CellPos(16, 4), path.cells().get(1));
         assertEquals(outlet, path.terminus());
-        assertEquals(1, Store.getRatio(FlowlineTracer.class, "retrySuccess").successes());
     }
 
     @Test

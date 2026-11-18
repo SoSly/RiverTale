@@ -38,6 +38,7 @@ class CacheConfigTest {
         CommentedConfig data = new TomlParser().parse("""
             regionSize = 8
             cellSize = 1
+            samplesPerCell = 1
             [caches]
             samples = 2
             cells = 2

@@ -100,6 +100,7 @@ class RoutingConfigTest {
         CommentedConfig data = new TomlParser().parse("""
             regionSize = 8
             cellSize = 1
+            samplesPerCell = 1
             enableNudging = false
             """);
         data.set("fallbackApproachCells", fallback);
