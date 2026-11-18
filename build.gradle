@@ -85,10 +85,6 @@ minecraft {
 
         server {
             args '--nogui'
-            if (project.hasProperty('rtfSmoke')) {
-                property 'rivertale.rtfSmoke', 'true'
-                workingDirectory project.file(project.findProperty('runDirectory') ?: 'run/rtfSmoke')
-            }
         }
 
         data {
