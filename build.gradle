@@ -61,7 +61,7 @@ minecraft {
     runs {
         configureEach {
             workingDirectory project.file("run/${it.name}")
-            jvmArgs "-Xmx${run_xmx}", "-Xms${run_xms}"
+            jvmArgs "-Xmx${run_xmx}", "-Xms${run_xms}", "-XX:+UseZGC"
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
             property 'mixin.env.remapRefMap', 'true'
@@ -135,6 +135,16 @@ dependencies {
     }
     if (jei_enabled.toBoolean()) {
         runtimeOnly fg.deobf("curse.maven:jei-${jei_projectId}:${jei_fileId}")
+    }
+    if (c2me_enabled.toBoolean()) {
+        runtimeOnly fg.deobf("curse.maven:c2me-forge-${c2me_projectId}:${c2me_fileId}")
+    }
+    if (fastnoise_enabled.toBoolean()) {
+        runtimeOnly fg.deobf("curse.maven:zfastnoise-${fastnoise_projectId}:${fastnoise_fileId}")
+    }
+    if (structure_layout_optimizer_enabled.toBoolean()) {
+        runtimeOnly fg.deobf("curse.maven:structure-layout-optimizer-${structure_layout_optimizer_projectId}:${structure_layout_optimizer_fileId}")
+        runtimeOnly fg.deobf("curse.maven:resourceful-config-${resourcefulconfig_projectId}:${resourcefulconfig_fileId}")
     }
 }
 
