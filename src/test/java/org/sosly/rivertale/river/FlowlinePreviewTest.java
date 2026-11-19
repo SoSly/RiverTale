@@ -14,7 +14,10 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.PositionalRandomFactory;
+import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.server.level.ServerPlayer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -72,10 +76,19 @@ class FlowlinePreviewTest {
         CellCache.init();
         RegionTypeCache.init();
         RegionCache.init();
+        // Crater classification draws from RiverShaping's random state; never let it pass the chance roll.
+        RandomState randomState = mock(RandomState.class);
+        PositionalRandomFactory factory = mock(PositionalRandomFactory.class);
+        RandomSource neverCrater = mock(RandomSource.class);
+        when(neverCrater.nextFloat()).thenReturn(1.0f);
+        when(factory.at(anyInt(), anyInt(), anyInt())).thenReturn(neverCrater);
+        when(randomState.getOrCreateRandomFactory(any())).thenReturn(factory);
+        RiverShaping.init(63, randomState);
     }
 
     @AfterEach
     void tearDown() {
+        RiverShaping.shutdown();
         WatershedCache.shutdown();
         RegionCache.shutdown();
         RegionTypeCache.shutdown();

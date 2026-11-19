@@ -13,8 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
@@ -31,17 +29,18 @@ import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.river.Flowline;
 import org.sosly.rivertale.river.FlowlineTracer;
 import org.sosly.rivertale.river.RiverPreparation;
+import org.sosly.rivertale.world.RiverShaping;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class RegionExplorerTest {
 
     @Mock
@@ -71,9 +70,13 @@ class RegionExplorerTest {
         cellCacheStatic.when(CellCache::get).thenReturn(cellCache);
         regionCacheStatic.when(RegionCache::get).thenReturn(regionCache);
         sampleCacheStatic.when(SampleCache::get).thenReturn(sampleCache);
-        typeCache = mock(RegionTypeCache.class);
-        when(typeCache.getOrCompute(any(RegionPos.class), any(SampleCache.class)))
-            .thenAnswer(call -> regionCache.getOrCompute((RegionPos) call.getArgument(0)).type());
+        // Production's RegionTypeCache and RegionCache agree on a region's type. Only FLUVIAL-origin discovery
+        // consults the type cache, and not every test gets there, so the agreement is a default answer
+        // (which strict stubbing doesn't track) instead of a stub that would be unused in most tests.
+        typeCache = mock(RegionTypeCache.class, call ->
+            "getOrCompute".equals(call.getMethod().getName())
+                ? regionCache.getOrCompute((RegionPos) call.getArgument(0)).type()
+                : null);
         typeCacheStatic = mockStatic(RegionTypeCache.class);
         typeCacheStatic.when(RegionTypeCache::get).thenReturn(typeCache);
     }
@@ -148,12 +151,9 @@ class RegionExplorerTest {
             return new Region(pos, RegionType.OCEANIC);
         });
 
-        List<CellPos> southBorderCells = northPos.getBorderCells(FlowDirection.SOUTH);
-        for (CellPos cellPos : southBorderCells) {
-            Cell cell = mockCellWithFlow(cellPos, List.of(FlowDirection.SOUTH));
-            when(cellCache.getOrComputeWithFlow(cellPos)).thenReturn(cell);
-        }
+        borderFlow.put(northPos.getBorderCells(FlowDirection.SOUTH), FlowDirection.SOUTH);
 
+        stubBorderFlow();
         BlockPos blockPos = centerPos.getWorldPosition(0);
         Set<Region> result = RegionExplorer.discover(blockPos);
 
@@ -180,12 +180,9 @@ class RegionExplorerTest {
             return new Region(pos, RegionType.OCEANIC);
         });
 
-        List<CellPos> southBorderCells = northPos.getBorderCells(FlowDirection.SOUTH);
-        for (CellPos cellPos : southBorderCells) {
-            Cell cell = mockCellWithFlow(cellPos, List.of(FlowDirection.NORTH));
-            when(cellCache.getOrComputeWithFlow(cellPos)).thenReturn(cell);
-        }
+        borderFlow.put(northPos.getBorderCells(FlowDirection.SOUTH), FlowDirection.NORTH);
 
+        stubBorderFlow();
         BlockPos blockPos = centerPos.getWorldPosition(0);
         Set<Region> result = RegionExplorer.discover(blockPos);
 
@@ -212,12 +209,9 @@ class RegionExplorerTest {
             return new Region(pos, RegionType.INLAND);
         });
 
-        List<CellPos> southBorderCells = centerPos.getBorderCells(FlowDirection.SOUTH);
-        for (CellPos cellPos : southBorderCells) {
-            Cell cell = mockCellWithFlow(cellPos, List.of(FlowDirection.SOUTH));
-            when(cellCache.getOrComputeWithFlow(cellPos)).thenReturn(cell);
-        }
+        borderFlow.put(centerPos.getBorderCells(FlowDirection.SOUTH), FlowDirection.SOUTH);
 
+        stubBorderFlow();
         BlockPos blockPos = centerPos.getWorldPosition(0);
         Set<Region> result = RegionExplorer.discover(blockPos);
 
@@ -244,12 +238,9 @@ class RegionExplorerTest {
             return new Region(pos, RegionType.INLAND);
         });
 
-        List<CellPos> southBorderCells = centerPos.getBorderCells(FlowDirection.SOUTH);
-        for (CellPos cellPos : southBorderCells) {
-            Cell cell = mockCellWithFlow(cellPos, List.of(FlowDirection.NORTH));
-            when(cellCache.getOrComputeWithFlow(cellPos)).thenReturn(cell);
-        }
+        borderFlow.put(centerPos.getBorderCells(FlowDirection.SOUTH), FlowDirection.NORTH);
 
+        stubBorderFlow();
         BlockPos blockPos = centerPos.getWorldPosition(0);
         Set<Region> result = RegionExplorer.discover(blockPos);
 
@@ -281,18 +272,11 @@ class RegionExplorerTest {
             return new Region(pos, RegionType.INLAND);
         });
 
-        List<CellPos> eastBorderCells = centerPos.getBorderCells(FlowDirection.EAST);
-        for (CellPos cellPos : eastBorderCells) {
-            Cell cell = mockCellWithFlow(cellPos, List.of(FlowDirection.EAST));
-            when(cellCache.getOrComputeWithFlow(cellPos)).thenReturn(cell);
-        }
+        borderFlow.put(centerPos.getBorderCells(FlowDirection.EAST), FlowDirection.EAST);
 
-        List<CellPos> westBorderCells = centerPos.getBorderCells(FlowDirection.WEST);
-        for (CellPos cellPos : westBorderCells) {
-            Cell cell = mockCellWithFlow(cellPos, List.of(FlowDirection.WEST));
-            when(cellCache.getOrComputeWithFlow(cellPos)).thenReturn(cell);
-        }
+        borderFlow.put(centerPos.getBorderCells(FlowDirection.WEST), FlowDirection.WEST);
 
+        stubBorderFlow();
         BlockPos blockPos = centerPos.getWorldPosition(0);
         Set<Region> result = RegionExplorer.discover(blockPos);
 
@@ -325,12 +309,9 @@ class RegionExplorerTest {
             return new Region(pos, RegionType.INLAND);
         });
 
-        List<CellPos> eastBorderCells = centerPos.getBorderCells(FlowDirection.EAST);
-        for (CellPos cellPos : eastBorderCells) {
-            Cell cell = mockCellWithFlow(cellPos, List.of(FlowDirection.EAST));
-            when(cellCache.getOrComputeWithFlow(cellPos)).thenReturn(cell);
-        }
+        borderFlow.put(centerPos.getBorderCells(FlowDirection.EAST), FlowDirection.EAST);
 
+        stubBorderFlow();
         BlockPos blockPos = centerPos.getWorldPosition(0);
         Set<Region> result = RegionExplorer.discover(blockPos);
 
@@ -358,12 +339,9 @@ class RegionExplorerTest {
             return new Region(pos, RegionType.OCEANIC);
         });
 
-        List<CellPos> southBorderCells = northPos.getBorderCells(FlowDirection.SOUTH);
-        for (CellPos cellPos : southBorderCells) {
-            Cell cell = mockCellWithFlow(cellPos, List.of(FlowDirection.NORTHEAST));
-            when(cellCache.getOrComputeWithFlow(cellPos)).thenReturn(cell);
-        }
+        borderFlow.put(northPos.getBorderCells(FlowDirection.SOUTH), FlowDirection.NORTHEAST);
 
+        stubBorderFlow();
         BlockPos blockPos = centerPos.getWorldPosition(0);
         Set<Region> result = RegionExplorer.discover(blockPos);
 
@@ -407,6 +385,7 @@ class RegionExplorerTest {
         regions.put(new RegionPos(1, 0), new Region(new RegionPos(1, 0), RegionType.FLUVIAL));
         regions.put(terminus.getRegion(), new Region(terminus.getRegion(), RegionType.COASTAL,
             List.of(new Boundary(terminus, new CellPos(19, 2), BoundaryType.OCEAN))));
+        stubEastwardBorderFlow();
         Flowline path = traceEastFrom(new CellPos(1, 2));
 
         assertTrue(path.isValid());
@@ -423,6 +402,7 @@ class RegionExplorerTest {
             List.of(new Boundary(basin, new CellPos(11, 2), BoundaryType.BASIN))));
         regions.put(ocean.getRegion(), new Region(ocean.getRegion(), RegionType.COASTAL,
             List.of(new Boundary(ocean, new CellPos(19, 2), BoundaryType.OCEAN))));
+        stubEastwardBorderFlow();
         Flowline path = traceEastFrom(new CellPos(1, 2));
 
         assertTrue(path.isValid());
@@ -455,8 +435,8 @@ class RegionExplorerTest {
         RegionPos coast = new RegionPos(1, 0);
         Region origin = new Region(center, RegionType.FLUVIAL);
         Region outlet = new Region(coast, RegionType.COASTAL);
-        when(typeCache.getOrCompute(any(RegionPos.class), any(SampleCache.class))).thenAnswer(call ->
-            coast.equals(call.getArgument(0)) ? RegionType.COASTAL : RegionType.INLAND);
+        doAnswer(call -> coast.equals(call.getArgument(0)) ? RegionType.COASTAL : RegionType.INLAND)
+            .when(typeCache).getOrCompute(any(RegionPos.class), any(SampleCache.class));
         when(regionCache.getOrCompute(any(RegionPos.class))).thenAnswer(call -> {
             RegionPos pos = call.getArgument(0);
             if (pos.equals(center)) {
@@ -468,19 +448,35 @@ class RegionExplorerTest {
             throw new AssertionError("Non-coastal region was fully prepared: " + pos);
         });
         when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(call ->
-            new Cell(call.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
+            mockCellWithFlow(List.of(FlowDirection.EAST)));
 
         assertEquals(Set.of(origin, outlet), RegionExplorer.discover(center.getWorldPosition(0)));
     }
 
+    /**
+     * Preparation loads cells through RiverShaping.preclassify, so that is where the intended cells are supplied.
+     * Every cell is a non-ocean land cell at height 100 flowing east; only the source is classified SNOWMELT.
+     */
+    /** Tests whose fluvial region is asked about border flow need every border cell to flow east. */
+    private void stubEastwardBorderFlow() {
+        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
+            mockCellWithFlow(List.of(FlowDirection.EAST)));
+    }
+
     private Flowline traceEastFrom(CellPos source) {
-        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation -> {
-            CellPos pos = invocation.getArgument(0);
-            Cell cell = new Cell(pos, Set.of()).withFlowDirections(List.of(FlowDirection.EAST));
-            return pos.equals(source) ? cell.withFeature(Feature.SNOWMELT) : cell;
-        });
-        RegionPos region = source.getRegion();
-        return new FlowlineTracer(RiverPreparation.prepare(region, Set.of(region), false)).trace(source);
+        try (MockedStatic<RiverShaping> shaping = mockStatic(RiverShaping.class)) {
+            shaping.when(() -> RiverShaping.preclassify(any(CellPos.class))).thenAnswer(invocation -> {
+                CellPos pos = invocation.getArgument(0);
+                Cell cell = mock(Cell.class);
+                // Preparation reads exactly these three values from a prepared cell.
+                when(cell.feature()).thenReturn(pos.equals(source) ? Feature.SNOWMELT : Feature.NONE);
+                when(cell.flowDirections()).thenReturn(List.of(FlowDirection.EAST));
+                when(cell.averageEstimatedTerrainHeight()).thenReturn(100);
+                return cell;
+            });
+            RegionPos region = source.getRegion();
+            return new FlowlineTracer(RiverPreparation.prepare(region, Set.of(region), false)).trace(source);
+        }
     }
 
     private Map<RegionPos, Region> inlandMap() {
@@ -491,9 +487,27 @@ class RegionExplorerTest {
         });
         return regions;
     }
-    private Cell mockCellWithFlow(CellPos pos, List<FlowDirection> flowDirections) {
+
+    private final Map<List<CellPos>, FlowDirection> borderFlow = new HashMap<>();
+
+    /**
+     * Border cells flow in the configured direction; any other cell lookup is a test failure.
+     * Cells are built on demand because discovery stops at the first border cell that flows into the target,
+     * so eagerly stubbing all of them would leave most stubs unused.
+     */
+    private void stubBorderFlow() {
+        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation -> {
+            CellPos pos = invocation.getArgument(0);
+            return borderFlow.entrySet().stream()
+                .filter(entry -> entry.getKey().contains(pos))
+                .findFirst()
+                .map(entry -> mockCellWithFlow(List.of(entry.getValue())))
+                .orElseThrow(() -> new AssertionError("Unexpected cell lookup: " + pos));
+        });
+    }
+
+    private Cell mockCellWithFlow(List<FlowDirection> flowDirections) {
         Cell cell = mock(Cell.class);
-        when(cell.pos()).thenReturn(pos);
         when(cell.flowDirections()).thenReturn(flowDirections);
         return cell;
     }

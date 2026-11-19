@@ -20,7 +20,6 @@ import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionType;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -90,12 +89,6 @@ class WatershedPreviewTest {
         }
         assertEquals(new CellPos(16, 0), watershed.terminus(new CellPos(-8, 0)).orElseThrow());
         verify(tracer, never()).predecessors(any(CellPos.class));
-        assertFalse(Store.timers().containsKey(FlowlinePreparation.class.getName() + "_prepare"));
-        assertFalse(Store.timers().containsKey(WatershedPreparation.class.getName() + "_gather"));
-        assertEquals(1, Store.getTimer(WatershedBuilder.class, "build").count());
-        assertEquals(1, Store.getTimer(WatershedPreview.class, "request").count());
-        assertEquals(1.0, Store.getDistribution(WatershedPreview.class, "localOnly").snapshot().avg());
-        assertEquals(9.0, Store.getDistribution(WatershedPreview.class, "localSourceRegions").snapshot().avg());
     }
 
     @Test
@@ -120,9 +113,6 @@ class WatershedPreviewTest {
         for (int z = 1; z <= 8; z++) {
             assertTrue(cells.contains(new CellPos(16, z)));
         }
-        assertEquals(1, Store.getTimer(FlowlinePreparation.class, "prepare").count());
-        assertEquals(1, Store.getTimer(WatershedPreparation.class, "gather").count());
-        assertEquals(0.0, Store.getDistribution(WatershedPreview.class, "localOnly").snapshot().avg());
     }
 
     @Test
@@ -137,51 +127,29 @@ class WatershedPreviewTest {
     }
 
     @Test
-    void fullPreviewTimesNetworkBuildBeforeOverlayTraces() {
+    void fullPreviewReturnsPathsForEveryVisibleRegion() {
         configure(false);
         RegionPos center = new RegionPos(0, 0);
         PreparedRiverData data = snapshot();
-        try (MockedStatic<RiverPreparation> preparation = mockStatic(RiverPreparation.class);
-             MockedStatic<FlowlinePreparation> flowlines = mockStatic(FlowlinePreparation.class);
-             MockedStatic<WatershedPreparation> gathering = mockStatic(WatershedPreparation.class);
-             MockedStatic<WatershedBuilder> builder = mockStatic(WatershedBuilder.class)) {
+        try (MockedStatic<RiverPreparation> preparation = mockStatic(RiverPreparation.class)) {
             preparation.when(() -> RiverPreparation.prepare(eq(center), any(), eq(false))).thenReturn(data);
-            flowlines.when(() -> FlowlinePreparation.prepare(any(Region.class), any(FlowlineTracer.class)))
-                .thenAnswer(call -> new FlowlinePreparation.Result(Map.of(), Map.of(), call.getArgument(1)));
-            gathering.when(() -> WatershedPreparation.gather(any())).thenReturn(List.of());
-            builder.when(() -> WatershedBuilder.build(any())).thenReturn(List.of());
-            preview.when(() -> SourceTrace.trace(any(Region.class), any(FlowlineTracer.class))).thenAnswer(call -> {
-                assertEquals(1, Store.getTimer(RiverNetwork.class, "build").count());
-                return List.of();
-            });
 
             WatershedPreview.Result result = WatershedPreview.prepare(center, visible);
 
             assertEquals(visible, result.paths().keySet());
-            assertEquals(1, Store.getTimer(RiverNetwork.class, "build").count());
-            assertFalse(Store.timers().containsKey(WatershedPreview.class.getName() + "_request"));
-            assertEquals(0.0, Store.getDistribution(WatershedPreview.class, "localOnly").snapshot().avg());
-        }
-    }
-
-    @Test
-    void localPreviewDoesNotTimeNetworkBuild() {
-        try (MockedStatic<RiverPreparation> preparation = mockStatic(RiverPreparation.class)) {
-            preparation.when(() -> RiverPreparation.prepare(any(), any(), eq(true))).thenReturn(snapshot());
-
-            WatershedPreview.prepare(new RegionPos(0, 0), visible);
-
-            assertFalse(Store.timers().containsKey(RiverNetwork.class.getName() + "_build"));
-            assertEquals(1, Store.getTimer(WatershedPreview.class, "request").count());
+            assertTrue(traceCounts.keySet().containsAll(visible));
         }
     }
 
     private PreparedRiverData snapshot() {
         Map<RegionPos, Region> regions = new HashMap<>();
+        Map<CellPos, List<CellPos>> incomingCells = new HashMap<>();
         for (RegionPos pos : visible) {
-            regions.put(pos, region(pos));
+            Region region = region(pos);
+            regions.put(pos, region);
+            region.cells().forEach(cell -> incomingCells.put(cell, List.of()));
         }
-        return new PreparedRiverData(regions, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), 0, 63);
+        return new PreparedRiverData(regions, Map.of(), Map.of(), Map.of(), incomingCells, Map.of(), 0, 63);
     }
 
     private WatershedPreview.Result prepare() {

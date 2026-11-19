@@ -112,8 +112,14 @@ class CellFlowTest {
         provider.put(center, 180, false);
         Cell cell = CellCache.get().getOrCompute(center);
 
-        assertFalse(cell.hasInflowingNeighbor());
+        // Cold: no neighbor has been computed yet, so classify has to populate the cache itself.
+        for (FlowDirection direction : FlowDirection.D8) {
+            assertEquals(null, CellCache.get().getIfPresent(center.relative(direction)));
+        }
         assertEquals(Feature.SNOWMELT, Feature.classify(cell, null).feature());
+
+        // Warm: the neighbor cache now holds all eight neighbors with flow.
+        assertFalse(cell.hasInflowingNeighbor());
         assertEquals(Feature.SNOWMELT, Feature.classify(cell, null).feature());
     }
 

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CacheConfig;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.config.SourceConfig;
@@ -174,18 +175,21 @@ class RegionTransitionTest {
     }
 
     private Region region(CellPos terminus, RegionType type) {
+        if (type == RegionType.OCEANIC) {
+            return new Region(terminus.getRegion(), type);
+        }
         BoundaryType boundaryType = type == RegionType.COASTAL ? BoundaryType.OCEAN : BoundaryType.BASIN;
         return new Region(terminus.getRegion(), type, List.of(
             new Boundary(terminus, terminus.relative(FlowDirection.SOUTH), boundaryType)));
     }
 
     private void flow(CellPos pos, FlowDirection direction) {
-        cells.put(pos, new Cell(pos, Set.of()).withFlowDirections(List.of(direction)));
+        cells.put(pos, RiverWorld.land(pos, RiverWorld.LAND_HEIGHT, Feature.NONE, List.of(direction)));
     }
 
     private FlowlineTracer tracer(List<Region> regions, Region center, int fallback, CellPos... sources) {
         RiverWorld.configureRouting(fallback, 10);
-        return world.regions(regions).cells(pos -> cells.getOrDefault(pos, new Cell(pos, Set.of())))
+        return world.regions(regions).cells(pos -> cells.getOrDefault(pos, RiverWorld.land(pos, RiverWorld.LAND_HEIGHT, Feature.NONE, List.of())))
             .prepare(center.pos(), sources);
     }
 }

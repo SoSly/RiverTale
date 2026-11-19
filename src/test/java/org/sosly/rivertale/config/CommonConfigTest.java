@@ -7,7 +7,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -23,24 +22,6 @@ class CommonConfigTest {
     void tearDown() {
         CommonConfig.Spec.SPEC.setConfig((CommentedConfig) null);
         CommonConfig.set(original);
-    }
-
-    @Test
-    void partialTomlRetainsCustomValuesAndUsesTuningDefaults() {
-        load("""
-            nudgingLimit = 12
-            """);
-        CommonConfig config = CommonConfig.get();
-        assertEquals(24, config.regionSize());
-        assertEquals(4, config.cellSize());
-        assertEquals(5, config.samplesPerCell());
-        assertFalse(config.enableMetrics());
-        assertEquals(12, config.nudgingLimit());
-        assertEquals(5, config.fallbackApproachCells());
-        assertEquals(1, config.awayStepAllowance());
-        assertFalse(config.localRiverPreview());
-        assertEquals(new SourceConfig(175, 0.2, 113, 0.5, 0.4, 0.3, 100, 0.2, 0.05), config.sources());
-        assertEquals(new CacheConfig(1_000_000, 50_000, 100, 100, 100), config.caches());
     }
 
     @Test

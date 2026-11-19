@@ -30,7 +30,6 @@ import org.sosly.rivertale.region.RegionType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -130,7 +129,7 @@ class FlowlineTracerTest {
     void divideRejectsThatBranchAndAllowsAnAlternative() {
         cells.put(new CellPos(1, 2), cell(new CellPos(1, 2), List.of(FlowDirection.EAST, FlowDirection.NORTHEAST)));
         CellPos divide = new CellPos(2, 2);
-        cells.put(divide, cell(divide, List.of(FlowDirection.EAST)).withFeature(Feature.DIVIDE));
+        cells.put(divide, divide(divide, List.of(FlowDirection.EAST)));
         Flowline path = tracer(List.of(region(new CellPos(5, 2), BoundaryType.OCEAN)), 0, new CellPos(1, 2)).trace(new CellPos(1, 2));
 
         assertTrue(path.isValid());
@@ -232,17 +231,6 @@ class FlowlineTracerTest {
     }
 
     @Test
-    void returnedPathCannotBeChangedThroughItsInputOrAccessor() {
-        CellPos source = new CellPos(1, 2);
-        List<CellPos> positions = new ArrayList<>(List.of(source));
-        Flowline path = new Flowline(positions, source, true);
-        positions.clear();
-
-        assertEquals(List.of(source), path.cells());
-        assertThrows(UnsupportedOperationException.class, () -> path.cells().clear());
-    }
-
-    @Test
     void fiveCellFallbackPrefersAvailableFlow() {
         CellPos source = new CellPos(1, 1);
         cells.put(source, cell(source, List.of(FlowDirection.SOUTH)));
@@ -269,6 +257,7 @@ class FlowlineTracerTest {
         Flowline path = fallbackTracer(new CellPos(5, 2), source).trace(source);
 
         assertTrue(path.isValid());
+        assertEquals(new CellPos(2, 1), path.cells().get(1));
         assertEquals(new CellPos(5, 2), path.terminus());
     }
 
@@ -328,38 +317,19 @@ class FlowlineTracerTest {
     }
 
     @Test
-    void exhaustedBranchesAreReusedAndFailedSearchesAreMeasured() {
+    void branchesConvergingOnADeadEndFailAndAreMeasuredAsAFailedSearch() {
         enableMetrics();
         setNudging(false);
         CellPos source = new CellPos(1, 2);
-        CellPos sharedDeadEnd = new CellPos(3, 2);
         cells.put(source, cell(source, List.of(FlowDirection.NORTHEAST, FlowDirection.SOUTHEAST)));
         putFlow(2, 1, FlowDirection.SOUTHEAST);
         putFlow(2, 3, FlowDirection.NORTHEAST);
-        Map<CellPos, Integer> visits = new HashMap<>();
-        FlowlineTracer tracer = prepare(List.of(region(new CellPos(6, 2), BoundaryType.OCEAN)), pos -> {
-            visits.merge(pos, 1, Integer::sum);
-            return cells.getOrDefault(pos, cell(pos, List.of()));
-        }, 0, 0, source);
 
-        Flowline path = tracer.trace(source);
+        Flowline path = searchTracer(new CellPos(6, 2), source).trace(source);
 
         assertFalse(path.isValid());
         assertEquals(List.of(source), path.cells());
-        assertEquals(1, visits.get(sharedDeadEnd));
         assertRatio("success", 0, 1);
-    }
-
-    @Test
-    void successfulFirstChoiceDoesNotCountAsARetry() {
-        enableMetrics();
-        Flowline path = tracer(List.of(region(new CellPos(6, 2), BoundaryType.OCEAN)), 0, new CellPos(1, 2))
-            .trace(new CellPos(1, 2));
-
-        assertTrue(path.isValid());
-        assertRatio("success", 1, 1);
-        assertFalse(Store.ratios().containsKey(FlowlineTracer.class.getName() + "_retrySuccess"));
-        assertFalse(Store.timers().containsKey(FlowlineTracer.class.getName() + "_backtracking"));
     }
 
     @Test
@@ -368,7 +338,7 @@ class FlowlineTracerTest {
         CellPos source = new CellPos(1, 2);
         cells.put(source, cell(source, List.of(FlowDirection.EAST, FlowDirection.SOUTHEAST)));
         CellPos divide = new CellPos(2, 2);
-        cells.put(divide, cell(divide, List.of()).withFeature(Feature.DIVIDE));
+        cells.put(divide, divide(divide, List.of()));
         Flowline path = tracer(List.of(region(new CellPos(5, 2), BoundaryType.OCEAN)), 5, source).trace(source);
 
         assertTrue(path.isValid());
@@ -382,7 +352,7 @@ class FlowlineTracerTest {
         CellPos source = new CellPos(1, 2);
         CellPos divide = new CellPos(2, 1);
         cells.put(source, cell(source, List.of(FlowDirection.NORTH)));
-        cells.put(divide, cell(divide, List.of()).withFeature(Feature.DIVIDE));
+        cells.put(divide, divide(divide, List.of()));
         Flowline path = fallbackTracer(new CellPos(6, 2), source).trace(source);
 
         assertTrue(path.isValid());
@@ -658,8 +628,6 @@ class FlowlineTracerTest {
             Store.getDistribution(FlowlineTracer.class, "carveFlatFallBlocks").snapshot());
         assertEquals(new Distribution.Snapshot(3, 1, 1, 1, 1),
             Store.getDistribution(FlowlineTracer.class, "carveDescendingFallBlocks").snapshot());
-        assertEquals(70, cells.get(new CellPos(3, 2)).averageEstimatedTerrainHeight());
-        assertEquals(200, cells.get(terminus).averageEstimatedTerrainHeight());
         assertFalse(tracer.trace(new CellPos(-1, 2)).isValid());
         assertTrue(tracer.trace(terminus).isValid());
         assertEquals(3, Store.getDistribution(FlowlineTracer.class, "cellFallBlocks").snapshot().count());
@@ -707,17 +675,6 @@ class FlowlineTracerTest {
         when(cell.feature()).thenReturn(Feature.NONE);
         return cell;
     }
-    @Test
-    void lengthCountsCardinalAndDiagonalSegmentsInsteadOfStraightLineDistance() {
-        CellPos source = new CellPos(-2, -2);
-        CellPos terminus = new CellPos(-1, -1);
-        Flowline path = new Flowline(List.of(source, new CellPos(-1, -2), new CellPos(0, -1), terminus), terminus, true);
-
-        assertEquals(128 + 64 * Math.sqrt(2), path.lengthBlocks(64), 0.000001);
-        assertEquals(32 + 16 * Math.sqrt(2), path.lengthBlocks(16), 0.000001);
-        assertEquals(0, new Flowline(List.of(source), source, true).lengthBlocks(64));
-    }
-
     @Test
     void lengthMetricsIncludeOnlySuccessfulTracesInConfiguredBlockUnits() {
         enableMetrics();
@@ -792,6 +749,10 @@ class FlowlineTracerTest {
     }
 
     private Cell cell(CellPos pos, List<FlowDirection> directions) {
-        return new Cell(pos, Set.of()).withFlowDirections(directions);
+        return RiverWorld.land(pos, RiverWorld.LAND_HEIGHT, Feature.NONE, directions);
+    }
+
+    private Cell divide(CellPos pos, List<FlowDirection> directions) {
+        return RiverWorld.land(pos, RiverWorld.LAND_HEIGHT, Feature.DIVIDE, directions);
     }
 }

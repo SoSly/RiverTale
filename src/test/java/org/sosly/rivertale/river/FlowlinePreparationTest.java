@@ -2,6 +2,7 @@ package org.sosly.rivertale.river;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,6 +36,7 @@ class FlowlinePreparationTest {
     private final Map<CellPos, List<CellPos>> incoming = new HashMap<>();
     private final Map<RegionPos, List<Flowline>> paths = new HashMap<>();
     private final Map<RegionPos, Integer> traceCounts = new HashMap<>();
+    private final Set<RegionPos> prepared = new HashSet<>();
 
     @BeforeEach
     void setUp() {
@@ -46,7 +48,17 @@ class FlowlinePreparationTest {
         cacheStatic = mockStatic(RegionCache.class);
         cacheStatic.when(RegionCache::get).thenReturn(cache);
         tracer = mock(FlowlineTracer.class);
-        when(tracer.region(any(RegionPos.class))).thenAnswer(call -> region(call.getArgument(0)));
+        // Like PreparedRiverData, refuse regions that were never prepared.
+        when(tracer.region(any(RegionPos.class))).thenAnswer(call -> {
+            RegionPos pos = call.getArgument(0);
+            if (!prepared.contains(pos)) {
+                throw new IllegalStateException("Incomplete river preparation: missing region at " + pos);
+            }
+            return region(pos);
+        });
+        // Every step in these scenarios flows toward its destination, so no search ever spends its allowance.
+        when(tracer.movesAway(any(CellPos.class), any(CellPos.class))).thenReturn(false);
+        when(tracer.awayStepAllowance()).thenReturn(0);
         when(tracer.predecessors(any(CellPos.class))).thenAnswer(call -> incoming.getOrDefault(call.getArgument(0), List.of()));
         preview = mockStatic(SourceTrace.class);
         preview.when(() -> SourceTrace.trace(any(Region.class), any(FlowlineTracer.class))).thenAnswer(call -> {
@@ -156,14 +168,26 @@ class FlowlinePreparationTest {
     }
 
     private FlowlinePreparation.Result prepare(int x) {
+        prepared.add(pos(x));
         return FlowlinePreparation.prepare(region(pos(x)), tracer);
     }
 
     private void addPath(int source, int... regions) {
         List<CellPos> cells = new ArrayList<>();
         for (int x : regions) {
-            cells.add(pos(x).getMinCell());
+            CellPos target = pos(x).getMinCell();
+            if (cells.isEmpty()) {
+                cells.add(target);
+                continue;
+            }
+            CellPos current = cells.get(cells.size() - 1);
+            while (!current.equals(target)) {
+                current = new CellPos(current.x() + Integer.signum(target.x() - current.x()),
+                    current.z() + Integer.signum(target.z() - current.z()));
+                cells.add(current);
+            }
         }
+        cells.forEach(cell -> prepared.add(cell.getRegion()));
         paths.put(pos(source), List.of(new Flowline(cells, cells.get(cells.size() - 1), true)));
         for (int i = 1; i < cells.size(); i++) {
             incoming.computeIfAbsent(cells.get(i), key -> new ArrayList<>()).add(cells.get(i - 1));

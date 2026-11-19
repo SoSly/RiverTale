@@ -33,16 +33,23 @@ import static org.mockito.Mockito.when;
  * river data through the production entry point. Regions come from {@link RegionCache}, working sets from
  * {@link RegionExplorer#discover(BlockPos)} and cells from {@link RiverShaping#preclassify(CellPos)}. Other
  * {@link RiverShaping} calls run for real unless a sea level is set. Source cells keep their flow and height but
- * are classified as {@link Feature#SNOWMELT}.
+ * are classified as {@link Feature#SNOWMELT}. Unless a test supplies its own loader, every cell is plain land from
+ * {@link #land(CellPos, int, Feature, List)} at {@link #LAND_HEIGHT} with no flow.
  */
 final class RiverWorld implements AutoCloseable {
+    /**
+     * Default terrain height for land cells whose height a test doesn't care about. It sits well above the default
+     * sea level of 63, so a default cell is never a basin, and it leaves room for tests to place cells above or below.
+     */
+    static final int LAND_HEIGHT = 100;
+
     private final Map<RegionPos, Region> regions = new LinkedHashMap<>();
     private final Set<CellPos> sources = new HashSet<>();
     private final MockedStatic<RegionCache> cache;
     private final MockedStatic<RegionExplorer> explorer;
     private final MockedStatic<RiverShaping> shaping;
     private Function<RegionPos, Collection<Region>> discovered = pos -> regions.values();
-    private Function<CellPos, Cell> cells = pos -> new Cell(pos, Set.of());
+    private Function<CellPos, Cell> cells = pos -> land(pos, LAND_HEIGHT, Feature.NONE, List.of());
     private Integer seaLevel;
 
     RiverWorld() {
@@ -55,6 +62,23 @@ final class RiverWorld implements AutoCloseable {
         explorer.when(() -> RegionExplorer.discover(any(BlockPos.class)))
             .thenAnswer(call -> new LinkedHashSet<>(discovered.apply(new RegionPos((BlockPos) call.getArgument(0)))));
         shaping = mockStatic(RiverShaping.class, this::shape);
+    }
+
+    /**
+     * Builds a coherent land cell: not ocean, not a basin, at an explicit height with explicit flow and feature.
+     * The cell is a mock, so {@link Cell#withFeature} and {@link Cell#withFlowDirections} return null; pass every
+     * value here instead.
+     */
+    static Cell land(CellPos pos, int height, Feature feature, List<FlowDirection> directions) {
+        List<FlowDirection> flow = List.copyOf(directions);
+        Cell cell = mock(Cell.class);
+        when(cell.pos()).thenReturn(pos);
+        when(cell.isOcean()).thenReturn(false);
+        when(cell.isBasin()).thenReturn(false);
+        when(cell.averageEstimatedTerrainHeight()).thenReturn(height);
+        when(cell.flowDirections()).thenReturn(flow);
+        when(cell.feature()).thenReturn(feature);
+        return cell;
     }
 
     static void configureRouting(int fallback, int away) {
@@ -115,12 +139,6 @@ final class RiverWorld implements AutoCloseable {
         if (!sources.contains(pos)) {
             return cell;
         }
-        List<FlowDirection> directions = cell.flowDirections();
-        int height = cell.averageEstimatedTerrainHeight();
-        Cell source = mock(Cell.class);
-        when(source.feature()).thenReturn(Feature.SNOWMELT);
-        when(source.flowDirections()).thenReturn(directions);
-        when(source.averageEstimatedTerrainHeight()).thenReturn(height);
-        return source;
+        return land(pos, cell.averageEstimatedTerrainHeight(), Feature.SNOWMELT, cell.flowDirections());
     }
 }

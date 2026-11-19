@@ -1,5 +1,6 @@
 package org.sosly.rivertale.terrain;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -18,6 +19,7 @@ import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.DensityField;
 import org.sosly.rivertale.density.Sample;
@@ -86,7 +88,8 @@ class CoastalTest {
 
         List<Boundary> boundaries = Coastal.boundaries(region, cellCache);
 
-        assertTrue(boundaries.stream().anyMatch(b -> b.type() == BoundaryType.OCEAN));
+        assertEquals(oceanEdgesAlongColumn(minCell, boundaryCellX), Set.copyOf(boundaries));
+        assertEquals(CommonConfig.get().cellsPerRegion(), boundaries.size());
     }
 
     @Test
@@ -102,7 +105,8 @@ class CoastalTest {
 
         List<Boundary> boundaries = Coastal.boundaries(region, cellCache);
 
-        assertTrue(boundaries.stream().anyMatch(b -> b.type() == BoundaryType.BASIN));
+        assertEquals(basinEdges(basinPos), Set.copyOf(boundaries));
+        assertEquals(4, boundaries.size());
     }
 
     @Test
@@ -123,10 +127,10 @@ class CoastalTest {
 
         List<Boundary> boundaries = Coastal.boundaries(region, cellCache);
 
-        boolean hasOcean = boundaries.stream().anyMatch(b -> b.type() == BoundaryType.OCEAN);
-        boolean hasBasin = boundaries.stream().anyMatch(b -> b.type() == BoundaryType.BASIN);
-        assertTrue(hasOcean);
-        assertTrue(hasBasin);
+        Set<Boundary> expected = new HashSet<>(oceanEdgesAlongColumn(minCell, boundaryCellX));
+        expected.addAll(basinEdges(basinPos));
+        assertEquals(expected, Set.copyOf(boundaries));
+        assertEquals(CommonConfig.get().cellsPerRegion() + 4, boundaries.size());
     }
 
     @Test
@@ -149,6 +153,26 @@ class CoastalTest {
         assertEquals(4, boundariesForPeninsula);
     }
 
+    /** Land cells in the column just west of the ocean edge, one ocean boundary per row. */
+    private static Set<Boundary> oceanEdgesAlongColumn(CellPos minCell, int oceanStartOffset) {
+        Set<Boundary> expected = new HashSet<>();
+        for (int z = 0; z < CommonConfig.get().cellsPerRegion(); z++) {
+            expected.add(new Boundary(
+                new CellPos(minCell.x() + oceanStartOffset - 1, minCell.z() + z),
+                new CellPos(minCell.x() + oceanStartOffset, minCell.z() + z),
+                BoundaryType.OCEAN));
+        }
+        return expected;
+    }
+
+    private static Set<Boundary> basinEdges(CellPos basin) {
+        Set<Boundary> expected = new HashSet<>();
+        for (FlowDirection dir : FlowDirection.D4) {
+            expected.add(new Boundary(basin.relative(dir), basin, BoundaryType.BASIN));
+        }
+        return expected;
+    }
+
     private void mockCellCache(Function<CellPos, Cell> cellFactory) {
         when(cellCache.getOrCompute(any(CellPos.class))).thenAnswer(invocation -> {
             CellPos pos = invocation.getArgument(0);
@@ -156,22 +180,28 @@ class CoastalTest {
         });
     }
 
+    /** The chunk CellCache would sample for this cell at cellSize=2, samplesPerCell=1 (the cell's center chunk). */
+    private static ChunkPos sampleChunk(CellPos pos) {
+        int cellSize = CommonConfig.get().cellSize();
+        return new ChunkPos(pos.x() * cellSize + cellSize / 2, pos.z() * cellSize + cellSize / 2);
+    }
+
     private Cell createOceanCell(CellPos pos) {
-        ChunkPos chunk = new ChunkPos(pos.x(), pos.z());
+        ChunkPos chunk = sampleChunk(pos);
         Sample sample = new Sample(chunk, -0.5, 142, true);
         provider.putSample(chunk, sample);
         return new Cell(pos, Set.of(chunk));
     }
 
     private Cell createLandCell(CellPos pos) {
-        ChunkPos chunk = new ChunkPos(pos.x(), pos.z());
+        ChunkPos chunk = sampleChunk(pos);
         Sample sample = new Sample(chunk, 0.5, 142, false);
         provider.putSample(chunk, sample);
         return new Cell(pos, Set.of(chunk));
     }
 
     private Cell createBasinCell(CellPos pos) {
-        ChunkPos chunk = new ChunkPos(pos.x(), pos.z());
+        ChunkPos chunk = sampleChunk(pos);
         Sample sample = new Sample(chunk, 0.5, 56, false);
         provider.putSample(chunk, sample);
         return new Cell(pos, Set.of(chunk));

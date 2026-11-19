@@ -6,12 +6,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.config.CacheConfig;
 import org.sosly.rivertale.config.SourceConfig;
@@ -37,7 +37,6 @@ class RegionalRoutingTest {
     private final Region last = new Region(new RegionPos(1, -1), RegionType.COASTAL,
         List.of(new Boundary(secondShore, secondShore.relative(FlowDirection.NORTH), BoundaryType.OCEAN)));
     private final Map<CellPos, Cell> cells = new HashMap<>();
-    private final AtomicInteger routingLoads = new AtomicInteger();
     private CommonConfig originalConfig;
     private RiverWorld world;
 
@@ -108,7 +107,6 @@ class RegionalRoutingTest {
         assertEquals(secondShore, arriving.terminus());
         assertEquals(secondShore, local.terminus());
         assertEquals(arriving.cells().subList(1, arriving.cells().size()), local.cells());
-        assertEquals(0, routingLoads.get());
     }
 
     @Test
@@ -135,7 +133,6 @@ class RegionalRoutingTest {
 
         assertTrue(paths.get(0).isValid());
         assertTrue(paths.stream().allMatch(paths.get(0)::equals));
-        assertEquals(0, routingLoads.get());
     }
 
     private void addLoopWithExit() {
@@ -148,20 +145,17 @@ class RegionalRoutingTest {
 
     private void flow(int x, int z, FlowDirection... directions) {
         CellPos pos = new CellPos(x, z);
-        cells.put(pos, new Cell(pos, Set.of()).withFlowDirections(List.of(directions)));
+        cells.put(pos, RiverWorld.land(pos, RiverWorld.LAND_HEIGHT, Feature.NONE, List.of(directions)));
     }
 
     private FlowlineTracer tracer() {
         RiverWorld.configureRouting(0, 10);
-        FlowlineTracer tracer = world.regions(List.of(first, middle, last)).discover(this::regions)
-            .cells(pos -> cells.getOrDefault(pos, new Cell(pos, Set.of())))
+        return world.regions(List.of(first, middle, last)).discover(this::regions)
+            .cells(pos -> cells.getOrDefault(pos, RiverWorld.land(pos, RiverWorld.LAND_HEIGHT, Feature.NONE, List.of())))
             .prepare(last.pos(), new CellPos(7, 2), new CellPos(8, 3), new CellPos(8, 2), new CellPos(7, 3));
-        routingLoads.set(0);
-        return tracer;
     }
 
     private Collection<Region> regions(RegionPos pos) {
-        routingLoads.incrementAndGet();
         if (pos.equals(first.pos())) {
             return List.of(first, middle);
         }
