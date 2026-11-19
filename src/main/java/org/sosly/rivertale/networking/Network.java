@@ -10,7 +10,7 @@ import org.sosly.rivertale.command.VisCommand;
 import org.sosly.rivertale.region.Region;
 
 public class Network {
-    private static final String PROTOCOL_VERSION = "3";
+    private static final String PROTOCOL_VERSION = "4";
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
         new ResourceLocation(RiverTale.MOD_ID, "main"),
@@ -32,12 +32,6 @@ public class Network {
             VisCommand.TogglePacket::encode,
             VisCommand.TogglePacket::decode,
             VisCommand.TogglePacket::handle);
-
-        CHANNEL.registerMessage(packetId++,
-            FlowDirectionSyncPacket.class,
-            FlowDirectionSyncPacket::encode,
-            FlowDirectionSyncPacket::decode,
-            FlowDirectionSyncPacket::handle);
     }
 
     public static void sendToPlayer(Message message, ServerPlayer player) {

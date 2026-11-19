@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.network.FriendlyByteBuf;
@@ -23,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.network.NetworkRegistry;
-import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.client.ClientRegionCache;
@@ -63,7 +61,7 @@ class FlowlinePreviewTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         RiverShaping.shutdown();
         WatershedCache.shutdown();
         RegionCache.shutdown();
@@ -97,12 +95,6 @@ class FlowlinePreviewTest {
         assertTrue(region.boundaries().stream().anyMatch(boundary -> boundary.land().equals(path.terminus())));
         assertEquals(Feature.SNOWMELT, CellCache.get().getOrCompute(source).feature());
         assertNull(WatershedCache.get());
-        for (CellPos pos : path.cells()) {
-            Cell cell = CellCache.get().getOrCompute(pos);
-            assertNull(cell.terminus());
-            assertNull(cell.entryY());
-            assertNull(cell.exitY());
-        }
     }
 
     @Test
@@ -171,34 +163,6 @@ class FlowlinePreviewTest {
     }
 
     @Test
-    void previewPacketPreservesSeparatePathsAndTheirSampledHeights() {
-        Region region = RegionCache.get().getOrCompute(source.getRegion());
-        CellPos terminus = new CellPos(6, 2);
-        Flowline first = new Flowline(List.of(source, new CellPos(2, 2), terminus), terminus, true);
-        Flowline singleCell = new Flowline(List.of(terminus), terminus, true);
-        Flowline invalid = new Flowline(List.of(new CellPos(0, 0)), null, false);
-        Region.Packet packet = new Region.Packet(region, List.of(first, singleCell, invalid));
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
-        try {
-            Region.Packet.encode(packet, buffer);
-            Region.Packet decoded = Region.Packet.decode(buffer);
-            buffer.clear();
-            Region.Packet.encode(decoded, buffer);
-            CompoundTag data = buffer.readNbt();
-            ClientRegionCache.Region client = ClientRegionCache.Region.decode(data);
-
-            assertEquals(2, client.paths().size());
-            assertEquals(first.cells(), client.paths().get(0).points().stream().map(ClientRegionCache.Point::pos).toList());
-            assertEquals(250, client.paths().get(0).points().get(0).y());
-            assertEquals(1, client.paths().get(1).points().size());
-            assertEquals(terminus, client.paths().get(1).points().get(0).pos());
-            assertTrue(client.edges().isEmpty());
-        } finally {
-            buffer.release();
-        }
-    }
-
-    @Test
     void regionWithoutBoundariesHasNoPreviewPaths() {
         Region region = RegionCache.get().getOrCompute(new RegionPos(-8, 0));
 
@@ -253,10 +217,6 @@ class FlowlinePreviewTest {
             Watershed watershed = WatershedCache.get().getWatershed(source);
             assertNotNull(watershed);
             assertTrue(sentOutlets.contains(watershed.terminus(source).orElseThrow()));
-            for (CellPos cell : watershed.allCells()) {
-                assertNull(CellCache.get().getOrCompute(cell).entryY());
-                assertNull(CellCache.get().getOrCompute(cell).exitY());
-            }
 
             messages.clear();
             VisCommand.register().build().getCommand().run(context);

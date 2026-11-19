@@ -5,21 +5,16 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
-import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionExplorer;
-import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.river.PreparedRiverData.Step;
 import org.sosly.rivertale.world.RiverShaping;
 
@@ -52,31 +47,10 @@ public final class RiverPreparation {
         }
     }
 
-    public static PreparedRiverData forCells(Collection<CellPos> cells) {
-        RiverPreparation preparation = new RiverPreparation(graph());
-        preparation.expand(cells);
-        return preparation.graph.finish();
-    }
-
-    static PreparedRiverData forRegions(Collection<Region> regions,
-                                        Function<RegionPos, Collection<Region>> regionProvider,
-                                        Function<CellPos, Cell> cells, int fallback, int away) {
-        Map<RegionPos, Region> byPosition = new LinkedHashMap<>();
-        regions.forEach(region -> byPosition.put(region.pos(), region));
-        RiverGraph graph = new RiverGraph(pos -> byPosition.getOrDefault(pos, new Region(pos, RegionType.OCEANIC)),
-            regionProvider, cells, fallback, away);
-        RiverPreparation preparation = new RiverPreparation(graph);
-        List<CellPos> roots = regions.stream().flatMap(region -> region.cells().stream()).toList();
-        preparation.expand(roots);
-        UpstreamSearch incoming = new UpstreamSearch(graph);
-        incoming.expand(roots);
-        return graph.finish();
-    }
-
     private static RiverGraph graph() {
         CommonConfig config = CommonConfig.get();
         return new RiverGraph(pos -> RegionCache.get().getOrCompute(pos),
-            pos -> RegionExplorer.discover(pos.getWorldPosition(0)), RiverShaping::classify,
+            pos -> RegionExplorer.discover(pos.getWorldPosition(0)), RiverShaping::preclassify,
             config.fallbackApproachCells(), config.awayStepAllowance());
     }
 

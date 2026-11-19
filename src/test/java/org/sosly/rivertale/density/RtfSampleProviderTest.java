@@ -89,7 +89,6 @@ class RtfSampleProviderTest {
         assertEquals(192, sample.terrainHeight());
         assertEquals(1.0, sample.continents(), 0.00001);
         assertFalse(sample.isOcean());
-        assertTrue(sample.hasFullDensities());
         assertEquals(0.125, sample.erosion());
         assertEquals(0.625, sample.ridges());
         assertEquals(-0.75, sample.temperature());

@@ -11,12 +11,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.config.CommonConfig;
-import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.metric.Store;
 
-public class CellCache implements Cache<Cell> {
+public class CellCache {
 
     private static volatile CellCache instance;
 
@@ -54,11 +53,6 @@ public class CellCache implements Cache<Cell> {
             instance.clear();
             instance = null;
         }
-    }
-
-    @Override
-    public Cell getOrCompute(int x, int z) {
-        return getOrCompute(new CellPos(x, z));
     }
 
     public Cell getIfPresent(CellPos pos) {
@@ -103,7 +97,6 @@ public class CellCache implements Cache<Cell> {
         cache.put(cell.pos().toLong(), cell);
     }
 
-    @Override
     public void clear() {
         cache.clear();
     }

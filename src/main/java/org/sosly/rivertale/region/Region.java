@@ -2,29 +2,20 @@ package org.sosly.rivertale.region;
 
 import com.mojang.logging.LogUtils;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Supplier;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkEvent;
-import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.networking.Message;
-import org.sosly.rivertale.river.Flowline;
-import org.sosly.rivertale.river.Watershed;
-import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.terrain.Coastal;
 import org.sosly.rivertale.terrain.Fluvial;
 import org.sosly.rivertale.world.RiverShaping;
@@ -39,7 +30,7 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
         RegionType type = RegionTypeCache.get().getOrCompute(pos, sampleCache);
         Region region = new Region(pos, type);
         for (CellPos cellPos : region.cells()) {
-            RiverShaping.classify(cellPos);
+            RiverShaping.preclassify(cellPos);
         }
         List<Boundary> boundaries = switch (type) {
             case COASTAL -> Coastal.boundaries(pos, cellCache);
@@ -65,98 +56,8 @@ public record Region(RegionPos pos, RegionType type, List<Boundary> boundaries) 
         return result;
     }
 
-    public CompoundTag encode() {
-        return encode(List.of());
-    }
-
-    public CompoundTag encode(List<Flowline> paths) {
-        Set<Watershed> watersheds = new HashSet<>();
-        WatershedCache cache = WatershedCache.get();
-        if (cache != null) {
-            for (CellPos cell : cells()) {
-                Watershed watershed = cache.getWatershed(cell);
-                if (watershed != null) {
-                    watersheds.add(watershed);
-                }
-            }
-        }
-        return encode(paths, watersheds);
-    }
-
-    public CompoundTag encode(List<Flowline> paths, Collection<Watershed> watersheds) {
-        CompoundTag tag = new CompoundTag();
-        tag.putLong("pos", pos.toLong());
-        tag.putString("type", type.name());
-
-        ListTag boundaryList = new ListTag();
-        for (Boundary boundary : boundaries) {
-            boundaryList.add(boundary.encode());
-        }
-        tag.put("boundaries", boundaryList);
-
-        CellCache cellCache = CellCache.get();
-        ListTag cellList = new ListTag();
-        for (CellPos cellPos : cells()) {
-            Cell cell = RiverShaping.classify(cellPos);
-            CompoundTag cellTag = new CompoundTag();
-            cellTag.putLong("pos", cellPos.toLong());
-            cellTag.putString("feature", cell.feature().name());
-            cellTag.putString("flow", cell.flowDirections().isEmpty()
-                ? FlowDirection.NONE.name()
-                : cell.flowDirections().get(0).name());
-            int y = cell.averageEstimatedTerrainHeight();
-            cellTag.putInt("y", y);
-            cellList.add(cellTag);
-        }
-        tag.put("cells", cellList);
-
-        ListTag watershedList = new ListTag();
-        ListTag outletList = new ListTag();
-        Set<CellPos> mergedCells = new HashSet<>();
-        for (Watershed watershed : watersheds) {
-            mergedCells.addAll(watershed.allCells());
-            ListTag edges = watershed.encode(cellCache);
-            for (int i = 0; i < edges.size(); i++) {
-                watershedList.add(edges.getCompound(i));
-            }
-            for (CellPos cell : watershed.allCells()) {
-                if (watershed.downstream(cell) == null) {
-                    CompoundTag outlet = new CompoundTag();
-                    outlet.putLong("pos", cell.toLong());
-                    outlet.putInt("y", cellCache.getOrCompute(cell).averageEstimatedTerrainHeight());
-                    outletList.add(outlet);
-                }
-            }
-        }
-        tag.put("watershed", watershedList);
-        tag.put("outlets", outletList);
-
-        ListTag pathList = new ListTag();
-        for (Flowline path : paths) {
-            boolean merged = !path.cells().isEmpty() && mergedCells.contains(path.cells().get(0));
-            if (path.isValid() && !merged) {
-                pathList.add(path.encode(cellCache));
-            }
-        }
-        tag.put("paths", pathList);
-
-        return tag;
-    }
-
     public static class Packet extends Message {
         private CompoundTag data;
-
-        public Packet(Region region) {
-            this(region, List.of());
-        }
-
-        public Packet(Region region, List<Flowline> paths) {
-            this.data = region.encode(paths);
-        }
-
-        public Packet(Region region, List<Flowline> paths, Collection<Watershed> watersheds) {
-            this.data = region.encode(paths, watersheds);
-        }
 
         public Packet(CompoundTag data) {
             this.data = data;

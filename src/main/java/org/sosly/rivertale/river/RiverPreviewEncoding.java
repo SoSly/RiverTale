@@ -8,7 +8,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.river.PreparedRiverData.CellData;
@@ -33,8 +32,6 @@ final class RiverPreviewEncoding {
             CompoundTag entry = new CompoundTag();
             entry.putLong("pos", cellPos.toLong());
             entry.putString("feature", cell.feature().name());
-            entry.putString("flow", cell.flowDirections().isEmpty()
-                ? FlowDirection.NONE.name() : cell.flowDirections().get(0).name());
             entry.putInt("y", cell.height());
             cells.add(entry);
         }

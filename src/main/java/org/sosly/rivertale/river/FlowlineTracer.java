@@ -1,7 +1,6 @@
 package org.sosly.rivertale.river;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -10,8 +9,6 @@ import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
-import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
@@ -32,14 +29,6 @@ public class FlowlineTracer {
     public FlowlineTracer(PreparedRiverData data) {
         this.data = data;
         this.awayStepAllowance = data.awayStepAllowance();
-    }
-
-    FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallback) {
-        this(regions, cells, fallback, CommonConfig.get().awayStepAllowance());
-    }
-
-    FlowlineTracer(Collection<Region> regions, Function<CellPos, Cell> cells, int fallback, int away) {
-        this(RiverPreparation.forRegions(regions, pos -> regions, cells, fallback, away));
     }
 
     PreparedRiverData data() {

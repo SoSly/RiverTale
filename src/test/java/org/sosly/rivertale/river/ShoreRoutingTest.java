@@ -33,16 +33,19 @@ class ShoreRoutingTest {
     private final CellPos shore = new CellPos(3, 4);
     private final Map<CellPos, Cell> cells = new HashMap<>();
     private CommonConfig originalConfig;
+    private RiverWorld world;
 
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, true, 12,
-            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, true, 12,
+            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        world = new RiverWorld();
     }
 
     @AfterEach
     void tearDown() {
+        world.close();
         CommonConfig.set(originalConfig);
     }
 
@@ -78,8 +81,8 @@ class ShoreRoutingTest {
     }
 
     private void waterIsExcludedEvenWhenNoLandRouteSucceeds(BoundaryType type) {
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, false, 12,
-            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 12,
+            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         FlowlineTracer tracer = tracer(type, 0);
 
         Flowline path = tracer.trace(source);
@@ -127,7 +130,8 @@ class ShoreRoutingTest {
         Region region = new Region(pos, RegionType.COASTAL, Coastal.boundaries(pos, cache));
         assertEquals(4, region.boundaries().size());
         assertTrue(region.boundaries().stream().noneMatch(boundary -> boundary.land().equals(source)));
-        return new FlowlineTracer(List.of(region), key -> cell(key, type), fallback, 10);
+        RiverWorld.configureRouting(fallback, 10);
+        return world.regions(List.of(region)).cells(key -> cell(key, type)).prepare(pos, source);
     }
 
     private Cell cell(CellPos pos, BoundaryType type) {

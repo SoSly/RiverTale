@@ -8,7 +8,6 @@
     "BoatMixin",
     "ChunkGeneratorMixin",
     "ChunkMapMixin",
-    "FlowingFluidMixin",
     "NaturalSpawnerMixin",
     "NoiseBasedChunkGeneratorMixin"
   ],

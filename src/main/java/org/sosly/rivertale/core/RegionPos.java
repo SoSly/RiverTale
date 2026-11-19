@@ -63,11 +63,6 @@ public record RegionPos(int x, int z) {
         return new CellPos(this.x * cells, this.z * cells);
     }
 
-    public CellPos getMaxCell() {
-        int cells = cellsPerRegion();
-        return new CellPos(this.x * cells + cells - 1, this.z * cells + cells - 1);
-    }
-
     public BlockPos getWorldPosition(int y) {
         return new BlockPos(this.getMinBlockX(), y, this.getMinBlockZ());
     }

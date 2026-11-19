@@ -30,15 +30,18 @@ class RegionTransitionTest {
     private final CellPos outlet = new CellPos(9, 3);
     private final Map<CellPos, Cell> cells = new HashMap<>();
     private CommonConfig originalConfig;
+    private RiverWorld world;
 
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
         configure(false);
+        world = new RiverWorld();
     }
 
     @AfterEach
     void tearDown() {
+        world.close();
         CommonConfig.set(originalConfig);
     }
 
@@ -50,7 +53,7 @@ class RegionTransitionTest {
                 Region destination = region(outlet, to);
                 flow(source, FlowDirection.EAST);
                 flow(entry, FlowDirection.EAST);
-                FlowlineTracer tracer = tracer(List.of(origin, destination), 0);
+                FlowlineTracer tracer = tracer(List.of(origin, destination), destination, 0, source);
                 boolean expected = (from == RegionType.INLAND && to == RegionType.FLUVIAL)
                     || (from == RegionType.FLUVIAL && to == RegionType.COASTAL);
                 String crossing = from + " -> " + to;
@@ -71,7 +74,7 @@ class RegionTransitionTest {
         Region origin = region(new CellPos(7, 0), RegionType.COASTAL);
         Region neighbor = new Region(entry.getRegion(), RegionType.FLUVIAL);
         flow(source, FlowDirection.EAST);
-        FlowlineTracer tracer = tracer(List.of(origin, neighbor), 0);
+        FlowlineTracer tracer = tracer(List.of(origin, neighbor), neighbor, 0, source);
 
         assertFalse(tracer.predecessors(nudge).contains(source));
         assertEquals(List.of(source), tracer.trace(source).cells());
@@ -81,7 +84,7 @@ class RegionTransitionTest {
     void fallbackKeepsCoastalRiversInsideTheirRegion() {
         Region origin = region(new CellPos(7, 7), RegionType.COASTAL);
         Region neighbor = region(outlet, RegionType.FLUVIAL);
-        Flowline path = tracer(List.of(origin, neighbor), 20).trace(source);
+        Flowline path = tracer(List.of(origin, neighbor), origin, 20, source).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(new CellPos(7, 7), path.terminus());
@@ -100,7 +103,7 @@ class RegionTransitionTest {
             new Region(new RegionPos(0, 0), RegionType.INLAND),
             new Region(new RegionPos(1, 0), RegionType.FLUVIAL),
             region(new CellPos(18, 3), RegionType.COASTAL));
-        FlowlineTracer tracer = tracer(regions, 0);
+        FlowlineTracer tracer = tracer(regions, regions.get(2), 0, expected.get(0));
 
         assertEquals(expected, tracer.trace(expected.get(0)).cells());
         assertTrue(tracer.trace(expected.get(0)).isValid());
@@ -116,7 +119,7 @@ class RegionTransitionTest {
         flow(new CellPos(7, 4), FlowDirection.SOUTH);
         Region origin = region(basin, RegionType.INLAND);
         Region neighbor = region(outlet, RegionType.INLAND);
-        Flowline path = tracer(List.of(origin, neighbor), 0).trace(source);
+        Flowline path = tracer(List.of(origin, neighbor), origin, 0, source).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(List.of(source, new CellPos(7, 4), basin), path.cells());
@@ -128,7 +131,7 @@ class RegionTransitionTest {
         Region destination = region(outlet, RegionType.COASTAL);
         flow(source, FlowDirection.EAST);
         flow(entry, FlowDirection.EAST);
-        FlowlineTracer tracer = tracer(List.of(origin, destination), 20);
+        FlowlineTracer tracer = tracer(List.of(origin, destination), destination, 20, source);
 
         assertFalse(tracer.hasDestinations(origin.pos()));
         assertFalse(tracer.trace(source).isValid());
@@ -145,7 +148,7 @@ class RegionTransitionTest {
         List<Region> regions = List.of(new Region(corner.getRegion(), RegionType.FLUVIAL),
             region(shore, RegionType.COASTAL));
 
-        assertFalse(tracer(regions, 20).trace(corner).isValid());
+        assertFalse(tracer(regions, regions.get(1), 20, corner).trace(corner).isValid());
     }
 
     @Test
@@ -157,7 +160,7 @@ class RegionTransitionTest {
         flow(approaching, FlowDirection.EAST);
         flow(source, FlowDirection.SOUTH);
         flow(new CellPos(7, 4), FlowDirection.SOUTH);
-        FlowlineTracer tracer = tracer(List.of(current, upstream), 20);
+        FlowlineTracer tracer = tracer(List.of(current, upstream), current, 20, approaching);
 
         assertFalse(tracer.predecessors(source).contains(approaching));
         Flowline path = tracer.trace(approaching);
@@ -166,8 +169,8 @@ class RegionTransitionTest {
     }
 
     private void configure(boolean nudging) {
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, false, nudging, 12,
-            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, nudging, 12,
+            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
     }
 
     private Region region(CellPos terminus, RegionType type) {
@@ -180,7 +183,9 @@ class RegionTransitionTest {
         cells.put(pos, new Cell(pos, Set.of()).withFlowDirections(List.of(direction)));
     }
 
-    private FlowlineTracer tracer(List<Region> regions, int fallback) {
-        return new FlowlineTracer(regions, pos -> cells.getOrDefault(pos, new Cell(pos, Set.of())), fallback, 10);
+    private FlowlineTracer tracer(List<Region> regions, Region center, int fallback, CellPos... sources) {
+        RiverWorld.configureRouting(fallback, 10);
+        return world.regions(regions).cells(pos -> cells.getOrDefault(pos, new Cell(pos, Set.of())))
+            .prepare(center.pos(), sources);
     }
 }

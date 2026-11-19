@@ -83,7 +83,7 @@ public class SampleCommand {
 
     private static void sendSampleInfo(ServerPlayer player, BlockPos pos) {
         ChunkPos chunk = new ChunkPos(pos);
-        Sample sample = SampleCache.get().getOrCompute(pos.getX(), pos.getZ());
+        Sample sample = SampleCache.get().getOrCompute(chunk);
         int sampleX = chunk.getMiddleBlockX();
         int sampleZ = chunk.getMiddleBlockZ();
         int y = pos.getY();
@@ -101,7 +101,7 @@ public class SampleCommand {
 
     private static void sendCellInfo(ServerPlayer player, BlockPos pos) {
         CellPos cellPos = new CellPos(pos);
-        Cell cell = RiverShaping.classify(cellPos);
+        Cell cell = RiverShaping.preclassify(cellPos);
         int y = pos.getY();
 
         player.sendSystemMessage(withTeleport("=== Cell at " + cellPos + " ===", cellPos.getMiddleBlockX(), y, cellPos.getMiddleBlockZ()));
@@ -110,10 +110,6 @@ public class SampleCommand {
         player.sendSystemMessage(Component.literal("  Average continents: " + format(cell.averageContinents())));
         player.sendSystemMessage(Component.literal("  Feature: " + cell.feature().name()));
         player.sendSystemMessage(Component.literal("  Flow directions: " + cell.flowDirections() + " (sorted by steepness)"));
-        player.sendSystemMessage(Component.literal("  entryY: " + formatNullableInt(cell.entryY()) + ", exitY: " + formatNullableInt(cell.exitY())));
-        player.sendSystemMessage(Component.literal("  width: " + formatNullableInt(cell.width()) + ", depth: " + formatNullableInt(cell.depth())));
-        player.sendSystemMessage(Component.literal("  upstreamCount: " + formatNullableInt(cell.upstreamCount()) + ", downstreamCount: " + formatNullableInt(cell.downstreamCount())));
-        player.sendSystemMessage(Component.literal("  terminus: " + (cell.terminus() != null ? cell.terminus().toString() : "(not computed)")));
         player.sendSystemMessage(Component.literal("  isOcean: " + cell.isOcean() + ", isBasin: " + cell.isBasin()));
 
         try {
@@ -133,7 +129,7 @@ public class SampleCommand {
         Map<CellType, Integer> counts = countCellTypes(regionPos);
 
         player.sendSystemMessage(Component.literal("Region " + regionPos));
-        player.sendSystemMessage(Component.literal("  type: " + region.encode().getString("type")));
+        player.sendSystemMessage(Component.literal("  type: " + region.type().name()));
         for (CellType type : CellType.values()) {
             int count = counts.getOrDefault(type, 0);
             player.sendSystemMessage(Component.literal("  " + type.name() + ": " + count));
@@ -163,10 +159,6 @@ public class SampleCommand {
 
     private static String formatNullable(Double value) {
         return value != null ? String.format("%.3f", value) : "(not computed)";
-    }
-
-    private static String formatNullableInt(Integer value) {
-        return value != null ? value.toString() : "(not computed)";
     }
 
     private static MutableComponent withTeleport(String text, int x, int y, int z) {

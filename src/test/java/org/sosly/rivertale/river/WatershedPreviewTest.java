@@ -189,8 +189,8 @@ class WatershedPreviewTest {
     }
 
     private void configure(boolean local) {
-        CommonConfig.set(new CommonConfig(8, 1, 1, 10, 1, 3, 288, true, true, 12, 5, 0,
-            SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, local));
+        CommonConfig.set(new CommonConfig(8, 1, 1, true, true, 12, 5, 0,
+            SourceConfig.DEFAULT, CacheConfig.DEFAULT, local));
     }
 
     private Flowline path(int... coordinates) {

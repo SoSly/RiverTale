@@ -1,34 +1,20 @@
 package org.sosly.rivertale.event;
 
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
-import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.RandomState;
-import net.minecraftforge.event.level.ChunkWatchEvent;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.sosly.rivertale.RiverTale;
-import org.sosly.rivertale.capability.FlowDirectionCapability;
-import org.sosly.rivertale.capability.FlowDirectionData;
 import org.sosly.rivertale.cell.CellCache;
-import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.density.RtfSampleProvider;
 import org.sosly.rivertale.density.SampleCache;
-import org.sosly.rivertale.networking.FlowDirectionSyncPacket;
-import org.sosly.rivertale.networking.Network;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionTypeCache;
 import org.sosly.rivertale.river.WatershedCache;
 import org.sosly.rivertale.world.RiverShaping;
-import org.sosly.rivertale.world.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 
@@ -61,15 +47,13 @@ public class ServerLifecycleHandler {
             return;
         }
 
-        WorldSettings.init(context.levels.waterLevel);
         SampleCache.init(new RtfSampleProvider(context));
         CellCache.init();
         RegionTypeCache.init();
         RegionCache.init();
         WatershedCache.init();
 
-        Holder<Biome> rivers = serverLevel.registryAccess().registryOrThrow(Registries.BIOME).getHolderOrThrow(Biomes.RIVER);
-        RiverShaping.init(rivers, context.levels.waterLevel, randomState);
+        RiverShaping.init(context.levels.waterLevel, randomState);
         RiverTale.LOGGER.info("Rivertale initialized with RTF base terrain samples and sea level {}", context.levels.waterLevel);
     }
 
@@ -81,42 +65,6 @@ public class ServerLifecycleHandler {
         RegionTypeCache.shutdown();
         CellCache.shutdown();
         SampleCache.shutdown();
-        WorldSettings.shutdown();
         RiverTale.LOGGER.info("Caches cleared");
-    }
-
-    @SubscribeEvent
-    public void onChunkWatch(ChunkWatchEvent.Watch event) {
-        ServerPlayer player = event.getPlayer();
-        LevelChunk chunk = event.getLevel().getChunk(event.getPos().x, event.getPos().z);
-        ChunkPos chunkPos = chunk.getPos();
-
-        FlowDirection[][] directions = null;
-
-        FlowDirectionData flowData = FlowDirectionCapability.get(chunk);
-        if (flowData != null) {
-            directions = new FlowDirection[16][16];
-            boolean hasData = false;
-            for (int x = 0; x < 16; x++) {
-                for (int z = 0; z < 16; z++) {
-                    FlowDirection dir = flowData.get(x, z);
-                    if (dir != null) {
-                        directions[x][z] = dir;
-                        hasData = true;
-                    }
-                }
-            }
-            if (!hasData) {
-                directions = null;
-            }
-        }
-
-        if (directions == null) {
-            directions = FlowDirectionCapability.getPending(chunkPos);
-        }
-
-        if (directions != null) {
-            Network.sendToPlayer(new FlowDirectionSyncPacket(chunkPos, directions), player);
-        }
     }
 }

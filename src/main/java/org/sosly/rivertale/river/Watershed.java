@@ -8,44 +8,16 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import java.util.Optional;
-import org.sosly.rivertale.cell.Cell;
-import org.sosly.rivertale.cell.CellCache;
-import org.sosly.rivertale.cell.feature.Feature;
-import org.sosly.rivertale.config.CommonConfig;
+import java.util.Set;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.RegionPos;
-import org.sosly.rivertale.metric.Store;
-import org.sosly.rivertale.metric.Timer;
-import org.sosly.rivertale.world.WorldSettings;
 
 public class Watershed {
-    private final RegionPos pos;
     private final Map<CellPos, CellPos> downstream = new HashMap<>();
     private final Map<CellPos, Set<CellPos>> upstream = new HashMap<>();
     private final Map<CellPos, Integer> upstreamCountCache = new HashMap<>();
 
-    public Watershed(RegionPos pos, List<Path> paths) {
-        Timer.Record record = Store.getTimer(Watershed.class, "constructor").start();
-
-        this.pos = pos;
-
-        for (Path path : paths) {
-            addPath(path);
-        }
-
-        pruneShortTributaries();
-        assignYLevels();
-        reclassify();
-
-        record.stop();
-    }
-
     private Watershed(CellPos terminus, Map<CellPos, CellPos> links) {
-        this.pos = terminus.getRegion();
         if (links.containsKey(terminus) || links.values().stream().anyMatch(value -> value == null)) {
             throw new IllegalArgumentException("Only nonterminal downstream links are accepted");
         }
@@ -89,259 +61,6 @@ public class Watershed {
         return ordered;
     }
 
-    private void addPath(Path path) {
-        Timer.Record record = Store.getTimer(Watershed.class, "addPath").start();
-
-        List<CellPos> cells = path.cells();
-
-        for (int i = 0; i < cells.size() - 1; i++) {
-            CellPos current = cells.get(i);
-            CellPos next = cells.get(i + 1);
-
-            CellPos crossingTarget = detectDiagonalCrossing(current, next);
-            if (crossingTarget != null) {
-                int currentAccumulation = i;
-                int existingAccumulation = accumulation(crossingTarget);
-                CellPos crossingDownstream = downstream.get(crossingTarget);
-
-                if (currentAccumulation <= existingAccumulation) {
-                    downstream.put(current, crossingDownstream);
-                    upstream.computeIfAbsent(crossingDownstream, k -> new HashSet<>()).add(current);
-                    record.stop();
-                    return;
-                } else {
-                    pruneDownstream(crossingTarget);
-                    downstream.put(crossingTarget, next);
-                    upstream.computeIfAbsent(next, k -> new HashSet<>()).add(crossingTarget);
-                }
-            }
-
-            downstream.put(current, next);
-            upstream.computeIfAbsent(next, k -> new HashSet<>()).add(current);
-        }
-
-        if (!cells.isEmpty()) {
-            CellPos last = cells.get(cells.size() - 1);
-            downstream.put(last, null);
-        }
-
-        record.stop();
-    }
-
-    private CellPos detectDiagonalCrossing(CellPos current, CellPos next) {
-        int dx = next.x() - current.x();
-        int dz = next.z() - current.z();
-
-        if (dx == 0 || dz == 0) {
-            return null;
-        }
-
-        CellPos neighborX = new CellPos(current.x() + dx, current.z());
-        CellPos neighborZ = new CellPos(current.x(), current.z() + dz);
-
-        if (downstream.containsKey(neighborX) && downstream.get(neighborX) != null) {
-            if (downstream.get(neighborX).equals(neighborZ)) {
-                return neighborX;
-            }
-        }
-
-        if (downstream.containsKey(neighborZ) && downstream.get(neighborZ) != null) {
-            if (downstream.get(neighborZ).equals(neighborX)) {
-                return neighborZ;
-            }
-        }
-
-        return null;
-    }
-
-    private void pruneDownstream(CellPos start) {
-        CellPos current = downstream.get(start);
-
-        while (current != null) {
-            Set<CellPos> upstreamSet = upstream.get(current);
-            if (upstreamSet != null && upstreamSet.size() > 1) {
-                upstreamSet.remove(start);
-                break;
-            }
-
-            CellPos next = downstream.get(current);
-            downstream.remove(current);
-            upstream.remove(current);
-            upstreamCountCache.remove(current);
-
-            start = current;
-            current = next;
-        }
-    }
-
-    private void pruneShortTributaries() {
-        int minLength = CommonConfig.get().minPathLength();
-        boolean pruned;
-
-        do {
-            pruned = false;
-            Set<CellPos> sources = findSources();
-
-            for (CellPos source : sources) {
-                List<CellPos> segment = traceToConfluenceOrTerminus(source);
-                if (segment.size() < minLength) {
-                    pruneSegment(segment);
-                    pruned = true;
-                }
-            }
-        } while (pruned);
-
-        upstreamCountCache.clear();
-    }
-
-    private Set<CellPos> findSources() {
-        Set<CellPos> sources = new HashSet<>();
-        for (CellPos cell : downstream.keySet()) {
-            Set<CellPos> up = upstream.get(cell);
-            if (up == null || up.isEmpty()) {
-                sources.add(cell);
-            }
-        }
-        return sources;
-    }
-
-    private List<CellPos> traceToConfluenceOrTerminus(CellPos source) {
-        List<CellPos> segment = new ArrayList<>();
-        CellPos current = source;
-
-        while (current != null) {
-            segment.add(current);
-
-            CellPos next = downstream.get(current);
-            if (next == null) {
-                break;
-            }
-
-            Set<CellPos> nextUpstream = upstream.get(next);
-            if (nextUpstream != null && nextUpstream.size() > 1) {
-                break;
-            }
-
-            current = next;
-        }
-
-        return segment;
-    }
-
-    private void pruneSegment(List<CellPos> segment) {
-        if (segment.isEmpty()) {
-            return;
-        }
-
-        CellPos lastInSegment = segment.get(segment.size() - 1);
-        CellPos afterSegment = downstream.get(lastInSegment);
-
-        if (afterSegment != null) {
-            Set<CellPos> upstreamSet = upstream.get(afterSegment);
-            if (upstreamSet != null) {
-                upstreamSet.remove(lastInSegment);
-            }
-        }
-
-        for (CellPos cell : segment) {
-            downstream.remove(cell);
-            upstream.remove(cell);
-        }
-    }
-
-    private void assignYLevels() {
-        Timer.Record record = Store.getTimer(Watershed.class, "assignYLevels").start();
-
-        CellCache cache = CellCache.get();
-        int minSlope = CommonConfig.get().minSlope();
-        int seaLevel = WorldSettings.get().seaLevel();
-        Set<CellPos> visited = new HashSet<>();
-
-        for (CellPos cellPos : allCells()) {
-            if (!upstream.containsKey(cellPos) || upstream.get(cellPos).isEmpty()) {
-                assignYLevelsDownstream(cellPos, cache, minSlope, seaLevel, visited);
-            }
-        }
-
-        visited.clear();
-        for (CellPos cellPos : allCells()) {
-            if (downstream.get(cellPos) == null) {
-                assignYLevelsUpstream(cellPos, cache, minSlope, seaLevel, visited);
-            }
-        }
-
-        record.stop();
-    }
-
-    private void assignYLevelsDownstream(CellPos source, CellCache cache, int minSlope, int seaLevel, Set<CellPos> visited) {
-        CellPos current = source;
-
-        while (current != null && !visited.contains(current)) {
-            visited.add(current);
-
-            Cell cell = cache.getOrCompute(current);
-            int terrainY = cell.averageEstimatedTerrainHeight();
-
-            Set<CellPos> upstreamCells = upstream.get(current);
-            if (upstreamCells == null || upstreamCells.isEmpty()) {
-                int y = Math.max(seaLevel, terrainY);
-                cache.put(cell.withElevations(y, y));
-            } else {
-                int maxAllowedY = Integer.MAX_VALUE;
-                for (CellPos upstreamPos : upstreamCells) {
-                    Cell upstreamCell = cache.getOrCompute(upstreamPos);
-                    int upstreamY = upstreamCell.entryY() != null ? upstreamCell.entryY() : upstreamCell.averageEstimatedTerrainHeight();
-                    maxAllowedY = Math.min(maxAllowedY, upstreamY - minSlope);
-                }
-                int constrainedY = Math.max(seaLevel, Math.min(terrainY, maxAllowedY));
-                cache.put(cell.withElevations(constrainedY, constrainedY));
-            }
-
-            current = downstream.get(current);
-        }
-    }
-
-    private void assignYLevelsUpstream(CellPos terminus, CellCache cache, int minSlope, int seaLevel, Set<CellPos> visited) {
-        CellPos current = terminus;
-
-        while (current != null && !visited.contains(current)) {
-            visited.add(current);
-
-            Cell cell = cache.getOrCompute(current);
-            CellPos downstreamPos = downstream.get(current);
-
-            if (downstreamPos != null) {
-                Cell downstreamCell = cache.getOrCompute(downstreamPos);
-                int downstreamY = downstreamCell.entryY() != null ? downstreamCell.entryY() : downstreamCell.averageEstimatedTerrainHeight();
-                int cellY = cell.entryY() != null ? cell.entryY() : cell.averageEstimatedTerrainHeight();
-                int minY = downstreamY + minSlope;
-                if (cellY < minY) {
-                    cache.put(cell.withElevations(minY, minY));
-                }
-            }
-
-            Set<CellPos> upstreamCells = upstream.get(current);
-            if (upstreamCells != null) {
-                for (CellPos upstreamPos : upstreamCells) {
-                    assignYLevelsUpstream(upstreamPos, cache, minSlope, seaLevel, visited);
-                }
-            }
-        }
-    }
-
-    private void reclassify() {
-        Timer.Record record = Store.getTimer(Watershed.class, "reclassify").start();
-
-        CellCache cache = CellCache.get();
-        for (CellPos pos : allCells()) {
-            Cell current = cache.getOrCompute(pos);
-            Cell reclassified = Feature.classify(current, this);
-            cache.put(reclassified);
-        }
-
-        record.stop();
-    }
-
     public Set<CellPos> upstream(CellPos cell) {
         return Collections.unmodifiableSet(upstream.getOrDefault(cell, Set.of()));
     }
@@ -351,22 +70,7 @@ public class Watershed {
     }
 
     public int accumulation(CellPos cell) {
-        if (!downstream.containsKey(cell)) {
-            return 0;
-        }
-
-        Integer cached = upstreamCountCache.get(cell);
-        if (cached != null) {
-            return cached;
-        }
-
-        int count = 0;
-        for (CellPos tributary : upstream(cell)) {
-            count += 1 + accumulation(tributary);
-        }
-
-        upstreamCountCache.put(cell, count);
-        return count;
+        return upstreamCountCache.getOrDefault(cell, 0);
     }
 
     public Set<CellPos> allCells() {
@@ -375,10 +79,6 @@ public class Watershed {
 
     public boolean contains(CellPos cell) {
         return downstream.containsKey(cell);
-    }
-
-    public RegionPos pos() {
-        return pos;
     }
 
     public Optional<CellPos> terminus(CellPos cell) {
@@ -391,31 +91,5 @@ public class Watershed {
             current = downstream.get(current);
         }
         return Optional.of(current);
-    }
-
-    public ListTag encode(CellCache cellCache) {
-        Timer.Record record = Store.getTimer(Watershed.class, "encode").start();
-
-        ListTag edges = new ListTag();
-        for (Map.Entry<CellPos, CellPos> entry : downstream.entrySet()) {
-            if (entry.getValue() == null) {
-                continue;
-            }
-
-            Cell fromCell = cellCache.getOrCompute(entry.getKey());
-            Cell toCell = cellCache.getOrCompute(entry.getValue());
-
-            CompoundTag edge = new CompoundTag();
-            edge.putLong("from", entry.getKey().toLong());
-            edge.putLong("to", entry.getValue().toLong());
-            int fromY = fromCell.entryY() != null ? fromCell.entryY() : fromCell.averageEstimatedTerrainHeight();
-            int toY = toCell.entryY() != null ? toCell.entryY() : toCell.averageEstimatedTerrainHeight();
-            edge.putInt("fromY", fromY);
-            edge.putInt("toY", toY);
-            edges.add(edge);
-        }
-
-        record.stop();
-        return edges;
     }
 }

@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
+import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.config.CacheConfig;
 import org.sosly.rivertale.config.SourceConfig;
@@ -61,7 +62,7 @@ class RegionExplorerTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(8, 2, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
 
         cellCacheStatic = mockStatic(CellCache.class);
         regionCacheStatic = mockStatic(RegionCache.class);
@@ -406,11 +407,7 @@ class RegionExplorerTest {
         regions.put(new RegionPos(1, 0), new Region(new RegionPos(1, 0), RegionType.FLUVIAL));
         regions.put(terminus.getRegion(), new Region(terminus.getRegion(), RegionType.COASTAL,
             List.of(new Boundary(terminus, new CellPos(19, 2), BoundaryType.OCEAN))));
-        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
-            new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
-
-        Flowline path = new FlowlineTracer(RiverPreparation.forCells(List.of(new CellPos(1, 2))))
-            .trace(new CellPos(1, 2));
+        Flowline path = traceEastFrom(new CellPos(1, 2));
 
         assertTrue(path.isValid());
         assertEquals(terminus, path.terminus());
@@ -426,11 +423,7 @@ class RegionExplorerTest {
             List.of(new Boundary(basin, new CellPos(11, 2), BoundaryType.BASIN))));
         regions.put(ocean.getRegion(), new Region(ocean.getRegion(), RegionType.COASTAL,
             List.of(new Boundary(ocean, new CellPos(19, 2), BoundaryType.OCEAN))));
-        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
-            new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
-
-        Flowline path = new FlowlineTracer(RiverPreparation.forCells(List.of(new CellPos(1, 2))))
-            .trace(new CellPos(1, 2));
+        Flowline path = traceEastFrom(new CellPos(1, 2));
 
         assertTrue(path.isValid());
         assertEquals(basin, path.terminus());
@@ -443,11 +436,7 @@ class RegionExplorerTest {
         Region neighbor = new Region(basin.getRegion(), RegionType.INLAND,
             List.of(new Boundary(basin, new CellPos(11, 2), BoundaryType.BASIN)));
         regions.put(neighbor.pos(), neighbor);
-        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation ->
-            new Cell(invocation.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
-
-        Flowline path = new FlowlineTracer(RiverPreparation.forCells(List.of(new CellPos(1, 2))))
-            .trace(new CellPos(1, 2));
+        Flowline path = traceEastFrom(new CellPos(1, 2));
         assertFalse(path.isValid());
         assertEquals(List.of(new CellPos(1, 2)), path.cells());
 
@@ -455,8 +444,7 @@ class RegionExplorerTest {
         CellPos distant = new CellPos(18, 2);
         regions.put(distant.getRegion(), new Region(distant.getRegion(), RegionType.INLAND,
             List.of(new Boundary(distant, new CellPos(19, 2), BoundaryType.BASIN))));
-        Flowline rejected = new FlowlineTracer(RiverPreparation.forCells(List.of(new CellPos(1, 2))))
-            .trace(new CellPos(1, 2));
+        Flowline rejected = traceEastFrom(new CellPos(1, 2));
         assertFalse(rejected.isValid());
         assertEquals(List.of(new CellPos(1, 2)), rejected.cells());
     }
@@ -483,6 +471,16 @@ class RegionExplorerTest {
             new Cell(call.getArgument(0), Set.of()).withFlowDirections(List.of(FlowDirection.EAST)));
 
         assertEquals(Set.of(origin, outlet), RegionExplorer.discover(center.getWorldPosition(0)));
+    }
+
+    private Flowline traceEastFrom(CellPos source) {
+        when(cellCache.getOrComputeWithFlow(any(CellPos.class))).thenAnswer(invocation -> {
+            CellPos pos = invocation.getArgument(0);
+            Cell cell = new Cell(pos, Set.of()).withFlowDirections(List.of(FlowDirection.EAST));
+            return pos.equals(source) ? cell.withFeature(Feature.SNOWMELT) : cell;
+        });
+        RegionPos region = source.getRegion();
+        return new FlowlineTracer(RiverPreparation.prepare(region, Set.of(region), false)).trace(source);
     }
 
     private Map<RegionPos, Region> inlandMap() {

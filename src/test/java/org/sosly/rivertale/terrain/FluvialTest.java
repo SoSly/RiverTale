@@ -41,7 +41,7 @@ class FluvialTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(32, 2, 1, 10, 1, 3, 288, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(32, 2, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         SampleCache.shutdown();
         provider = new TestSampleProvider();
         SampleCache.init(provider);

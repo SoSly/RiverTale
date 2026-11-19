@@ -26,7 +26,7 @@ class FeatureTest {
 
     @BeforeEach
     void setUp() {
-        CommonConfig.set(new CommonConfig(8, 2, 1, 10, 1, 3, 288, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(8, 2, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         SampleCache.shutdown();
         CellCache.shutdown();
         provider = new TestSampleProvider();
@@ -47,8 +47,7 @@ class FeatureTest {
         Sample sample = new Sample(chunkPos, 0.5, 84, false, 0.5, 0.8, 0.5, 0.1);
         provider.putSample(chunkPos, sample);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
-        int y = sample.estimatedTerrainHeight();
-        Cell original = new Cell(pos, samplePositions, List.of(FlowDirection.SOUTH), Feature.NONE, null, y, y, null, null, null, null, null, null, null);
+        Cell original = new Cell(pos, samplePositions, List.of(FlowDirection.SOUTH), Feature.NONE);
 
         Cell cell = Feature.classify(original, null);
 
@@ -64,8 +63,7 @@ class FeatureTest {
         Sample sample = new Sample(chunkPos, 0.5, 84, false, 0.5, 0.8, 0.5, 0.1);
         provider.putSample(chunkPos, sample);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
-        int y = sample.estimatedTerrainHeight();
-        Cell original = new Cell(pos, samplePositions, List.of(FlowDirection.SOUTH), Feature.RUN, null, y, y, null, null, null, null, null, null, null);
+        Cell original = new Cell(pos, samplePositions, List.of(FlowDirection.SOUTH), Feature.RUN);
 
         Cell classified = Feature.classify(original, null);
 

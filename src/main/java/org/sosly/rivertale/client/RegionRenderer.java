@@ -31,9 +31,7 @@ import org.sosly.rivertale.core.CellPos;
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class RegionRenderer {
     private static Integer seaLevel;
-    private static final double ARROW_LENGTH = 3.5;
     private static final double ARROWHEAD_SIZE = 1.5;
-    private static final double DIAG_COMPONENT = ARROW_LENGTH / Math.sqrt(2.0);
 
     private static final float[] COLOR_OCEAN_BOUNDARY = {1.0f, 0.5f, 0.0f, 1.0f};
     private static final float[] COLOR_BASIN_BOUNDARY = {1.0f, 0.0f, 0.0f, 1.0f};
@@ -190,29 +188,6 @@ public class RegionRenderer {
         }
     }
 
-    private static void renderFlowArrows(ClientRegionCache.Region region, int cellBlocks,
-                                         PoseStack poseStack, BufferBuilder buffer, Vec3 camPos) {
-        for (ClientRegionCache.Cell cell : region.cells()) {
-            FlowDirection dir = cell.flow();
-            if (dir == FlowDirection.NONE) {
-                continue;
-            }
-
-            double centerX = cell.pos().getMinBlockX() + cellBlocks / 2.0;
-            double centerZ = cell.pos().getMinBlockZ() + cellBlocks / 2.0;
-            Vec3 center = new Vec3(centerX, cell.y(), centerZ);
-
-            float[] arrowColor = cell.feature().color;
-
-            Vec3 arrowEnd = calculateArrowEnd(center, dir);
-            drawLine(poseStack, buffer, center, arrowEnd, camPos, arrowColor);
-
-            Vec3[] arrowhead = calculateArrowhead(arrowEnd, dir);
-            drawLine(poseStack, buffer, arrowEnd, arrowhead[0], camPos, arrowColor);
-            drawLine(poseStack, buffer, arrowEnd, arrowhead[1], camPos, arrowColor);
-        }
-    }
-
     private static void renderFlowlines(ClientRegionCache.Region region, PoseStack poseStack,
                                          BufferBuilder buffer, Vec3 camPos, Set<CellPos> renderedSources) {
         for (ClientRegionCache.Flowline path : region.paths()) {
@@ -259,20 +234,6 @@ public class RegionRenderer {
             drawLine(poseStack, buffer, point.add(-2, 0, 0), point.add(2, 0, 0), camPos, COLOR_PATH);
             drawLine(poseStack, buffer, point.add(0, 0, -2), point.add(0, 0, 2), camPos, COLOR_PATH);
         }
-    }
-
-    private static Vec3 calculateArrowEnd(Vec3 center, FlowDirection dir) {
-        return switch (dir) {
-            case NORTH -> new Vec3(center.x, center.y, center.z - ARROW_LENGTH);
-            case SOUTH -> new Vec3(center.x, center.y, center.z + ARROW_LENGTH);
-            case EAST -> new Vec3(center.x + ARROW_LENGTH, center.y, center.z);
-            case WEST -> new Vec3(center.x - ARROW_LENGTH, center.y, center.z);
-            case NORTHEAST -> new Vec3(center.x + DIAG_COMPONENT, center.y, center.z - DIAG_COMPONENT);
-            case NORTHWEST -> new Vec3(center.x - DIAG_COMPONENT, center.y, center.z - DIAG_COMPONENT);
-            case SOUTHEAST -> new Vec3(center.x + DIAG_COMPONENT, center.y, center.z + DIAG_COMPONENT);
-            case SOUTHWEST -> new Vec3(center.x - DIAG_COMPONENT, center.y, center.z + DIAG_COMPONENT);
-            case NONE -> center;
-        };
     }
 
     private static Vec3[] calculateArrowhead(Vec3 tip, FlowDirection dir) {

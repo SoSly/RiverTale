@@ -1,7 +1,5 @@
 package org.sosly.rivertale.world;
 
-import net.minecraft.core.Holder;
-import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.cell.Cell;
@@ -12,30 +10,23 @@ import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 
 public class RiverShaping {
-    private static Holder<Biome> riverBiome;
     private static int seaLevel = 63;
     private static volatile RandomState randomState;
 
     private RiverShaping() {}
 
-    public static void init(Holder<Biome> river, int waterLevel, RandomState state) {
-        riverBiome = river;
+    public static void init(int waterLevel, RandomState state) {
         seaLevel = waterLevel;
         randomState = state;
     }
 
     public static void shutdown() {
         randomState = null;
-        riverBiome = null;
         seaLevel = 63;
     }
 
     public static boolean isActive(RandomState state) {
         return state != null && state == randomState;
-    }
-
-    public static Holder<Biome> getRiverBiome() {
-        return riverBiome;
     }
 
     public static int getSeaLevel() {
@@ -46,7 +37,7 @@ public class RiverShaping {
         return randomState;
     }
 
-    public static void shape(ChunkAccess chunk, int waterLevel, RandomState state) {
+    public static void shape(ChunkAccess chunk, RandomState state) {
         if (!isActive(state)) {
             return;
         }
@@ -58,13 +49,13 @@ public class RiverShaping {
 
         Timer.Record timer = Store.getTimer(RiverShaping.class, "shape").start();
         try {
-            classify(pos);
+            preclassify(pos);
         } finally {
             timer.stop();
         }
     }
 
-    public static Cell classify(CellPos pos) {
+    public static Cell preclassify(CellPos pos) {
         CellCache cache = CellCache.get();
         Cell cell = cache.getOrComputeWithFlow(pos);
         if (cell.isOcean()) {

@@ -44,7 +44,7 @@ public class DebugCommand {
 
     private static void sendRiverDebugInfo(ServerPlayer player, BlockPos pos) {
         CellPos cellPos = new CellPos(pos);
-        Cell cell = RiverShaping.classify(cellPos);
+        Cell cell = RiverShaping.preclassify(cellPos);
 
         player.sendSystemMessage(Component.literal("=== River Debug at " + pos.getX() + ", " + pos.getZ() + " ==="));
         player.sendSystemMessage(Component.literal("Cell: " + cellPos + " (" + cell.feature().name() + ")"));
@@ -53,11 +53,6 @@ public class DebugCommand {
             ? FlowDirection.NONE.name()
             : cell.flowDirections().get(0).name();
         player.sendSystemMessage(Component.literal("Flow: " + flowStr));
-
-        player.sendSystemMessage(Component.literal("entryY: " + formatNullableInt(cell.entryY()) + ", exitY: " + formatNullableInt(cell.exitY())));
-        player.sendSystemMessage(Component.literal("width: " + formatNullableInt(cell.width()) + ", depth: " + formatNullableInt(cell.depth())));
-        player.sendSystemMessage(Component.literal("upstreamCount: " + formatNullableInt(cell.upstreamCount()) + ", downstreamCount: " + formatNullableInt(cell.downstreamCount())));
-        player.sendSystemMessage(Component.literal("terminus: " + (cell.terminus() != null ? cell.terminus().toString() : "(not computed)")));
 
         Watershed watershed = WatershedCache.get().getWatershed(cellPos);
         if (watershed == null) {
@@ -73,9 +68,5 @@ public class DebugCommand {
         for (CellPos upstream : upstreamSet) {
             player.sendSystemMessage(Component.literal("  - " + upstream));
         }
-    }
-
-    private static String formatNullableInt(Integer value) {
-        return value != null ? value.toString() : "(not computed)";
     }
 }

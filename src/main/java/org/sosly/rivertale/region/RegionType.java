@@ -1,5 +1,6 @@
 package org.sosly.rivertale.region;
 
+import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
@@ -32,7 +33,7 @@ public enum RegionType {
         for (int x = 0; x < cells; x++) {
             for (int z = 0; z < cells; z++) {
                 CellPos cellPos = new CellPos(min.x() + x, min.z() + z);
-                Sample sample = sampleCache.getOrCompute(cellPos.getMiddleBlockX(), cellPos.getMiddleBlockZ());
+                Sample sample = sampleCache.getOrCompute(new ChunkPos(cellPos.getMiddleBlockPosition(0)));
                 boolean ocean = sample.isOcean();
                 allOcean &= ocean;
                 anyOcean |= ocean;
@@ -70,7 +71,7 @@ public enum RegionType {
         for (int x = 0; x < cells; x++) {
             for (int z = 0; z < cells; z++) {
                 CellPos cellPos = new CellPos(min.x() + x, min.z() + z);
-                Sample sample = sampleCache.getOrCompute(cellPos.getMiddleBlockX(), cellPos.getMiddleBlockZ());
+                Sample sample = sampleCache.getOrCompute(new ChunkPos(cellPos.getMiddleBlockPosition(0)));
                 if (sample.isOcean()) {
                     hasOcean = true;
                 } else {

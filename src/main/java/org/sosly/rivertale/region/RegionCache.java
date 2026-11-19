@@ -5,13 +5,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.config.CommonConfig;
-import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.river.WatershedCache;
 
-public class RegionCache implements Cache<Region> {
+public class RegionCache {
 
     private static volatile RegionCache instance;
 
@@ -53,11 +52,6 @@ public class RegionCache implements Cache<Region> {
         }
     }
 
-    @Override
-    public Region getOrCompute(int x, int z) {
-        return getOrCompute(new RegionPos(x, z));
-    }
-
     public Region getOrCompute(RegionPos pos) {
         long key = pos.toLong();
         Region cached = cache.get(key);
@@ -79,7 +73,6 @@ public class RegionCache implements Cache<Region> {
         cache.put(region.pos().toLong(), region);
     }
 
-    @Override
     public void clear() {
         cache.clear();
     }

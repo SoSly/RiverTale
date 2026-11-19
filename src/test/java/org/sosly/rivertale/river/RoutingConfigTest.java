@@ -4,12 +4,9 @@ import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.toml.TomlParser;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
@@ -18,34 +15,27 @@ import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.region.Region;
-import org.sosly.rivertale.region.RegionExplorer;
 import org.sosly.rivertale.region.RegionType;
-import org.sosly.rivertale.world.RiverShaping;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 class RoutingConfigTest {
     private CommonConfig original;
-    private MockedStatic<RegionExplorer> explorer;
-    private MockedStatic<RiverShaping> shaping;
+    private RiverWorld world;
 
     @BeforeEach
     void setUp() {
         original = CommonConfig.get();
-        explorer = mockStatic(RegionExplorer.class);
-        shaping = mockStatic(RiverShaping.class);
+        world = new RiverWorld();
     }
 
     @AfterEach
     void tearDown() {
-        shaping.close();
-        explorer.close();
+        world.close();
         CommonConfig.Spec.SPEC.setConfig((CommentedConfig) null);
         CommonConfig.set(original);
     }
@@ -92,8 +82,7 @@ class RoutingConfigTest {
     }
 
     private FlowlineTracer preparedTracer(CellPos source) {
-        Set<Region> regions = RegionExplorer.discover(source.getRegion().getWorldPosition(0));
-        return new FlowlineTracer(regions, RiverShaping::classify, CommonConfig.get().fallbackApproachCells());
+        return world.prepare(source.getRegion(), source);
     }
 
     private void configure(int fallback, int away) {
@@ -112,10 +101,8 @@ class RoutingConfigTest {
     private void terrain(CellPos outlet, Map<CellPos, Cell> cells) {
         Region region = new Region(outlet.getRegion(), RegionType.COASTAL,
             List.of(new Boundary(outlet, outlet.relative(FlowDirection.EAST), BoundaryType.OCEAN)));
-        explorer.when(() -> RegionExplorer.discover(any(BlockPos.class))).thenReturn(Set.of(region));
         Cell empty = cell();
-        shaping.when(() -> RiverShaping.classify(any(CellPos.class)))
-            .thenAnswer(invocation -> cells.getOrDefault(invocation.getArgument(0), empty));
+        world.regions(List.of(region)).cells(pos -> cells.getOrDefault(pos, empty));
     }
 
     private Cell cell(FlowDirection... directions) {

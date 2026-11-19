@@ -3,13 +3,11 @@ package org.sosly.rivertale.density;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.config.CommonConfig;
-import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.metric.Store;
 
-public class SampleCache implements Cache<Sample> {
+public class SampleCache {
     private static final int SAMPLE_Y = 63;
 
     private static volatile SampleCache instance;
@@ -59,11 +57,6 @@ public class SampleCache implements Cache<Sample> {
         cache.put(pos.toLong(), sample);
     }
 
-    @Override
-    public Sample getOrCompute(int x, int z) {
-        return getOrCompute(new ChunkPos(new BlockPos(x, 0, z)));
-    }
-
     public Sample getOrCompute(ChunkPos chunk) {
         long key = chunk.toLong();
 
@@ -80,7 +73,6 @@ public class SampleCache implements Cache<Sample> {
         return value;
     }
 
-    @Override
     public void clear() {
         cache.clear();
     }

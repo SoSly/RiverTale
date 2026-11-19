@@ -17,7 +17,6 @@ import org.sosly.rivertale.density.SampleProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CellTest {
@@ -49,16 +48,6 @@ class CellTest {
         assertEquals(1, cell.samplePositions().size());
         assertTrue(cell.flowDirections().isEmpty());
         assertEquals(Feature.NONE, cell.feature());
-        assertNull(cell.waypoint());
-        assertNull(cell.entryY());
-        assertNull(cell.exitY());
-        assertNull(cell.width());
-        assertNull(cell.depth());
-        assertNull(cell.upstreamCount());
-        assertNull(cell.downstreamCount());
-        assertNull(cell.terminus());
-        assertNull(cell.entryT());
-        assertNull(cell.exitT());
     }
 
     @Test
@@ -186,15 +175,12 @@ class CellTest {
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
         Cell cell = new Cell(pos, samplePositions)
-            .withFeature(Feature.RUN)
-            .withElevations(100, 95);
+            .withFeature(Feature.RUN);
 
         Cell updated = cell.withFlowDirections(List.of(FlowDirection.NORTH, FlowDirection.EAST));
 
         assertEquals(List.of(FlowDirection.NORTH, FlowDirection.EAST), updated.flowDirections());
         assertEquals(Feature.RUN, updated.feature());
-        assertEquals(100, updated.entryY());
-        assertEquals(95, updated.exitY());
     }
 
     @Test
@@ -205,34 +191,12 @@ class CellTest {
         CellPos pos = new CellPos(0, 0);
         Set<ChunkPos> samplePositions = Set.of(chunkPos);
         Cell cell = new Cell(pos, samplePositions)
-            .withFlowDirections(List.of(FlowDirection.SOUTH))
-            .withElevations(100, 95);
+            .withFlowDirections(List.of(FlowDirection.SOUTH));
 
         Cell updated = cell.withFeature(Feature.CASCADE);
 
         assertEquals(Feature.CASCADE, updated.feature());
         assertEquals(List.of(FlowDirection.SOUTH), updated.flowDirections());
-        assertEquals(100, updated.entryY());
-        assertEquals(95, updated.exitY());
-    }
-
-    @Test
-    void withElevationsPreservesOtherFields() {
-        ChunkPos chunkPos = new ChunkPos(0, 0);
-        provider.putSample(chunkPos, new Sample(chunkPos, 0.5, 142, false));
-
-        CellPos pos = new CellPos(0, 0);
-        Set<ChunkPos> samplePositions = Set.of(chunkPos);
-        Cell cell = new Cell(pos, samplePositions)
-            .withFlowDirections(List.of(FlowDirection.WEST))
-            .withFeature(Feature.RAPIDS);
-
-        Cell updated = cell.withElevations(80, 70);
-
-        assertEquals(80, updated.entryY());
-        assertEquals(70, updated.exitY());
-        assertEquals(List.of(FlowDirection.WEST), updated.flowDirections());
-        assertEquals(Feature.RAPIDS, updated.feature());
     }
 
     @Test

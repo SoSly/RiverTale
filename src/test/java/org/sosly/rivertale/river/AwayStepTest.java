@@ -32,16 +32,19 @@ import static org.mockito.Mockito.when;
 class AwayStepTest {
     private final Map<CellPos, Cell> cells = new HashMap<>();
     private CommonConfig originalConfig;
+    private RiverWorld world;
 
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(64, 1, 1, 0, 1, 3, 288, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(64, 1, 1, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         Store.clear();
+        world = new RiverWorld();
     }
 
     @AfterEach
     void tearDown() {
+        world.close();
         CommonConfig.set(originalConfig);
         Store.clear();
     }
@@ -50,7 +53,7 @@ class AwayStepTest {
     void acceptsExactlyTenConsecutiveStepsAway() {
         List<CellPos> expected = detour(10);
         connect(expected);
-        FlowlineTracer tracer = tracer(last(expected));
+        FlowlineTracer tracer = tracer(last(expected), expected.get(0));
 
         Flowline path = tracer.trace(expected.get(0));
 
@@ -67,7 +70,7 @@ class AwayStepTest {
     void rejectsTheEleventhStepAndReverseDiscoveryUsesTheSameLimit() {
         List<CellPos> expected = detour(11);
         connect(expected);
-        FlowlineTracer tracer = tracer(last(expected));
+        FlowlineTracer tracer = tracer(last(expected), expected.get(0), expected.get(1));
 
         Flowline path = tracer.trace(expected.get(0));
 
@@ -91,7 +94,7 @@ class AwayStepTest {
         move(expected, FlowDirection.EAST, 38);
         move(expected, FlowDirection.SOUTH, 2);
         connect(expected);
-        FlowlineTracer tracer = tracer(last(expected));
+        FlowlineTracer tracer = tracer(last(expected), expected.get(0));
 
         Flowline path = tracer.trace(expected.get(0));
 
@@ -114,7 +117,7 @@ class AwayStepTest {
         move(expected, FlowDirection.SOUTHEAST, 9);
         move(expected, FlowDirection.SOUTH, 2);
         connect(expected);
-        FlowlineTracer tracer = tracer(last(expected));
+        FlowlineTracer tracer = tracer(last(expected), expected.get(0), expected.get(1));
 
         Flowline path = tracer.trace(expected.get(0));
 
@@ -125,7 +128,7 @@ class AwayStepTest {
     @Test
     void backtrackingRestoresAllowanceAndRevisitsAnExhaustedCellWithMoreRemaining() {
         List<CellPos> expected = retryRoute();
-        FlowlineTracer tracer = tracer(last(expected));
+        FlowlineTracer tracer = tracer(last(expected), expected.get(0));
 
         Flowline path = tracer.trace(expected.get(0));
 
@@ -137,7 +140,7 @@ class AwayStepTest {
     @Test
     void concurrentRetriesKeepTheirAllowanceIndependent() {
         List<CellPos> expected = retryRoute();
-        FlowlineTracer tracer = tracer(last(expected));
+        FlowlineTracer tracer = tracer(last(expected), expected.get(0));
 
         List<Flowline> paths = IntStream.range(0, 24).parallel()
             .mapToObj(index -> tracer.trace(expected.get(0))).toList();
@@ -153,7 +156,7 @@ class AwayStepTest {
         flow(source, 100, List.of(FlowDirection.WEST));
         flow(next, 90, List.of(FlowDirection.EAST));
 
-        Flowline path = tracer(new CellPos(40, 20)).trace(source);
+        Flowline path = tracer(new CellPos(40, 20), source).trace(source);
 
         assertFalse(path.isValid());
         assertEquals(List.of(source), path.cells());
@@ -161,7 +164,7 @@ class AwayStepTest {
 
     @Test
     void nudgesStillCannotMoveAwayEvenWhenTheirClimbWouldBeAllowed() {
-        CommonConfig.set(new CommonConfig(64, 1, 1, 0, 1, 3, 288, true, true, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(64, 1, 1, true, true, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         CellPos source = new CellPos(20, 20);
         List<CellPos> nudgedRoute = new ArrayList<>();
         nudgedRoute.add(new CellPos(19, 19));
@@ -171,7 +174,7 @@ class AwayStepTest {
         flow(source, 100, List.of(FlowDirection.WEST));
         flow(new CellPos(19, 20), 90, List.of());
         flow(nudgedRoute.get(0), 110, List.of(FlowDirection.EAST));
-        FlowlineTracer tracer = tracer(last(nudgedRoute));
+        FlowlineTracer tracer = tracer(last(nudgedRoute), source);
 
         assertFalse(tracer.trace(source).isValid());
         assertFalse(tracer.predecessors(nudgedRoute.get(0)).contains(source));
@@ -188,10 +191,7 @@ class AwayStepTest {
         Region destination = new Region(new RegionPos(0, 0), RegionType.COASTAL,
             List.of(new Boundary(last(expected), last(expected).relative(FlowDirection.SOUTH), BoundaryType.OCEAN)));
         Region fluvial = new Region(new RegionPos(1, 0), RegionType.FLUVIAL);
-        Cell empty = mock(Cell.class);
-        when(empty.flowDirections()).thenReturn(List.of());
-        when(empty.feature()).thenReturn(Feature.NONE);
-        FlowlineTracer tracer = new FlowlineTracer(List.of(destination, fluvial), pos -> cells.getOrDefault(pos, empty), 0);
+        FlowlineTracer tracer = prepare(List.of(destination, fluvial), expected.get(0), expected.get(1));
 
         Flowline path = tracer.trace(expected.get(0));
 
@@ -213,7 +213,7 @@ class AwayStepTest {
         flow(branch, 180, List.of(FlowDirection.NORTH, FlowDirection.NORTHEAST));
         flow(new CellPos(19, 19), 170, List.of(FlowDirection.SOUTH));
 
-        Flowline path = tracer(last(expected)).trace(source);
+        Flowline path = tracer(last(expected), source).trace(source);
 
         assertTrue(path.isValid());
         assertEquals(expected, path.cells());
@@ -276,12 +276,17 @@ class AwayStepTest {
         cells.put(pos, cell);
     }
 
-    private FlowlineTracer tracer(CellPos terminus) {
+    private FlowlineTracer tracer(CellPos terminus, CellPos... sources) {
         Region region = new Region(terminus.getRegion(), RegionType.COASTAL,
             List.of(new Boundary(terminus, terminus.relative(FlowDirection.SOUTH), BoundaryType.OCEAN)));
+        return prepare(List.of(region), sources);
+    }
+
+    private FlowlineTracer prepare(List<Region> regions, CellPos... sources) {
         Cell empty = mock(Cell.class);
         when(empty.flowDirections()).thenReturn(List.of());
         when(empty.feature()).thenReturn(Feature.NONE);
-        return new FlowlineTracer(List.of(region), pos -> cells.getOrDefault(pos, empty), 0);
+        RiverWorld.configureRouting(0, CommonConfig.get().awayStepAllowance());
+        return world.regions(regions).cells(pos -> cells.getOrDefault(pos, empty)).prepare(regions.get(0).pos(), sources);
     }
 }

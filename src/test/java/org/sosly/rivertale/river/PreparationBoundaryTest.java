@@ -44,8 +44,8 @@ class PreparationBoundaryTest {
     @BeforeEach
     void setUp() {
         original = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, true, false, 12, 0, 0,
-            SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, true));
+        CommonConfig.set(new CommonConfig(8, 1, 1, true, false, 12, 0, 0,
+            SourceConfig.DEFAULT, CacheConfig.DEFAULT, true));
         Store.clear();
         regions.put(source.getRegion(), new Region(source.getRegion(), RegionType.INLAND));
         regions.put(new RegionPos(2, 0), new Region(new RegionPos(2, 0), RegionType.FLUVIAL));
@@ -85,9 +85,8 @@ class PreparationBoundaryTest {
     @Test
     void remoteUpstreamsAndWatershedGatheringUseOnlyPreparedData() {
         CommonConfig c = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(c.regionSize(), c.cellSize(), c.samplesPerCell(), c.mergeThreshold(),
-            c.minSlope(), c.minPathLength(), c.embankmentRadius(), true, false, 12, 0, 0,
-            SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(c.regionSize(), c.cellSize(), c.samplesPerCell(), true, false, 12, 0, 0,
+            SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         RegionPos center = outlet.getRegion();
         Set<RegionPos> visible = visible(center);
         assertFalse(visible.contains(source.getRegion()));
@@ -135,9 +134,8 @@ class PreparationBoundaryTest {
     @Test
     void downstreamDiagonalTributaryAndDetoursArePreparedBeforeTracing() {
         CommonConfig c = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(c.regionSize(), c.cellSize(), c.samplesPerCell(), c.mergeThreshold(),
-            c.minSlope(), c.minPathLength(), c.embankmentRadius(), true, false, 12, 0, 10,
-            SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(c.regionSize(), c.cellSize(), c.samplesPerCell(), true, false, 12, 0, 10,
+            SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         CellPos remoteSource = new CellPos(26, -1);
         CellPos mainOutlet = new CellPos(30, 4);
         CellPos sideOutlet = new CellPos(25, 6);

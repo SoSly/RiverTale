@@ -9,51 +9,48 @@ import org.sosly.rivertale.river.Watershed;
 
 public enum Feature {
     // Sources (ordered by specificity: most specific first)
-    SNOWMELT(CellType.SOURCE, new Snowmelt(), new float[]{1f, 0f, 0f, 1f}),
-    RESURGENCE(CellType.SOURCE, new Resurgence(), new float[]{0f, 1f, 0f, 1f}),
-    SEEP(CellType.SOURCE, new Seep(), new float[]{0f, 0f, 1f, 1f}),
-    CRATER(CellType.SOURCE, new Crater(), new float[]{1f, 1f, 0f, 1f}),
-    SPRING(CellType.SOURCE, new Spring(), new float[]{0f, 1f, 1f, 1f}),
+    SNOWMELT(CellType.SOURCE, new Snowmelt()),
+    RESURGENCE(CellType.SOURCE, new Resurgence()),
+    SEEP(CellType.SOURCE, new Seep()),
+    CRATER(CellType.SOURCE, new Crater()),
+    SPRING(CellType.SOURCE, new Spring()),
 
     // Termini
-    DELTA(CellType.TERMINUS, new Delta(), new float[]{1f, 0f, 0f, 1f}),
-    ESTUARY(CellType.TERMINUS, new Estuary(), new float[]{0f, 1f, 0f, 1f}),
-    WETLAND(CellType.TERMINUS, new Wetland(), new float[]{0f, 0f, 1f, 1f}),
-    MOUTH(CellType.TERMINUS, new Mouth(), new float[]{1f, 1f, 0f, 1f}),
+    DELTA(CellType.TERMINUS, new Delta()),
+    ESTUARY(CellType.TERMINUS, new Estuary()),
+    WETLAND(CellType.TERMINUS, new Wetland()),
+    MOUTH(CellType.TERMINUS, new Mouth()),
 
     // Junctions
-    CONFLUENCE(CellType.JUNCTION, new Confluence(), new float[]{1f, 0f, 0f, 1f}),
-    BIFURCATION(CellType.JUNCTION, new Bifurcation(), new float[]{0f, 1f, 0f, 1f}),
-    BRAID(CellType.JUNCTION, new Braid(), new float[]{0f, 0f, 1f, 1f}),
+    CONFLUENCE(CellType.JUNCTION, new Confluence()),
+    BIFURCATION(CellType.JUNCTION, new Bifurcation()),
+    BRAID(CellType.JUNCTION, new Braid()),
 
     // Lakes
-    ENDORHEIC(CellType.LAKE, new Endorheic(), new float[]{1f, 0f, 0f, 1f}),
-    KETTLE(CellType.LAKE, new Kettle(), new float[]{0f, 1f, 0f, 1f}),
-    SINKHOLE(CellType.LAKE, new Sinkhole(), new float[]{0f, 0f, 1f, 1f}),
-    LAGOON(CellType.LAKE, new Lagoon(), new float[]{1f, 1f, 0f, 1f}),
-    TECTONIC(CellType.LAKE, new Tectonic(), new float[]{0f, 1f, 1f, 1f}),
+    ENDORHEIC(CellType.LAKE, new Endorheic()),
+    KETTLE(CellType.LAKE, new Kettle()),
+    SINKHOLE(CellType.LAKE, new Sinkhole()),
+    LAGOON(CellType.LAKE, new Lagoon()),
+    TECTONIC(CellType.LAKE, new Tectonic()),
 
     // Courses (ordered by drop size: largest first, then fallback)
-    PLUNGE_POOL(CellType.COURSE, new PlungePool(), new float[]{1f, 0f, 0f, 1f}),
-    WATERFALL(CellType.COURSE, new Waterfall(), new float[]{0f, 1f, 0f, 1f}),
-    CASCADE(CellType.COURSE, new Cascade(), new float[]{0f, 0f, 1f, 1f}),
-    RAPIDS(CellType.COURSE, new Rapids(), new float[]{1f, 1f, 0f, 1f}),
-    RUN(CellType.COURSE, new Run(), new float[]{0f, 1f, 1f, 1f}),
+    PLUNGE_POOL(CellType.COURSE, new PlungePool()),
+    WATERFALL(CellType.COURSE, new Waterfall()),
+    CASCADE(CellType.COURSE, new Cascade()),
+    RAPIDS(CellType.COURSE, new Rapids()),
+    RUN(CellType.COURSE, new Run()),
 
     // Fallback
-    DIVIDE(CellType.NONE, new Divide(), new float[]{1f, 1f, 1f, 1f}),
-    NONE(CellType.NONE, new None(), new float[]{0.5f, 0.5f, 0.5f, 1f});
+    DIVIDE(CellType.NONE, new Divide()),
+    NONE(CellType.NONE, new None());
 
     public final CellType type;
-    public final float[] color;
-
     public final FeatureHandler handler;
     private static final Feature[] VALUES = values();
 
-    Feature(CellType type, FeatureHandler handler, float[] color) {
+    Feature(CellType type, FeatureHandler handler) {
         this.handler = handler;
         this.type = type;
-        this.color = color;
     }
 
     public static Cell classify(Cell cell, @Nullable Watershed watershed) {

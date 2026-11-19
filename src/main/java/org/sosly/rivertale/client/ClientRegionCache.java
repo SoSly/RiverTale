@@ -16,14 +16,12 @@ import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.command.VisMode;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.config.CommonConfig;
-import org.sosly.rivertale.core.Cache;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.region.RegionType;
 
 @OnlyIn(Dist.CLIENT)
-public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
+public class ClientRegionCache {
 
     private static ClientRegionCache instance;
     private static EnumSet<VisMode> enabledModes = EnumSet.noneOf(VisMode.class);
@@ -31,12 +29,11 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
     private final Map<Long, Region> cache;
     private final int capacity;
 
-    public record Cell(CellPos pos, Feature feature, FlowDirection flow, int y) {
+    public record Cell(CellPos pos, Feature feature, int y) {
         public static Cell decode(CompoundTag tag) {
             return new Cell(
                 new CellPos(tag.getLong("pos")),
                 Feature.valueOf(tag.getString("feature")),
-                FlowDirection.valueOf(tag.getString("flow")),
                 tag.getInt("y")
             );
         }
@@ -165,11 +162,6 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
         cache.put(region.pos().toLong(), region);
     }
 
-    @Override
-    public Region getOrCompute(int x, int z) {
-        return cache.get(RegionPos.asLong(x, z));
-    }
-
     public Region get(RegionPos pos) {
         return cache.get(pos.toLong());
     }
@@ -178,7 +170,6 @@ public class ClientRegionCache implements Cache<ClientRegionCache.Region> {
         return cache.values();
     }
 
-    @Override
     public void clear() {
         cache.clear();
     }

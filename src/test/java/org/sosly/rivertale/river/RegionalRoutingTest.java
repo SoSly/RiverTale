@@ -39,16 +39,19 @@ class RegionalRoutingTest {
     private final Map<CellPos, Cell> cells = new HashMap<>();
     private final AtomicInteger routingLoads = new AtomicInteger();
     private CommonConfig originalConfig;
+    private RiverWorld world;
 
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, 0, 1, 3, 288, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, 5000, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         Store.clear();
+        world = new RiverWorld();
     }
 
     @AfterEach
     void tearDown() {
+        world.close();
         CommonConfig.set(originalConfig);
         Store.clear();
     }
@@ -149,10 +152,12 @@ class RegionalRoutingTest {
     }
 
     private FlowlineTracer tracer() {
-        PreparedRiverData data = RiverPreparation.forRegions(List.of(first, middle, last), this::regions,
-            pos -> cells.getOrDefault(pos, new Cell(pos, Set.of())), 0, 10);
+        RiverWorld.configureRouting(0, 10);
+        FlowlineTracer tracer = world.regions(List.of(first, middle, last)).discover(this::regions)
+            .cells(pos -> cells.getOrDefault(pos, new Cell(pos, Set.of())))
+            .prepare(last.pos(), new CellPos(7, 2), new CellPos(8, 3), new CellPos(8, 2), new CellPos(7, 3));
         routingLoads.set(0);
-        return new FlowlineTracer(data);
+        return tracer;
     }
 
     private Collection<Region> regions(RegionPos pos) {
