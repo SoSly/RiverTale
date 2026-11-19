@@ -1,6 +1,6 @@
 ---
 level: 5
-parent: "[[Feature Classification]]"
+parent: "[[Rough Diagrams]]"
 status: draft
 ---
 
@@ -69,7 +69,7 @@ Requires from Minecraft:
 - `PositionalRandomFactory` via `RandomState` — position-seeded deterministic randomness. Use `randomState.getOrCreateRandomFactory(resourceLocation).at(x, y, z)` to get a `RandomSource` for a specific position.
 
 Requires from Feature Classification:
-- `Cell.hasInflowingNeighbor()` — true if any D8 neighbor flows toward this cell (defined in [[Feature Classification Implementation]])
+- `Cell.hasInflowingNeighbor()` — true if any D8 neighbor flows toward this cell
 
 ## Edge Cases
 

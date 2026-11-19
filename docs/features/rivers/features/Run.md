@@ -1,6 +1,6 @@
 ---
 level: 5
-parent: "[[Feature Classification]]"
+parent: "[[Rough Diagrams]]"
 status: draft
 ---
 

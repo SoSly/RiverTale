@@ -1,99 +1,177 @@
-RiverShaping is invoked by Minecraft's noise generation phase, once per chunk, to compute river data before terrain is finalized.
+River generation has two entry points, which share one build per region. Steps with dashed borders are not built yet.
 
 ```mermaid
 flowchart TD
-	N[Minecraft Noise Generation]
+	classDef planned stroke-dasharray: 5 5
 
-	D[Region Discovery]
-
-	subgraph "Lazy Services"
-		WP[Waypoint Calculation]
-		FE[Flow Evaluation]
-		RC[Region Classification]
+	subgraph "Entry Points"
+		BP[Background Preparation]:::planned
+		CG[Chunk Generation]
 	end
 
-	subgraph "Per Region"
-		R1[Boundary Identification] --> R2[Early Feature Classification]
-		R2 --> R3[Flowline Tracing]
+	subgraph "Lazy Services"
+		RC[Region Classification]
+		FE[Flow Evaluation]
+		RD[Region Discovery]
+		WP[Waypoint Calculation]:::planned
+	end
+
+	subgraph "Per Region (RegionCache)"
+		R1[Preclassification] --> R2[Boundary Identification]
+	end
+
+	subgraph "Per Build"
+		B1[River Preparation] --> B2[Flowline Tracing]
+		B2 --> B3[Watershed Building]
 	end
 
 	subgraph "Per Watershed"
-		W1[Watershed Building] --> W2[Wateshed Validation]
-		W2 --> W3a[Elevation Assignment]
-		W2 --> W3b[Flow Accumulation]
-		W3a --> W4[Feature Reclassification]
-		W3b --> W4
-		W4 --> W5[Spline Building]
+		W1[Watershed Validation]:::planned
+		W1 --> W2a[Elevation Assignment]:::planned
+		W1 --> W2b[Flow Accumulation]:::planned
+		W2a --> W3[Feature Classification]:::planned
+		W2b --> W3
+		W3 --> W4[Spline Building]:::planned
 	end
+
+	WC[(WatershedCache)]
 
 	subgraph "Apply to Chunk"
-		C1[Terrain Shaping] --> C2[Biome Assignment]
-		C2 --> C3[Water Placement]
+		C1[Terrain Shaping]:::planned --> C2[Biome Assignment]:::planned
+		C2 --> C3[Water Placement]:::planned
 	end
 
-	N --> D
-	D --> R1
-	R3 --> W1
-	W5 --> C1
+	BP --> B1
+	CG -->|region not finished| B1
+	B1 --> R1
+	B3 --> W1
+	W4 --> WC
+	CG -->|region finished| WC
+	WC --> C1
 
-	D -.-> RC
-	D -.-> FE
-	R2 -.-> FE
-	R3 -.-> FE
-	W5 -.-> WP
-
+	R1 -.-> RC
+	R1 -.-> FE
+	B1 -.-> RD
+	RD -.-> RC
+	RD -.-> FE
+	W4 -.-> WP
 ```
 
-The same flow as a sequence diagram, showing execution order and RiverShaping's orchestration role:
+## Entry Points
+
+### Background Preparation
+
+Background Preparation is the normal path. It builds the 3×3 around each player before chunk generation needs it. A player's own region, with all of its contributing regions, takes priority over any other player's 3×3.
+
+```mermaid
+sequenceDiagram
+    participant Player
+    participant BP as Background Preparation
+    participant Queue as Build Queue
+    participant Build as Region Build
+    participant WatershedCache
+
+    Note over Player,WatershedCache: Not yet built
+
+    Player ->> BP: enters a different region (or logs in)
+    loop Each region in the 3×3 that isn't finished
+        BP ->> Queue: enqueue build job
+    end
+
+    alt Teleported out of previous region, changed dimension, or disconnected
+        BP ->> Queue: release this player's jobs
+    end
+
+    loop While jobs are in scope
+        Queue ->> Queue: rank: player's region first, then rest of 3×3, then FIFO
+        Queue ->>+ Build: build highest-priority region
+        Build ->> Build: build region and contributing regions
+        Build ->> WatershedCache: store watersheds
+        Build -->>- Queue: done
+    end
+```
+
+### Chunk Generation
+
+Chunk Generation runs when Minecraft fills a chunk's noise. Building on the chunk generation thread is the last resort, and its pause (about 3.2 seconds cold) is accepted.
 
 ```mermaid
 sequenceDiagram
     participant Minecraft
     participant RiverShaping
-    participant RegionCache
-    participant CellCache
-    participant Watershed
+    participant Build as Region Build
+    participant WatershedCache
     participant ChunkAccess
+
+    Note over Minecraft,ChunkAccess: Not yet built. Today, shape() only preclassifies the chunk's cell.
 
     Minecraft ->>+ RiverShaping: shape chunk
 
-    Note over RiverShaping,RegionCache: Region Discovery
-    RiverShaping ->> RegionCache: get center region (triggers classification)
-    RegionCache -->> RiverShaping: region with type
-
-    alt OCEANIC or INLAND
-        RiverShaping -->> Minecraft: early return
+    alt Region finished
+        RiverShaping ->> WatershedCache: look up watersheds
+    else Region being built by Background Preparation
+        RiverShaping ->> Build: wait for that build
+        Build -->> RiverShaping: done
+        RiverShaping ->> WatershedCache: look up watersheds
+    else No build in progress
+        RiverShaping ->>+ Build: build region on this thread
+        Build ->> WatershedCache: store watersheds
+        Build -->>- RiverShaping: done
+        RiverShaping ->> WatershedCache: look up watersheds
     end
 
-    RiverShaping ->> RegionCache: get neighbors, build working set
+    WatershedCache -->> RiverShaping: watersheds
 
-    Note over RiverShaping,CellCache: Per Region
-    loop Each region in working set
-        RiverShaping ->> RiverShaping: Boundary Identification
-        RiverShaping ->> CellCache: Early Feature Classification (triggers flow evaluation)
-        RiverShaping ->> RiverShaping: Flowline Tracing
-    end
-
-    RiverShaping ->> RiverShaping: group flowlines by terminus
-
-    Note over RiverShaping,Watershed: Per Watershed
-    loop Each terminus with flowlines
-        RiverShaping ->>+ Watershed: build from flowlines
-        Watershed -->>- RiverShaping: watershed
-        RiverShaping ->> Watershed: validate
-        RiverShaping ->> Watershed: assign elevations
-        RiverShaping ->> Watershed: determine accumulation
-        RiverShaping ->> Watershed: reclassify features
-        RiverShaping ->> Watershed: build splines (triggers waypoint calculation)
-        RiverShaping ->> RiverShaping: store in WatershedCache
-    end
-
-    Note over RiverShaping,ChunkAccess: Apply to Chunk
     RiverShaping ->> ChunkAccess: Terrain Shaping
     RiverShaping ->> ChunkAccess: Biome Assignment
     RiverShaping ->> ChunkAccess: Water Placement
 
     RiverShaping -->>- Minecraft: done
+```
+
+## Region Build
+
+A region build is the same no matter which entry point starts it.
+
+```mermaid
+sequenceDiagram
+    participant Build as Region Build
+    participant RegionCache
+    participant RiverGraph
+    participant FlowlineTracer
+    participant WatershedBuilder
+    participant Watershed
+    participant WatershedCache
+
+    Note over Build,RiverGraph: River Preparation
+    Build ->>+ RiverGraph: prepare target region
+    loop Each region reached by the upstream search
+        RiverGraph ->> RegionCache: get region (triggers preclassification and boundaries)
+        RiverGraph ->> RiverGraph: routing, legal steps, predecessors, sources
+    end
+    RiverGraph -->>- Build: PreparedRiverData
+
+    Note over Build,FlowlineTracer: Flowline Tracing
+    loop Each source in each connected region
+        Build ->> FlowlineTracer: trace source
+        FlowlineTracer -->> Build: flowline
+    end
+    Build ->> Build: gather flowlines connected to the target
+
+    Note over Build,WatershedBuilder: Watershed Building
+    Build ->>+ WatershedBuilder: build from flowlines
+    WatershedBuilder -->>- Build: one watershed per outlet
+
+    Note over Build,Watershed: Per Watershed (not yet built)
+    loop Each watershed
+        Build ->> Watershed: validate
+        Build ->> Watershed: assign elevations
+        Build ->> Watershed: determine accumulation
+        Build ->> Watershed: classify features
+        Build ->> Watershed: build splines (triggers waypoint calculation)
+    end
+
+    Build ->> WatershedCache: store watersheds
 ```
 
 ## Lazy Services
@@ -106,6 +184,8 @@ Waypoint Calculation determines the meandering offset for a cell's river path. W
 sequenceDiagram
     participant Caller as Caller (Spline Building)
     participant CellCache
+
+    Note over Caller,CellCache: Not yet built
 
     Caller ->>+ CellCache: get waypoint for cell
 
@@ -120,244 +200,294 @@ sequenceDiagram
 
 ### Region Classification
 
-Region Classification determines a region's type (OCEANIC, COASTAL, FLUVIAL, INLAND) based on its cells' ocean status. It runs lazily when RegionCache computes a new region. Results are cached for reuse.
+Region Classification determines a region's type (OCEANIC, COASTAL, FLUVIAL, INLAND) from the ocean status of its cells and its neighbors' cells. Results are cached in RegionTypeCache.
 
 ```mermaid
 sequenceDiagram
-    participant Caller as Caller (Region Discovery)
-    participant RegionCache
-    participant CellCache
+    participant Caller as Caller (RegionCache, Region Discovery)
+    participant RegionTypeCache
     participant SampleCache
 
-    Caller ->>+ RegionCache: get region
+    Caller ->>+ RegionTypeCache: get region type
 
-    alt Region not cached
+    alt Type not cached
         loop For each cell in region
-            RegionCache ->> CellCache: is cell ocean?
-            CellCache ->> SampleCache: get sample
-            SampleCache -->> CellCache: sample (density, continents, depth, isOcean)
-            CellCache -->> RegionCache: boolean
+            RegionTypeCache ->> SampleCache: get sample at cell center
+            SampleCache -->> RegionTypeCache: sample (isOcean)
         end
 
-        RegionCache ->> RegionCache: count ocean cells
-        RegionCache ->> RegionCache: check if adjacent to COASTAL (for FLUVIAL)
-        RegionCache ->> RegionCache: classify (OCEANIC, COASTAL, FLUVIAL, INLAND)
+        alt All ocean
+            RegionTypeCache ->> RegionTypeCache: OCEANIC
+        else Some ocean
+            RegionTypeCache ->> RegionTypeCache: COASTAL
+        else Any D4 neighbor has both ocean and land
+            RegionTypeCache ->> RegionTypeCache: FLUVIAL
+        else Otherwise
+            RegionTypeCache ->> RegionTypeCache: INLAND
+        end
     end
 
-    RegionCache -->>- Caller: region (with type)
+    RegionTypeCache -->>- Caller: region type
 ```
 
 ### Flow Evaluation
 
-Flow Evaluation computes flow directions for a cell by comparing terrain density with neighboring cells. It runs lazily on-demand when any step requests flow data from CellCache. Results are cached for reuse.
+Flow Evaluation computes flow directions for a cell by comparing its estimated terrain height with its eight neighbors. Ocean cells have no flow directions. Results are cached in CellCache.
 
 ```mermaid
 sequenceDiagram
-    participant Caller as Caller (Region Discovery, Feature Classification, Flowline Tracing)
+    participant Caller as Caller (Preclassification, Region Discovery)
     participant CellCache
     participant SampleCache
 
-    Caller ->>+ CellCache: get flow directions for cell
+    Caller ->>+ CellCache: get cell with flow
 
-    alt Flow directions not cached
-        loop For each neighbor
-            CellCache ->> SampleCache: get sample
-            SampleCache -->> CellCache: sample (density values)
-            CellCache ->> CellCache: compare density, track downhill directions
+    alt Flow directions not cached and cell is land
+        loop For each D8 neighbor
+            CellCache ->> SampleCache: get samples
+            SampleCache -->> CellCache: samples (terrainHeight)
+            CellCache ->> CellCache: keep neighbor if lower
         end
-        CellCache ->> CellCache: sort by steepest slope, cache result
+        CellCache ->> CellCache: sort by steepest drop, cache result
     end
 
-    CellCache -->>- Caller: flow directions (direction list)
+    CellCache -->>- Caller: cell (flow directions)
 ```
 
+### Region Discovery
 
-## Region Discovery
-
-Region Discovery determines which regions need to be processed for a given chunk. Because rivers can only span FLUVIAL → COASTAL (FLUVIAL is defined as adjacent to COASTAL), expansion beyond immediate neighbors is never required.
+Region Discovery finds the regions a river starting in a given region may pass through. River Preparation asks for it once per region while building that region's routing. Rivers may only move INLAND → FLUVIAL → COASTAL.
 
 ```mermaid
 sequenceDiagram
-    participant RiverShaping
+    participant RiverGraph
+    participant RegionExplorer
     participant RegionCache
     participant CellCache
 
-    RiverShaping ->> RegionCache: get center region
-    RegionCache -->> RiverShaping: region (with type)
+    RiverGraph ->>+ RegionExplorer: discover regions for region
+    RegionExplorer ->> RegionCache: get region
+    RegionCache -->> RegionExplorer: region (with type)
 
-    alt OCEANIC or INLAND
-        RiverShaping -->> RiverShaping: early return (no river processing)
+    alt OCEANIC
+        RegionExplorer -->> RiverGraph: no regions
     else COASTAL
-        loop For each neighbor
-            RiverShaping ->> RegionCache: get neighbor
-            RegionCache -->> RiverShaping: neighbor (with type)
-
-            opt Neighbor is FLUVIAL
-                RiverShaping ->> CellCache: do neighbor's border cells flow toward center?
-                CellCache -->> RiverShaping: boolean
-
-                opt Yes
-                    RiverShaping ->> RiverShaping: add to working set
-                end
+        loop For each D4 neighbor that is FLUVIAL
+            RegionExplorer ->> CellCache: do neighbor's border cells flow toward this region?
+            opt Yes
+                RegionExplorer ->> RegionExplorer: add neighbor
             end
         end
     else FLUVIAL
-        loop For each neighbor
-            RiverShaping ->> RegionCache: get neighbor
-            RegionCache -->> RiverShaping: neighbor (with type)
-
-            opt Neighbor is COASTAL
-                RiverShaping ->> CellCache: do my border cells flow toward neighbor?
-                CellCache -->> RiverShaping: boolean
-
-                opt Yes
-                    RiverShaping ->> RiverShaping: add to working set
-                end
+        loop For each D4 neighbor that is COASTAL
+            RegionExplorer ->> CellCache: do my border cells flow toward neighbor?
+            opt Yes
+                RegionExplorer ->> RegionExplorer: add neighbor
             end
         end
+    else INLAND
+        RegionExplorer ->> RegionCache: get D4 neighbors
+        alt Any neighbor is FLUVIAL
+            RegionExplorer ->> RegionExplorer: add FLUVIAL neighbors and their COASTAL neighbors
+        else No FLUVIAL neighbor
+            RegionExplorer ->> RegionExplorer: add all neighbors
+        end
     end
-```
 
+    RegionExplorer -->>- RiverGraph: region and discovered regions
+
+    RiverGraph ->> RiverGraph: allowed regions (reachable by INLAND → FLUVIAL → COASTAL)
+    RiverGraph ->> RiverGraph: termini (land side of boundaries in reachable regions)
+    RiverGraph ->> RiverGraph: water cells (water side of every boundary)
+```
 
 ## Per Region
 
-### Boundary Identification
-
-Boundary Identification finds ocean and basin boundaries within each region where rivers can terminate. It uses cached cell data from Region Discovery—no new sampling required.
+Both steps run inside RegionCache the first time a region is requested, so every cached region is already preclassified and has its boundaries.
 
 ```mermaid
 sequenceDiagram
-    participant RiverShaping
+    participant Caller
     participant RegionCache
-    participant CellCache
-    participant Terrain
+    participant RegionTypeCache
+    participant Preclassification
+    participant Boundaries as Boundary Identification
 
-    loop For each region in working set
-        RiverShaping ->> RegionCache: get region type
-        RegionCache -->> RiverShaping: region type
+    Caller ->>+ RegionCache: get region
 
-        alt Region is COASTAL
-            RiverShaping ->>+ Terrain: identify ocean boundaries
-
-            loop For each cell in region
-                Terrain ->> CellCache: get cached ocean status
-                CellCache -->> Terrain: isOcean (boolean)
-                opt Cell is land AND neighbor is ocean
-                    Terrain ->> Terrain: record boundary pair (land cell, ocean cell)
-                end
-            end
-
-            Terrain -->>- RiverShaping: ocean boundaries
-        end
-
-        RiverShaping ->>+ Terrain: identify basin boundaries
-
+    alt Region not cached
+        RegionCache ->> RegionTypeCache: get region type
         loop For each cell in region
-            Terrain ->> CellCache: get elevation
-            CellCache -->> Terrain: elevation
-            opt cell.isBasin()
-                Terrain ->> Terrain: record basin boundary
-            end
+            RegionCache ->> Preclassification: preclassify cell
         end
-
-        Terrain -->>- RiverShaping: basin boundaries
+        RegionCache ->> Boundaries: identify boundaries
+        RegionCache ->> RegionCache: cache region
     end
+
+    RegionCache -->>- Caller: region (type, boundaries)
 ```
 
-### Early Feature Classification
+### Preclassification
 
-Early Feature Classification identifies SOURCE cells (potential river origins with no upstream flow) and DIVIDE cells (local maxima that water flows away from) before flowlines are traced.
+Preclassification finds SOURCE cells, which are land cells with no inflowing neighbor that match a source feature's rules. Every other land cell is NONE. It runs with no watershed, so only source features can match.
 
 ```mermaid
 sequenceDiagram
-	participant RiverShaping
+	participant RegionCache
 	participant Features as Feature Classification
 	participant CellCache
 
-	loop For each cell
-		RiverShaping ->>+ Features: identify source and divide cells
-		Features ->> CellCache: get flow data
-		CellCache -->> Features: flow data (direction list)
-		Features ->> Features: classify
-		Features ->>- CellCache: store classification
+	loop For each cell in region
+		RegionCache ->> CellCache: get cell with flow (triggers flow evaluation)
+		CellCache -->> RegionCache: cell
+		opt Cell is land
+			RegionCache ->>+ Features: classify (no watershed)
+			Features ->> Features: first matching source feature, else NONE
+			Features -->>- RegionCache: cell with feature
+			RegionCache ->> CellCache: store classification
+		end
 	end
+```
+
+### Boundary Identification
+
+Boundary Identification finds the land-to-water cell pairs where rivers can terminate. COASTAL regions look for ocean and basin neighbors. FLUVIAL and INLAND regions look only for basin neighbors. OCEANIC regions have none.
+
+```mermaid
+sequenceDiagram
+    participant RegionCache
+    participant Terrain as Coastal / Fluvial
+    participant CellCache
+
+    RegionCache ->>+ Terrain: identify boundaries
+
+    loop For each land cell in region
+        loop For each D4 neighbor
+            Terrain ->> CellCache: get neighbor
+            CellCache -->> Terrain: isOcean, isBasin
+            opt Neighbor is ocean (COASTAL only)
+                Terrain ->> Terrain: record OCEAN boundary (land, water)
+            end
+            opt Neighbor is basin
+                Terrain ->> Terrain: record BASIN boundary (land, water)
+            end
+        end
+    end
+
+    Terrain -->>- RegionCache: boundaries
+```
+
+## Per Build
+
+### River Preparation
+
+River Preparation builds a fixed snapshot of everything tracing needs. It searches upstream from the target region for every region whose rivers can reach it, then forward from those regions' sources, repeating until no new regions appear. Tracing reads only this snapshot.
+
+```mermaid
+sequenceDiagram
+    participant Build as Region Build
+    participant RiverGraph
+    participant RegionCache
+    participant CellCache
+
+    Build ->>+ RiverGraph: prepare target region
+
+    loop Until no new regions are found
+        RiverGraph ->> RiverGraph: search upstream through predecessors
+        loop For each newly found region
+            RiverGraph ->> RegionCache: get region
+            RiverGraph ->> RiverGraph: routing (triggers region discovery)
+            RiverGraph ->> RiverGraph: sources (SOURCE cells, if the region has termini)
+        end
+        RiverGraph ->> RiverGraph: expand forward from sources through legal steps
+    end
+
+    Note over RiverGraph,CellCache: Computed lazily for each cell reached
+    RiverGraph ->> CellCache: get feature, flow directions, terrain height
+    RiverGraph ->> RiverGraph: legal steps (flow, nudges within nudgingLimit, fallback near terminus)
+    RiverGraph ->> RiverGraph: predecessors
+
+    RiverGraph -->>- Build: PreparedRiverData
 ```
 
 ### Flowline Tracing
 
-Flowline Tracing traces each Source cell's flow data until it reaches an ocean cell or a basin cell (both pre-identified via Boundary Identification). Valid flowlines are returned to RiverShaping for aggregation.
+Flowline Tracing runs a best-first search from each source over the prepared legal steps until it reaches a terminus or joins a flowline that already reached one. Steps that move away from the target are limited by awayStepAllowance, and a path may not revisit its own cells. The flowlines connected to the target region are then gathered for Watershed Building.
 
 ```mermaid
 sequenceDiagram
-    participant RiverShaping
-    participant CellCache
-    participant Flowline
+    participant Build as Region Build
+    participant FlowlineTracer
+    participant PreparedRiverData
 
-    loop For each cell in region
-        RiverShaping ->> CellCache: get classification
-        CellCache -->> RiverShaping: classification
+    loop For each source in each connected region
+        Build ->>+ FlowlineTracer: trace source
 
-        opt Cell is SOURCE
-            RiverShaping ->>+ Flowline: create from source
-
-            loop Until Cell is TERMINUS or no valid next cell
-                Flowline ->> CellCache: get cell data
-                CellCache -->> Flowline: cell (flow directions, position)
-                Flowline ->> Flowline: determine next cell (follow flow or nudge toward terminus)
-                Flowline ->> Flowline: validate (not DIVIDE, not cycle)
+        alt Source already on a found path
+            FlowlineTracer ->> FlowlineTracer: reuse that path
+        else New path
+            loop Until TERMINUS, joined path, or no candidates
+                FlowlineTracer ->> PreparedRiverData: get legal steps
+                PreparedRiverData -->> FlowlineTracer: steps (preference order)
+                FlowlineTracer ->> FlowlineTracer: skip steps over awayStepAllowance or onto own path
+                FlowlineTracer ->> FlowlineTracer: expand most preferred candidate
             end
-
-            Flowline -->>- RiverShaping: flowline (or null if invalid)
+            FlowlineTracer ->> FlowlineTracer: publish path for reuse
         end
+
+        FlowlineTracer -->>- Build: flowline (or invalid)
     end
 
-    RiverShaping ->> RiverShaping: group flowlines by terminus
+    Build ->> Build: gather flowlines sharing a cell or diagonal crossing with the target's flowlines
 ```
-
-Note: Grouped flowlines are held in memory by RiverShaping and passed directly to Watershed Building—no intermediate storage.
-
-## Per Watershed
 
 ### Watershed Building
 
-Watershed Building merges flowlines into a single cohesive river system, eliminating duplication and smoothing aberrant behavior within the watershed (such as diagonally crossing segments). This includes merging across region boundaries when a Fluvial region flows through a Coastal region to reach the ocean.
+Watershed Building merges the gathered flowlines into one tree per outlet. Diagonal crossings become shared nodes, and a cell with competing downstream links keeps the one supported by the most upstream cells.
 
 ```mermaid
 sequenceDiagram
-    participant RiverShaping
+    participant Build as Region Build
+    participant WatershedBuilder
     participant Watershed
     participant WatershedCache
 
-    loop For each terminus with flowlines
-        RiverShaping ->>+ Watershed: create from flowlines
+    Build ->>+ WatershedBuilder: build from flowlines
 
-        loop For each flowline
-            loop For each cell in flowline
-                Watershed ->> Watershed: build upstream/downstream links
-            end
+    WatershedBuilder ->> WatershedBuilder: find crossing diagonals, insert crossing nodes
+    WatershedBuilder ->> WatershedBuilder: collect candidate downstream links
+    WatershedBuilder ->> WatershedBuilder: keep link with most upstream support (ties by position)
+    WatershedBuilder ->> WatershedBuilder: reconnect cycles to an outlet
+    WatershedBuilder ->> WatershedBuilder: drop nodes not reachable from a source
 
-            opt Diagonal crossing detected
-                Watershed ->> Watershed: resolve crossing (lower accumulation yields)
-            end
-        end
-
-        Watershed -->>- RiverShaping: watershed
-
-        RiverShaping ->> WatershedCache: store watershed
+    loop For each outlet
+        WatershedBuilder ->>+ Watershed: fromLinks(outlet, links)
+        Watershed ->> Watershed: build upstream links, compute upstream counts
+        Watershed -->>- WatershedBuilder: watershed
     end
+
+    WatershedBuilder -->>- Build: watersheds
+
+    Build ->> WatershedCache: store watersheds
 ```
 
-### Validation
+## Per Watershed
 
-Validation prunes river segments that are too short to be meaningful, iterating until no more pruning is needed.
+None of these steps are built yet. Their results are stored on the watershed's RiverCells, never in CellCache. Tracing reads CellCache, so writing results there would change the next build's routing.
+
+### Watershed Validation
+
+Watershed Validation prunes river segments that are too short to be meaningful, iterating until no more pruning is needed.
 
 ```mermaid
 sequenceDiagram
-    participant RiverShaping
+    participant Build as Region Build
     participant Watershed
 
+    Note over Build,Watershed: Not yet built
+
     loop For each watershed
-        RiverShaping ->>+ Watershed: validate
+        Build ->>+ Watershed: validate
 
         loop Until no more pruning needed
             Watershed ->> Watershed: find source cells (no upstream)
@@ -369,7 +499,7 @@ sequenceDiagram
             end
         end
 
-        Watershed -->>- RiverShaping: validated watershed
+        Watershed -->>- Build: validated watershed
     end
 ```
 
@@ -379,21 +509,23 @@ Elevation Assignment determines entryY and exitY for each cell in the watershed,
 
 ```mermaid
 sequenceDiagram
-    participant RiverShaping
+    participant Build as Region Build
     participant Watershed
-    participant CellCache
+    participant RiverCell
+
+    Note over Build,RiverCell: Not yet built
 
     loop For each watershed
-        RiverShaping ->>+ Watershed: assign elevations
+        Build ->>+ Watershed: assign elevations
 
         Note over Watershed: Assign boundary elevations (downstream pass)
         loop For each source cell (no upstream)
             Watershed ->> Watershed: trace downstream
             loop For each cell in path
-                Watershed ->> CellCache: get terrain elevation at boundaries
-                CellCache -->> Watershed: elevation
+                Watershed ->> RiverCell: get terrain height
+                RiverCell -->> Watershed: height
                 Watershed ->> Watershed: constrain exitY (must descend by minSlope from entryY)
-                Watershed ->> CellCache: store entryY and exitY
+                Watershed ->> RiverCell: store entryY and exitY
             end
         end
 
@@ -402,98 +534,104 @@ sequenceDiagram
             Watershed ->> Watershed: trace upstream
             loop For each cell
                 Watershed ->> Watershed: ensure entryY >= downstream entryY + minSlope
-                Watershed ->> CellCache: store adjusted entryY and exitY
+                Watershed ->> RiverCell: store adjusted entryY and exitY
             end
         end
 
-        Watershed -->>- RiverShaping: watershed with elevations
+        Watershed -->>- Build: watershed with elevations
     end
 ```
 
 ### Flow Accumulation
 
-Flow Accumulation calculates the depth and width of the river at each cell based on upstream accumulation, and stores topology counts (upstream/downstream) for later feature classification.
+Flow Accumulation calculates the depth and width of the river at each cell based on upstream accumulation, and stores topology counts (upstream/downstream) for later feature classification. Upstream cell counts already exist on Watershed; width and depth do not.
 
 ```mermaid
 sequenceDiagram
-    participant RiverShaping
+    participant Build as Region Build
     participant Watershed
-    participant CellCache
+    participant RiverCell
+
+    Note over Build,RiverCell: Not yet built
 
     loop For each watershed
-        RiverShaping ->>+ Watershed: determine accumulation
+        Build ->>+ Watershed: determine accumulation
 
         loop For each cell in watershed
-            Watershed ->> Watershed: trace upstream
-            Watershed ->> Watershed: count cells (for width)
-            Watershed ->> Watershed: count confluences (for depth)
+            Watershed ->> Watershed: get upstream cell count (for width)
+            Watershed ->> Watershed: count confluences upstream (for depth)
             Watershed ->> Watershed: apply saturation formulas
             Watershed ->> Watershed: count immediate upstream and downstream links
-            Watershed ->> CellCache: store width, depth, upstreamCount, downstreamCount
+            Watershed ->> RiverCell: store width, depth, upstreamCount, downstreamCount
         end
 
-        Watershed -->>- RiverShaping: watershed with accumulation
+        Watershed -->>- Build: watershed with accumulation
     end
 ```
 
-### Feature Reclassification
+### Feature Classification
 
-Feature Reclassification re-evaluates all cells in a watershed now that the full river network is known. Cells are processed in topological order (sources to terminus) so upstream neighbors are always classified before downstream cells. This allows features like Plunge Pool to check their upstream neighbor's classification.
+Feature Classification evaluates all cells in a watershed now that the full river network is known. Cells are processed in topological order (sources to terminus) so upstream neighbors are always classified before downstream cells. This allows features like Plunge Pool to check their upstream neighbor's classification.
 
 ```mermaid
 sequenceDiagram
-    participant RiverShaping
+    participant Build as Region Build
     participant Watershed
     participant Features as Feature Classification
-    participant CellCache
+    participant RiverCell
+
+    Note over Build,RiverCell: Not yet built
 
     loop For each watershed
-        RiverShaping ->>+ Watershed: reclassify cells
+        Build ->>+ Watershed: classify cells
 
         loop For each cell (sources to terminus)
             Watershed ->>+ Features: classify
-            Features ->> CellCache: get cell data (entryY, exitY, width, depth, upstreamCount, downstreamCount)
-            CellCache -->> Features: cell data
+            Features ->> RiverCell: get cell data (entryY, exitY, width, depth, upstreamCount, downstreamCount)
+            RiverCell -->> Features: cell data
             opt Needs neighbor context (e.g., Plunge Pool)
-                Features ->> CellCache: get upstream neighbor classification
-                CellCache -->> Features: upstream feature
+                Features ->> RiverCell: get upstream neighbor's feature
+                RiverCell -->> Features: upstream feature
             end
             Features ->> Features: determine feature type
-            Features -->>- CellCache: store final classification
+            Features -->>- RiverCell: store feature
         end
 
-        Watershed -->>- RiverShaping: reclassified watershed
+        Watershed -->>- Build: classified watershed
     end
 ```
 
 ### Spline Building
 
-Spline Building generates smooth curves for river rendering by converting the cell-based watershed graph into continuous splines. Cells are processed in topological order (sources to terminus). Each cell's feature provides its Y profile function (Run interpolates linearly, Waterfall drops at waypoint, etc.), while XZ is interpolated via Catmull-Rom from waypoint to waypoint. Coarse sample points are generated and stored for distance lookups during terrain shaping.
+Spline Building generates smooth curves for river rendering by converting the cell-based watershed graph into continuous splines. Cells are processed in topological order (sources to terminus). Each cell's feature provides its Y profile function (Run interpolates linearly, Waterfall drops at waypoint, etc.), while XZ is interpolated via Catmull-Rom from waypoint to waypoint. Coarse sample points are generated and stored for distance lookups during terrain shaping. It does not carve.
 
 ```mermaid
 sequenceDiagram
-    participant RiverShaping
+    participant Build as Region Build
     participant Watershed
+    participant RiverCell
     participant CellCache
     participant Features as FeatureHandler
 
+    Note over Build,Features: Not yet built
+
     loop For each watershed
-        RiverShaping ->>+ Watershed: build splines
+        Build ->>+ Watershed: build splines
 
         loop For each cell (sources to terminus)
-            Watershed ->> CellCache: get cell data (entryY, exitY, feature)
-            CellCache -->> Watershed: cell data
-            Watershed ->> Watershed: get waypoints (current + neighbors for Catmull-Rom)
+            Watershed ->> RiverCell: get cell data (entryY, exitY, feature)
+            RiverCell -->> Watershed: cell data
+            Watershed ->> CellCache: get waypoints (current + neighbors, triggers waypoint calculation)
             Watershed ->> Features: get Y profile for feature type
             Features -->> Watershed: Y profile function
             Watershed ->> Watershed: compute spline segment (XZ from Catmull-Rom, Y from profile)
             Watershed ->> Watershed: generate coarse sample points along segment
-            Watershed ->> CellCache: store entry_t and exit_t
+            Watershed ->> RiverCell: store entry_t and exit_t
         end
 
         Watershed ->> Watershed: store spline geometry and coarse points
 
-        Watershed -->>- RiverShaping: watershed with splines
+        Watershed -->>- Build: watershed with splines
     end
 ```
 
@@ -505,15 +643,15 @@ Terrain Shaping modifies chunk terrain to carve river channels based on watershe
 
 ```mermaid
 sequenceDiagram
-    participant Minecraft
     participant RiverShaping
+    participant WatershedCache
     participant FeatureHandler
     participant Watershed
     participant ChunkAccess
 
-    Minecraft ->> RiverShaping: shape chunk
+    Note over RiverShaping,ChunkAccess: Not yet built
 
-    RiverShaping ->> RiverShaping: find cells within influence radius
+    RiverShaping ->> WatershedCache: find river cells within influence radius
 
     loop Each contributing cell
         RiverShaping ->> FeatureHandler: get Shape opinions for chunk
@@ -530,19 +668,21 @@ sequenceDiagram
 
 ### Biome Assignment
 
-Biome Assignment updates biome data for river areas, replacing the original biome with the river biome where appropriate. It uses the same Shape opinions collected during Terrain Shaping—each Shape has a `preserveBiome` flag, and weighted consensus determines the outcome.
+Biome Assignment replaces the original biome with a river biome where appropriate, so river areas get river noise. It uses the same Shape opinions collected during Terrain Shaping—each Shape has a `preserveBiome` flag, and weighted consensus determines the outcome. Which river biome is chosen is undecided.
 
 ```mermaid
 sequenceDiagram
     participant RiverShaping
     participant ChunkAccess
 
+    Note over RiverShaping,ChunkAccess: Not yet built
+
     Note over RiverShaping: Using Shape opinions from Terrain Shaping
 
     loop Each column with river influence
         RiverShaping ->> RiverShaping: check weighted consensus on preserveBiome
         opt Consensus favors changing
-            RiverShaping ->> RiverShaping: determine river biome from dominant feature
+            RiverShaping ->> RiverShaping: choose river biome
             RiverShaping ->> ChunkAccess: apply river biome
         end
     end
@@ -562,7 +702,9 @@ sequenceDiagram
     participant ChunkAccess
     participant FlowDirectionCapability
 
-    RiverShaping ->> RiverShaping: find cells within influence radius
+    Note over RiverShaping,FlowDirectionCapability: Not yet built
+
+    RiverShaping ->> RiverShaping: find river cells within influence radius
 
     loop Each contributing cell
         RiverShaping ->> FeatureHandler: get Fill opinions for chunk
@@ -587,12 +729,14 @@ sequenceDiagram
 
 ## Data Structures
 
-Pseudocode definitions for the records implied by these diagrams.
+Pseudocode definitions for the records implied by these diagrams. Fields and records marked `planned` do not exist yet.
 
 ```
 enum RegionType { OCEANIC, COASTAL, FLUVIAL, INLAND }
 
 enum FlowDirection { N, NE, E, SE, S, SW, W, NW, NONE }
+
+enum BoundaryType { OCEAN, BASIN }
 
 enum CellType { SOURCE, TERMINUS, JUNCTION, LAKE, COURSE, NONE }
 
@@ -608,21 +752,74 @@ enum Feature {
     // Courses
     PLUNGE_POOL, WATERFALL, CASCADE, RAPIDS, RUN,
     // Fallback
-    DIVIDE, NONE
+    NONE
 }
 
 record Sample {
-    density: double
     continents: double
-    depth: double
+    terrainHeight: int
     isOcean: boolean
+    erosion: double
+    ridges: double
+    temperature: double
+    vegetation: double
 }
 
 record Cell {
     pos: CellPos
-    flowDirections: List<FlowDirection>  // sorted by steepest slope
-    feature: Feature
-    waypoint: BlockPos                   // cell center + noise offset
+    samplePositions: Set<ChunkPos>       // height, ocean, and basin are derived from these samples
+    flowDirections: List<FlowDirection>  // sorted by steepest drop
+    feature: Feature                     // set by Preclassification: a source feature or NONE
+    waypoint: BlockPos                   // planned: cell center + noise offset
+}
+
+record Region {
+    pos: RegionPos
+    type: RegionType
+    boundaries: List<Boundary>
+}
+
+record Boundary {
+    land: CellPos   // D4 adjacent to water
+    water: CellPos
+    type: BoundaryType
+}
+
+record PreparedRiverData {
+    regions: Map<RegionPos, Region>
+    cells: Map<CellPos, CellData>              // feature, flowDirections, height
+    routing: Map<RegionPos, Routing>           // allowedRegions, termini, waterCells
+    moves: Map<CellPos, List<Step>>            // legal steps in preference order
+    incoming: Map<CellPos, List<CellPos>>      // predecessors
+    sources: Map<RegionPos, List<CellPos>>
+}
+
+record Step {
+    pos: CellPos
+    nudgingRise: long     // blocks climbed by a nudge, 0 otherwise
+    approaching: boolean  // false if the step moves away from the nearest terminus
+}
+
+record Flowline {
+    cells: List<CellPos>  // ordered source to terminus
+    terminus: CellPos?
+    isValid: boolean
+}
+
+record Watershed {
+    downstream: Map<CellPos, CellPos?>     // terminus maps to null
+    upstream: Map<CellPos, Set<CellPos>>
+    accumulation: Map<CellPos, int>        // upstream cell count
+    cells: Map<CellPos, RiverCell>         // planned
+    spline: List<SplinePoint>              // planned: coarse sample points
+    splineGeometry: SplineCurve            // planned: Catmull-Rom curve data
+}
+
+record RiverCell {                // planned: Cell values plus watershed results
+    pos: CellPos
+    flowDirections: List<FlowDirection>
+    height: int
+    preclassified: Feature        // copied from Cell.feature
 
     // Set during Elevation Assignment
     entryY: int
@@ -634,30 +831,12 @@ record Cell {
     upstreamCount: int
     downstreamCount: int
 
+    // Set during Feature Classification
+    feature: Feature
+
     // Set during Spline Building
     entry_t: double
     exit_t: double
-}
-
-record Region {
-    pos: RegionPos
-    type: RegionType
-    cells: Set<CellPos>
-}
-
-record Flowline {
-    cells: List<CellPos>  // ordered source to terminus
-    terminus: CellPos
-    isValid: boolean
-}
-
-record Watershed {
-    terminus: CellPos
-    cells: Set<CellPos>
-    upstreamLinks: Map<CellPos, Set<CellPos>>
-    downstreamLinks: Map<CellPos, CellPos>
-    spline: List<SplinePoint>        // coarse sample points
-    splineGeometry: SplineCurve  // Catmull-Rom curve data
 }
 
 record SplinePoint {
@@ -684,13 +863,13 @@ interface FeatureHandler {
     // Classify whether this feature applies to a cell
     classify(cell: Cell, watershed: Watershed?): boolean
 
-    // Terrain shaping opinions for a chunk
-    shape(cell: Cell, watershed: Watershed, chunkPos: ChunkPos): Shape[16][16]?
+    // planned: Terrain shaping opinions for a chunk
+    shape(cell: RiverCell, watershed: Watershed, chunkPos: ChunkPos): Shape[16][16]?
 
-    // Water placement opinions for a chunk
-    fill(cell: Cell, watershed: Watershed, chunkPos: ChunkPos): Fill[16][16]?
+    // planned: Water placement opinions for a chunk
+    fill(cell: RiverCell, watershed: Watershed, chunkPos: ChunkPos): Fill[16][16]?
 
-    // Y profile function for spline building (how Y varies from entryY to exitY)
+    // planned: Y profile function for spline building (how Y varies from entryY to exitY)
     profile(t: double, entryY: int, exitY: int): int
 }
 ```
