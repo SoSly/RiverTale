@@ -75,6 +75,7 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue REGION_SIZE;
         public static final ForgeConfigSpec.IntValue CELL_SIZE;
         public static final ForgeConfigSpec.IntValue SAMPLES_PER_CELL;
+        public static final ForgeConfigSpec.BooleanValue DISABLE_CHUNK_SAVING;
         public static final ForgeConfigSpec.BooleanValue ENABLE_METRICS;
         public static final ForgeConfigSpec.BooleanValue ENABLE_NUDGING;
         public static final ForgeConfigSpec.IntValue NUDGING_LIMIT;
@@ -97,6 +98,12 @@ public record CommonConfig(
             SAMPLES_PER_CELL = builder
                 .comment("Chunks sampled per cell (1 = center only)")
                 .defineInRange("samplesPerCell", DEFAULT_SAMPLES_PER_CELL, 1, 64);
+
+            DISABLE_CHUNK_SAVING = builder
+                .comment(
+                    "For development use only. Do not enable this setting unless directed by a RiverTale developer.",
+                    "When enabled, chunk changes will not be saved to disk.")
+                .define("disableChunkSaving", false);
 
             ENABLE_METRICS = builder
                 .comment("Enable performance metrics collection. Useful for debugging but consumes memory.")

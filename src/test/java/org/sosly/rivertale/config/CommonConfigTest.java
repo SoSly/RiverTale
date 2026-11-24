@@ -7,7 +7,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommonConfigTest {
     private CommonConfig original;
@@ -50,6 +52,15 @@ class CommonConfigTest {
         assertEquals(3, config.awayStepAllowance());
         assertEquals(new SourceConfig(210, -0.1, 130, 0.7, 0.6, 0.15, 140, 0.35, 0.25), config.sources());
         assertEquals(new CacheConfig(2000, 200, 20, 30, 40), config.caches());
+    }
+
+    @Test
+    void disablingChunkSavingIsOptIn() {
+        load("");
+        assertFalse(CommonConfig.Spec.DISABLE_CHUNK_SAVING.get());
+
+        load("disableChunkSaving = true");
+        assertTrue(CommonConfig.Spec.DISABLE_CHUNK_SAVING.get());
     }
 
     @Test

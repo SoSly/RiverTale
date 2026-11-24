@@ -2,7 +2,7 @@ package org.sosly.rivertale.mixin;
 
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraftforge.fml.loading.FMLLoader;
+import org.sosly.rivertale.config.CommonConfig;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -20,7 +20,7 @@ public abstract class ChunkMapMixin {
         cancellable = true
     )
     private void skipDiskWrite(ChunkAccess chunk, CallbackInfoReturnable<Boolean> cir) {
-        if (!FMLLoader.isProduction()) {
+        if (CommonConfig.Spec.DISABLE_CHUNK_SAVING.get()) {
             cir.setReturnValue(true);
         }
     }
