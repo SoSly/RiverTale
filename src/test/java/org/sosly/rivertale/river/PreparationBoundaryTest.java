@@ -1,7 +1,6 @@
 package org.sosly.rivertale.river;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,7 +44,7 @@ class PreparationBoundaryTest {
     void setUp() {
         original = CommonConfig.get();
         CommonConfig.set(new CommonConfig(8, 1, 1, true, false, 12, 0, 0,
-            SourceConfig.DEFAULT, CacheConfig.DEFAULT, true));
+            SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         Store.clear();
         regions.put(source.getRegion(), new Region(source.getRegion(), RegionType.INLAND));
         regions.put(new RegionPos(2, 0), new Region(new RegionPos(2, 0), RegionType.FLUVIAL));
@@ -67,32 +66,32 @@ class PreparationBoundaryTest {
     @Test
     void inlandSourceAtTheEdgeOfTheInitialNineHasAllDownstreamDataBeforeTracing() {
         RegionPos center = new RegionPos(0, 0);
-        Set<RegionPos> visible = visible(center);
-        PreparedRiverData data = RiverPreparation.prepare(center, visible, true, graph());
+        Set<RegionPos> roots = Set.copyOf(center.neighborhood());
+        PreparedRiverData data = RiverPreparation.prepare(roots, graph());
 
         assertTrue(data.regions().containsKey(new RegionPos(2, 0)));
         assertTrue(data.regions().containsKey(new RegionPos(3, 0)));
         assertEquals(0, Store.getTimer(FlowlineTracer.class, "trace").count());
 
-        WatershedPreview.Result result = traceWithoutLoaders(center, visible, data);
-        Flowline path = result.paths().get(source.getRegion()).get(0);
+        Map<RegionPos, RiverRegion> result = traceWithoutLoaders(roots, data);
+        RiverRegion edge = result.get(source.getRegion());
+        Flowline path = edge.flowlines().get(0);
         assertTrue(path.isValid());
         assertEquals(source, path.cells().get(0));
         assertEquals(outlet, path.terminus());
-        assertEquals(1, result.watersheds().size());
+        assertEquals(1, edge.watersheds().size());
+        assertTrue(result.get(center).watersheds().isEmpty());
+        assertFalse(result.containsKey(outlet.getRegion()));
     }
 
     @Test
     void remoteUpstreamsAndWatershedGatheringUseOnlyPreparedData() {
-        CommonConfig c = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(c.regionSize(), c.cellSize(), c.samplesPerCell(), true, false, 12, 0, 0,
-            SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
         RegionPos center = outlet.getRegion();
-        Set<RegionPos> visible = visible(center);
-        assertFalse(visible.contains(source.getRegion()));
-        PreparedRiverData data = RiverPreparation.prepare(center, visible, false, graph());
+        Set<RegionPos> roots = Set.copyOf(center.neighborhood());
+        assertFalse(roots.contains(source.getRegion()));
+        PreparedRiverData data = RiverPreparation.prepare(roots, graph());
 
-        WatershedPreview.Result result = traceWithoutLoaders(center, visible, data);
+        RiverRegion result = traceWithoutLoaders(roots, data).get(center);
 
         assertEquals(1, result.watersheds().size());
         Watershed watershed = result.watersheds().get(0);
@@ -105,28 +104,26 @@ class PreparationBoundaryTest {
         cells.put(source, land(source, Feature.SNOWMELT, FlowDirection.EAST, FlowDirection.SOUTHEAST));
         cells.put(new CellPos(16, 3), land(new CellPos(16, 3), Feature.NONE));
         cells.put(new CellPos(16, 4), land(new CellPos(16, 4), Feature.NONE, FlowDirection.NORTHEAST));
-        RegionPos center = new RegionPos(0, 0);
-        Set<RegionPos> visible = visible(center);
-        PreparedRiverData data = RiverPreparation.prepare(center, visible, true, graph());
+        Set<RegionPos> roots = Set.of(source.getRegion());
+        PreparedRiverData data = RiverPreparation.prepare(roots, graph());
 
-        WatershedPreview.Result result = traceWithoutLoaders(center, visible, data);
+        RiverRegion result = traceWithoutLoaders(roots, data).get(source.getRegion());
 
-        Flowline path = result.paths().get(source.getRegion()).get(0);
+        Flowline path = result.flowlines().get(0);
         assertEquals(new CellPos(16, 4), path.cells().get(1));
         assertEquals(outlet, path.terminus());
     }
 
     @Test
     void preparedPathsSurviveChangesToThePreparationProviders() {
-        RegionPos center = new RegionPos(0, 0);
-        Set<RegionPos> visible = visible(center);
-        PreparedRiverData data = RiverPreparation.prepare(center, visible, true, graph());
+        Set<RegionPos> roots = Set.of(source.getRegion());
+        PreparedRiverData data = RiverPreparation.prepare(roots, graph());
         cells.clear();
         regions.clear();
 
-        WatershedPreview.Result result = traceWithoutLoaders(center, visible, data);
+        RiverRegion result = traceWithoutLoaders(roots, data).get(source.getRegion());
 
-        assertEquals(outlet, result.paths().get(source.getRegion()).get(0).terminus());
+        assertEquals(outlet, result.flowlines().get(0).terminus());
     }
 
 
@@ -134,7 +131,7 @@ class PreparationBoundaryTest {
     void downstreamDiagonalTributaryAndDetoursArePreparedBeforeTracing() {
         CommonConfig c = CommonConfig.get();
         CommonConfig.set(new CommonConfig(c.regionSize(), c.cellSize(), c.samplesPerCell(), true, false, 12, 0, 10,
-            SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+            SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         CellPos remoteSource = new CellPos(26, -1);
         CellPos mainOutlet = new CellPos(30, 4);
         CellPos sideOutlet = new CellPos(25, 6);
@@ -159,11 +156,11 @@ class PreparationBoundaryTest {
         cells.put(source, land(source, Feature.SNOWMELT, FlowDirection.EAST));
         cells.put(remoteSource, land(remoteSource, Feature.SNOWMELT, FlowDirection.SOUTH));
         RegionPos center = source.getRegion();
-        Set<RegionPos> visible = visible(center);
-        assertFalse(visible.contains(remoteSource.getRegion()));
+        Set<RegionPos> roots = Set.copyOf(center.neighborhood());
+        assertFalse(roots.contains(remoteSource.getRegion()));
 
-        PreparedRiverData data = RiverPreparation.prepare(center, visible, false, graph());
-        WatershedPreview.Result result = traceWithoutLoaders(center, visible, data);
+        PreparedRiverData data = RiverPreparation.prepare(roots, graph());
+        RiverRegion result = traceWithoutLoaders(roots, data).get(center);
 
         assertEquals(1, result.watersheds().size());
         Watershed watershed = result.watersheds().get(0);
@@ -182,16 +179,17 @@ class PreparationBoundaryTest {
         return RiverWorld.land(pos, RiverWorld.LAND_HEIGHT, feature, List.of(directions));
     }
 
-    private WatershedPreview.Result traceWithoutLoaders(RegionPos center, Set<RegionPos> visible, PreparedRiverData data) {
+    private Map<RegionPos, RiverRegion> traceWithoutLoaders(Set<RegionPos> roots, PreparedRiverData data) {
         tracing.set(true);
         try (MockedStatic<RegionCache> cache = mockStatic(RegionCache.class, call -> forbidden());
              MockedStatic<RegionExplorer> explorer = mockStatic(RegionExplorer.class, call -> forbidden());
              MockedStatic<SampleCache> samples = mockStatic(SampleCache.class, call -> forbidden());
              MockedStatic<RiverShaping> shaping = mockStatic(RiverShaping.class, call -> forbidden());
              MockedStatic<Feature> features = mockStatic(Feature.class, call -> forbidden())) {
-            WatershedPreview.Result result = WatershedPreview.tracePrepared(center, visible, new FlowlineTracer(data));
-            for (RegionPos pos : visible) {
-                assertEquals(pos.toLong(), result.encode(pos).getLong("pos"));
+            Map<RegionPos, RiverRegion> result = RiverNetwork.assemble(roots, data);
+            assertEquals(roots, result.keySet());
+            for (RegionPos pos : roots) {
+                assertEquals(pos.toLong(), result.get(pos).encode().getLong("pos"));
             }
             return result;
         }
@@ -212,14 +210,5 @@ class PreparationBoundaryTest {
             assertFalse(tracing.get());
             return cells.getOrDefault(pos, land(pos, Feature.NONE));
         }, 0, CommonConfig.get().awayStepAllowance());
-    }
-
-    private Set<RegionPos> visible(RegionPos center) {
-        Set<RegionPos> result = new HashSet<>();
-        result.add(center);
-        for (FlowDirection direction : FlowDirection.D8) {
-            result.add(center.relative(direction));
-        }
-        return result;
     }
 }

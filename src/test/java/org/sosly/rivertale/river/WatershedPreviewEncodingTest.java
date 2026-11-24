@@ -30,7 +30,7 @@ class WatershedPreviewEncodingTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
     }
 
     @AfterEach
@@ -81,10 +81,8 @@ class WatershedPreviewEncodingTest {
         for (CellPos pos : region.cells()) {
             cells.put(pos, new CellData(Feature.NONE, List.of(), height(pos)));
         }
-        PreparedRiverData data = new PreparedRiverData(Map.of(CENTER, region), cells, Map.of(), Map.of(), Map.of(),
-            Map.of(), 0, 63);
-        WatershedPreview.Result result = new WatershedPreview.Result(Map.of(CENTER, flowlines), watersheds, data, CENTER);
-        return ClientRegionCache.Region.decode(result.encode(CENTER));
+        RiverRegion result = new RiverRegion(region, cells, flowlines, watersheds);
+        return ClientRegionCache.Region.decode(result.encode());
     }
 
     private static int height(CellPos pos) {

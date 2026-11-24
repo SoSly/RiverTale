@@ -8,12 +8,12 @@ import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
+import org.sosly.rivertale.river.RiverRegion;
 import org.sosly.rivertale.river.Watershed;
-import org.sosly.rivertale.river.WatershedCache;
-import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.world.RiverShaping;
 
 public class DebugCommand {
@@ -54,7 +54,8 @@ public class DebugCommand {
             : cell.flowDirections().get(0).name();
         player.sendSystemMessage(Component.literal("Flow: " + flowStr));
 
-        Watershed watershed = WatershedCache.get().getWatershed(cellPos);
+        RiverRegion region = RiverShaping.getReady(cellPos.getRegion(), player.serverLevel().getChunkSource().randomState());
+        Watershed watershed = region == null ? null : region.watershedAt(cellPos);
         if (watershed == null) {
             player.sendSystemMessage(Component.literal("Watershed: (none)"));
             return;

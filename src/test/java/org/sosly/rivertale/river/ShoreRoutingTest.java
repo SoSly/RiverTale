@@ -39,7 +39,7 @@ class ShoreRoutingTest {
     void setUp() {
         originalConfig = CommonConfig.get();
         CommonConfig.set(new CommonConfig(8, 1, 1, false, true, 12,
-            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         world = new RiverWorld();
     }
 
@@ -82,7 +82,7 @@ class ShoreRoutingTest {
 
     private void waterIsExcludedEvenWhenNoLandRouteSucceeds(BoundaryType type) {
         CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 12,
-            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         FlowlineTracer tracer = tracer(type, 0);
 
         Flowline path = tracer.trace(source);

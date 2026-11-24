@@ -37,7 +37,7 @@ class AwayStepTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(64, 1, 1, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(64, 1, 1, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         Store.clear();
         world = new RiverWorld();
     }
@@ -164,7 +164,7 @@ class AwayStepTest {
 
     @Test
     void nudgesStillCannotMoveAwayEvenWhenTheirClimbWouldBeAllowed() {
-        CommonConfig.set(new CommonConfig(64, 1, 1, true, true, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(64, 1, 1, true, true, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         CellPos source = new CellPos(20, 20);
         List<CellPos> nudgedRoute = new ArrayList<>();
         nudgedRoute.add(new CellPos(19, 19));

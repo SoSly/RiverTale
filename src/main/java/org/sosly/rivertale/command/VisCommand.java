@@ -5,7 +5,6 @@ import com.mojang.brigadier.context.CommandContext;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -15,31 +14,30 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.server.ServerLifecycleHooks;
 import org.sosly.rivertale.RiverTale;
 import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.client.RegionRenderer;
-import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.networking.Message;
 import org.sosly.rivertale.networking.Network;
 import org.sosly.rivertale.region.Region;
-import org.sosly.rivertale.river.Watershed;
-import org.sosly.rivertale.river.WatershedCache;
-import org.sosly.rivertale.river.WatershedPreview;
+import org.sosly.rivertale.river.RiverRegion;
 import org.sosly.rivertale.world.RiverShaping;
 
 @Mod.EventBusSubscriber(modid = RiverTale.MOD_ID)
 public class VisCommand {
     private static final Map<UUID, EnumSet<VisMode>> ENABLED_MODES = new HashMap<>();
-    private static final Map<UUID, RegionPos> LAST_REGION = new HashMap<>();
+    private static final int REFRESH_TICKS = 20;
+    private static final Map<UUID, Refresh> LAST_REFRESH = new HashMap<>();
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         return Commands.literal("vis")
@@ -97,16 +95,13 @@ public class VisCommand {
 
         if (modes.isEmpty()) {
             ENABLED_MODES.remove(playerId);
-            LAST_REGION.remove(playerId);
-        }
-
-        if (!modes.isEmpty() && !LAST_REGION.containsKey(playerId)) {
-            RegionPos center = new RegionPos(player.blockPosition());
-            LAST_REGION.put(playerId, center);
-            sendRegions(player, center);
+            LAST_REFRESH.remove(playerId);
         }
 
         sendUpdate(player);
+        if (!modes.isEmpty() && !LAST_REFRESH.containsKey(playerId)) {
+            sendRegions(player, new RegionPos(player.blockPosition()), player.serverLevel().getServer().getTickCount());
+        }
         return 1;
     }
 
@@ -115,9 +110,7 @@ public class VisCommand {
         ENABLED_MODES.put(id, EnumSet.allOf(VisMode.class));
         sendUpdate(player);
 
-        RegionPos center = new RegionPos(player.blockPosition());
-        LAST_REGION.put(id, center);
-        sendRegions(player, center);
+        sendRegions(player, new RegionPos(player.blockPosition()), player.serverLevel().getServer().getTickCount());
 
         player.sendSystemMessage(Component.literal("All visualizations enabled.")
             .withStyle(ChatFormatting.GREEN));
@@ -126,7 +119,7 @@ public class VisCommand {
     private static void disableAll(ServerPlayer player) {
         UUID id = player.getUUID();
         ENABLED_MODES.remove(id);
-        LAST_REGION.remove(id);
+        LAST_REFRESH.remove(id);
         sendUpdate(player);
 
         player.sendSystemMessage(Component.literal("All visualizations disabled.")
@@ -139,23 +132,14 @@ public class VisCommand {
         Network.sendToPlayer(new TogglePacket(modes, seaLevel), player);
     }
 
-    private static void sendRegions(ServerPlayer player, RegionPos center) {
-        Set<RegionPos> loadedRegions = new HashSet<>();
-
-        loadedRegions.add(center);
-
-        for (FlowDirection dir : FlowDirection.D8) {
-            RegionPos neighbor = center.relative(dir);
-            loadedRegions.add(neighbor);
-        }
-
-        WatershedPreview.Result prepared = WatershedPreview.prepare(center, loadedRegions);
-        List<Watershed> watersheds = prepared.watersheds();
-        WatershedCache.init();
-        WatershedCache.get().replace(watersheds);
-        for (RegionPos pos : loadedRegions) {
-            Region.Packet packet = new Region.Packet(prepared.encode(pos));
-            Network.sendToPlayer(packet, player);
+    private static void sendRegions(ServerPlayer player, RegionPos center, int tick) {
+        LAST_REFRESH.put(player.getUUID(), new Refresh(center, tick));
+        RandomState state = player.serverLevel().getChunkSource().randomState();
+        for (RegionPos pos : center.neighborhood()) {
+            RiverRegion region = RiverShaping.getReady(pos, state);
+            if (region != null) {
+                Network.sendToPlayer(new Region.Packet(region.encode()), player);
+            }
         }
     }
 
@@ -172,7 +156,7 @@ public class VisCommand {
 
         UUID id = player.getUUID();
         ENABLED_MODES.remove(id);
-        LAST_REGION.remove(id);
+        LAST_REFRESH.remove(id);
     }
 
     @SubscribeEvent
@@ -185,7 +169,7 @@ public class VisCommand {
         if (ENABLED_MODES.remove(id) == null) {
             return;
         }
-        LAST_REGION.remove(id);
+        LAST_REFRESH.remove(id);
         sendUpdate(player);
     }
 
@@ -198,11 +182,8 @@ public class VisCommand {
             return;
         }
 
-        var server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null) {
-            return;
-        }
-
+        MinecraftServer server = event.getServer();
+        int tick = server.getTickCount();
         for (UUID id : new HashSet<>(ENABLED_MODES.keySet())) {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             if (player == null) {
@@ -211,19 +192,20 @@ public class VisCommand {
 
             if (!RiverShaping.isActive(player.serverLevel().getChunkSource().randomState())) {
                 ENABLED_MODES.remove(id);
-                LAST_REGION.remove(id);
+                LAST_REFRESH.remove(id);
                 sendUpdate(player);
                 continue;
             }
 
             RegionPos current = new RegionPos(player.blockPosition());
-            RegionPos last = LAST_REGION.get(id);
-
-            if (last == null || !current.equals(last)) {
-                LAST_REGION.put(id, current);
-                sendRegions(player, current);
+            Refresh last = LAST_REFRESH.get(id);
+            if (last == null || !current.equals(last.center()) || tick - last.tick() >= REFRESH_TICKS) {
+                sendRegions(player, current, tick);
             }
         }
+    }
+
+    private record Refresh(RegionPos center, int tick) {
     }
 
     public static class TogglePacket extends Message {

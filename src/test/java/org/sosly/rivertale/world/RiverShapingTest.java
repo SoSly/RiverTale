@@ -8,23 +8,27 @@ import net.minecraft.world.level.levelgen.RandomState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.config.CacheConfig;
 import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.core.FlowDirection;
+import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.DensityField;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.density.SampleProvider;
+import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
+import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.region.RegionTypeCache;
+import org.sosly.rivertale.river.RiverRegion;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,7 +44,7 @@ class RiverShapingTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         RiverShaping.shutdown();
         SampleCache.shutdown();
         CellCache.shutdown();
@@ -49,12 +53,16 @@ class RiverShapingTest {
         provider = new TestSampleProvider();
         SampleCache.init(provider);
         CellCache.init();
+        RegionTypeCache.init();
+        RegionCache.init();
         overworldState = mock(RandomState.class);
     }
 
     @AfterEach
     void tearDown() {
         RiverShaping.shutdown();
+        RegionCache.shutdown();
+        RegionTypeCache.shutdown();
         CellCache.shutdown();
         SampleCache.shutdown();
         CommonConfig.set(originalConfig);
@@ -89,20 +97,32 @@ class RiverShapingTest {
     }
 
     @Test
-    void activeInlandChunkClassifiesOnlyItsCellWithoutRegionDiscovery() {
+    void activeInlandChunkBuildsRiverDataThatSurvivesTerrainCacheEviction() {
         RiverShaping.init(78, overworldState);
+        assertNull(RiverShaping.getReady(CENTER.getRegion(), overworldState));
 
         RiverShaping.shape(chunkAt(CENTER), overworldState);
 
-        Cell classified = CellCache.get().getIfPresent(CENTER);
-        assertEquals(Feature.SNOWMELT, classified.feature());
-        assertEquals(180, classified.averageEstimatedTerrainHeight());
+        RiverRegion ready = RiverShaping.getReady(CENTER.getRegion(), overworldState);
+        assertNotNull(ready);
+        assertEquals(Feature.SNOWMELT, ready.cells().get(CENTER).feature());
+        assertEquals(180, ready.cells().get(CENTER).height());
         assertEquals(78, RiverShaping.getSeaLevel());
-        for (FlowDirection direction : FlowDirection.D8) {
-            Cell neighbor = CellCache.get().getIfPresent(CENTER.relative(direction));
-            assertEquals(Feature.NONE, neighbor.feature());
+        RegionCache terrain = RegionCache.get();
+        RegionPos pos = CENTER.getRegion();
+        Region beforeEviction = terrain.getOrCompute(pos);
+        for (int i = 1; i <= CacheConfig.DEFAULT.regions(); i++) {
+            terrain.put(new Region(new RegionPos(pos.x() + i, pos.z()), RegionType.INLAND));
         }
-        assertTrue(provider.requested.stream().allMatch(pos -> Math.abs(pos.x - CENTER.x()) <= 2 && Math.abs(pos.z - CENTER.z()) <= 2));
+        assertNotSame(beforeEviction, terrain.getOrCompute(pos));
+        CellCache.get().clear();
+        SampleCache.get().clear();
+        provider.requested.clear();
+
+        RiverShaping.shape(chunkAt(CENTER), overworldState);
+
+        assertTrue(provider.requested.isEmpty());
+        assertSame(ready, RiverShaping.getReady(CENTER.getRegion(), overworldState));
     }
 
     @Test
@@ -112,10 +132,11 @@ class RiverShapingTest {
 
         RiverShaping.shape(chunkAt(CENTER), overworldState);
 
-        Cell cell = CellCache.get().getIfPresent(CENTER);
-        assertTrue(cell.isOcean());
-        assertEquals(Feature.NONE, cell.feature());
-        assertTrue(cell.flowDirections().isEmpty());
+        RiverRegion ready = RiverShaping.getReady(CENTER.getRegion(), overworldState);
+        assertNotNull(ready);
+        assertEquals(Feature.NONE, ready.cells().get(CENTER).feature());
+        assertTrue(ready.flowlines().isEmpty());
+        assertTrue(ready.watersheds().isEmpty());
     }
 
     @Test

@@ -26,21 +26,18 @@ public final class RiverPreparation {
         this.graph = graph;
     }
 
-    public static PreparedRiverData prepare(RegionPos center, Set<RegionPos> visible, boolean local) {
-        return prepare(center, visible, local, graph());
+    public static PreparedRiverData prepare(Set<RegionPos> roots) {
+        return prepare(roots, graph());
     }
 
-    static PreparedRiverData prepare(RegionPos center, Set<RegionPos> visible, boolean local, RiverGraph graph) {
+    static PreparedRiverData prepare(Set<RegionPos> roots, RiverGraph graph) {
         Timer.Record timer = Store.getTimer(RiverPreparation.class, "prepare").start();
         try {
             RiverPreparation preparation = new RiverPreparation(graph);
-            for (RegionPos pos : visible) {
+            for (RegionPos pos : roots) {
                 graph.region(pos).cells().forEach(graph::cell);
             }
-            if (!local) {
-                preparation.prepareConnected(preparation.prepareUpstreamRegions(center));
-            }
-            preparation.prepareSources(visible);
+            preparation.prepareConnected(preparation.prepareUpstreamRegions(roots));
             return graph.finish();
         } finally {
             timer.stop();
@@ -54,11 +51,9 @@ public final class RiverPreparation {
             config.fallbackApproachCells(), config.awayStepAllowance());
     }
 
-    private Set<RegionPos> prepareUpstreamRegions(RegionPos center) {
-        Set<RegionPos> found = new HashSet<>();
-        ArrayDeque<RegionPos> pending = new ArrayDeque<>();
-        found.add(center);
-        pending.add(center);
+    private Set<RegionPos> prepareUpstreamRegions(Set<RegionPos> roots) {
+        Set<RegionPos> found = new HashSet<>(roots);
+        ArrayDeque<RegionPos> pending = new ArrayDeque<>(roots);
         UpstreamSearch search = new UpstreamSearch(graph);
         while (!pending.isEmpty()) {
             RegionPos pos = pending.remove();

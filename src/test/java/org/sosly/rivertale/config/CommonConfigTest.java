@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommonConfigTest {
     private CommonConfig original;
@@ -29,7 +28,6 @@ class CommonConfigTest {
         load("""
             fallbackApproachCells = 2
             awayStepAllowance = 3
-            localRiverPreview = true
             [sources]
             snowmeltMinHeight = 210
             snowmeltMaxTemperature = -0.1
@@ -50,7 +48,6 @@ class CommonConfigTest {
         CommonConfig config = CommonConfig.get();
         assertEquals(2, config.fallbackApproachCells());
         assertEquals(3, config.awayStepAllowance());
-        assertTrue(config.localRiverPreview());
         assertEquals(new SourceConfig(210, -0.1, 130, 0.7, 0.6, 0.15, 140, 0.35, 0.25), config.sources());
         assertEquals(new CacheConfig(2000, 200, 20, 30, 40), config.caches());
     }
@@ -77,7 +74,7 @@ class CommonConfigTest {
         assertThrows(IllegalArgumentException.class, () -> new SourceConfig(175, Double.NaN, 113, 0.5, 0.4, 0.3, 100, 0.2, 0.05));
         assertThrows(IllegalArgumentException.class, () -> new SourceConfig(175, 0.2, 113, 0.5, 0.4, 0.3, 100, 0.2, 1.1));
         assertThrows(IllegalArgumentException.class, () -> new CommonConfig(8, 1, 1, false, false, 16,
-            5, Integer.MAX_VALUE, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+            5, Integer.MAX_VALUE, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
     }
 
     private void load(String toml) {

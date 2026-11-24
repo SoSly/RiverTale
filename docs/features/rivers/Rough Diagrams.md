@@ -5,7 +5,7 @@ flowchart TD
 	classDef planned stroke-dasharray: 5 5
 
 	subgraph "Entry Points"
-		BP[Background Preparation]:::planned
+		BP[Background Preparation]
 		CG[Chunk Generation]
 	end
 
@@ -34,7 +34,8 @@ flowchart TD
 		W3 --> W4[Spline Building]:::planned
 	end
 
-	WC[(WatershedCache)]
+	WC[(RiverRegionCache)]
+	Vis[Read-only /vis]
 
 	subgraph "Apply to Chunk"
 		C1[Terrain Shaping]:::planned --> C2[Biome Assignment]:::planned
@@ -45,8 +46,9 @@ flowchart TD
 	CG -->|region not finished| B1
 	B1 --> R1
 	B3 --> W1
-	W4 --> WC
+	B3 --> WC
 	CG -->|region finished| WC
+	WC --> Vis
 	WC --> C1
 
 	R1 -.-> RC
@@ -61,34 +63,20 @@ flowchart TD
 
 ### Background Preparation
 
-Background Preparation is the normal path. It builds the 3×3 around each player before chunk generation needs it. A player's own region, with all of its contributing regions, takes priority over any other player's 3×3.
+Background preparation starts when a player logs in or changes regions in the active RTF overworld. It builds the missing regions in the player's 3×3, following any dependencies needed to complete the watersheds touching them.
 
 ```mermaid
 sequenceDiagram
     participant Player
     participant BP as Background Preparation
-    participant Queue as Build Queue
+    participant Cache as RiverRegionCache
     participant Build as Region Build
-    participant WatershedCache
-
-    Note over Player,WatershedCache: Not yet built
 
     Player ->> BP: enters a different region (or logs in)
-    loop Each region in the 3×3 that isn't finished
-        BP ->> Queue: enqueue build job
-    end
-
-    alt Teleported out of previous region, changed dimension, or disconnected
-        BP ->> Queue: release this player's jobs
-    end
-
-    loop While jobs are in scope
-        Queue ->> Queue: rank: player's region first, then rest of 3×3, then FIFO
-        Queue ->>+ Build: build highest-priority region
-        Build ->> Build: build region and contributing regions
-        Build ->> WatershedCache: store watersheds
-        Build -->>- Queue: done
-    end
+    BP ->> Cache: queue the 3×3
+    Cache ->> Cache: claim regions that are not ready or already building
+    Cache ->>+ Build: build the claimed regions and follow dependencies
+    Build -->>- Cache: publish completed flowlines and watersheds
 ```
 
 ### Chunk Generation
@@ -99,35 +87,26 @@ Chunk Generation runs when Minecraft fills a chunk's noise. Building on the chun
 sequenceDiagram
     participant Minecraft
     participant RiverShaping
+    participant Cache as RiverRegionCache
     participant Build as Region Build
-    participant WatershedCache
-    participant ChunkAccess
-
-    Note over Minecraft,ChunkAccess: Not yet built. Today, shape() only preclassifies the chunk's cell.
 
     Minecraft ->>+ RiverShaping: shape chunk
-
-    alt Region finished
-        RiverShaping ->> WatershedCache: look up watersheds
-    else Region being built by Background Preparation
-        RiverShaping ->> Build: wait for that build
-        Build -->> RiverShaping: done
-        RiverShaping ->> WatershedCache: look up watersheds
+    RiverShaping ->>+ Cache: request the chunk's region
+    alt Region ready
+        Cache ->> Cache: look up finished data
+    else Region building
+        Cache ->> Cache: wait for that region's build
     else No build in progress
-        RiverShaping ->>+ Build: build region on this thread
-        Build ->> WatershedCache: store watersheds
-        Build -->>- RiverShaping: done
-        RiverShaping ->> WatershedCache: look up watersheds
+        Cache ->>+ Build: build region on the chunk generation thread
+        Build -->>- Cache: publish finished data
     end
-
-    WatershedCache -->> RiverShaping: watersheds
-
-    RiverShaping ->> ChunkAccess: Terrain Shaping
-    RiverShaping ->> ChunkAccess: Biome Assignment
-    RiverShaping ->> ChunkAccess: Water Placement
-
-    RiverShaping -->>- Minecraft: done
+    Cache -->>- RiverShaping: flowlines and watersheds
+    RiverShaping -->>- Minecraft: done (no terrain changes yet)
 ```
+
+### Visualization
+
+`/vis` does not build river data. It sends whichever regions in the player's 3×3 are ready, immediately on enable or region entry and every 20 server ticks while enabled.
 
 ## Region Build
 
@@ -141,10 +120,10 @@ sequenceDiagram
     participant FlowlineTracer
     participant WatershedBuilder
     participant Watershed
-    participant WatershedCache
+    participant RiverRegionCache
 
     Note over Build,RiverGraph: River Preparation
-    Build ->>+ RiverGraph: prepare target region
+    Build ->>+ RiverGraph: prepare target regions
     loop Each region reached by the upstream search
         RiverGraph ->> RegionCache: get region (triggers preclassification and boundaries)
         RiverGraph ->> RiverGraph: routing, legal steps, predecessors, sources
@@ -161,8 +140,9 @@ sequenceDiagram
     Note over Build,WatershedBuilder: Watershed Building
     Build ->>+ WatershedBuilder: build from flowlines
     WatershedBuilder -->>- Build: one watershed per outlet
+    Build ->> RiverRegionCache: publish ready regions
 
-    Note over Build,Watershed: Per Watershed (not yet built)
+    Note over Build,Watershed: Later steps (not yet built)
     loop Each watershed
         Build ->> Watershed: validate
         Build ->> Watershed: assign elevations
@@ -170,8 +150,6 @@ sequenceDiagram
         Build ->> Watershed: classify features
         Build ->> Watershed: build splines (triggers waypoint calculation)
     end
-
-    Build ->> WatershedCache: store watersheds
 ```
 
 ## Lazy Services
@@ -450,7 +428,7 @@ sequenceDiagram
     participant Build as Region Build
     participant WatershedBuilder
     participant Watershed
-    participant WatershedCache
+    participant RiverRegionCache
 
     Build ->>+ WatershedBuilder: build from flowlines
 
@@ -468,7 +446,7 @@ sequenceDiagram
 
     WatershedBuilder -->>- Build: watersheds
 
-    Build ->> WatershedCache: store watersheds
+    Build ->> RiverRegionCache: store finished river data
 ```
 
 ## Per Watershed
@@ -644,14 +622,14 @@ Terrain Shaping modifies chunk terrain to carve river channels based on watershe
 ```mermaid
 sequenceDiagram
     participant RiverShaping
-    participant WatershedCache
+    participant RiverRegionCache
     participant FeatureHandler
     participant Watershed
     participant ChunkAccess
 
     Note over RiverShaping,ChunkAccess: Not yet built
 
-    RiverShaping ->> WatershedCache: find river cells within influence radius
+    RiverShaping ->> RiverRegionCache: find river cells within influence radius
 
     loop Each contributing cell
         RiverShaping ->> FeatureHandler: get Shape opinions for chunk

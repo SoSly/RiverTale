@@ -29,7 +29,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 /**
- * Fakes the providers beneath {@link RiverPreparation#prepare(RegionPos, Set, boolean)} so tests build prepared
+ * Fakes the providers beneath {@link RiverPreparation#prepare(Set)} so tests build prepared
  * river data through the production entry point. Regions come from {@link RegionCache}, working sets from
  * {@link RegionExplorer#discover(BlockPos)} and cells from {@link RiverShaping#preclassify(CellPos)}. Other
  * {@link RiverShaping} calls run for real unless a sea level is set. Source cells keep their flow and height but
@@ -84,7 +84,7 @@ final class RiverWorld implements AutoCloseable {
     static void configureRouting(int fallback, int away) {
         CommonConfig c = CommonConfig.get();
         CommonConfig.set(new CommonConfig(c.regionSize(), c.cellSize(), c.samplesPerCell(), c.enableMetrics(),
-            c.enableNudging(), c.nudgingLimit(), fallback, away, c.sources(), c.caches(), c.localRiverPreview()));
+            c.enableNudging(), c.nudgingLimit(), fallback, away, c.sources(), c.caches()));
     }
 
     RiverWorld regions(Collection<Region> values) {
@@ -113,7 +113,7 @@ final class RiverWorld implements AutoCloseable {
         Set<RegionPos> visible = new LinkedHashSet<>(regions.keySet());
         visible.add(center);
         sources.forEach(pos -> visible.add(pos.getRegion()));
-        return new FlowlineTracer(RiverPreparation.prepare(center, visible, false));
+        return new FlowlineTracer(RiverPreparation.prepare(visible));
     }
 
     @Override

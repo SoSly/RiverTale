@@ -61,7 +61,7 @@ class RegionExplorerTest {
     @BeforeEach
     void setUp() {
         Store.clear();
-        CommonConfig.set(new CommonConfig(8, 2, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(8, 2, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
 
         cellCacheStatic = mockStatic(CellCache.class);
         regionCacheStatic = mockStatic(RegionCache.class);
@@ -475,7 +475,7 @@ class RegionExplorerTest {
                 return cell;
             });
             RegionPos region = source.getRegion();
-            return new FlowlineTracer(RiverPreparation.prepare(region, Set.of(region), false)).trace(source);
+            return new FlowlineTracer(RiverPreparation.prepare(Set.of(region))).trace(source);
         }
     }
 

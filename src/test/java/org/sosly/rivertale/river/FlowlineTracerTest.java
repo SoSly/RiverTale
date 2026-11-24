@@ -43,7 +43,7 @@ class FlowlineTracerTest {
     void setUp() {
         originalConfig = CommonConfig.get();
         Store.clear();
-        CommonConfig.set(new CommonConfig(8, 1, 1, false, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         world = new RiverWorld();
     }
 
@@ -363,7 +363,7 @@ class FlowlineTracerTest {
     @Test
     void longRoutesHaveNoSearchBudgetOrRecursiveStackLimit() {
         CommonConfig.set(new CommonConfig(64, 1, 1, false, false, 16,
-            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         CellPos source = new CellPos(0, 0);
         CellPos terminus = new CellPos(64, 0);
         List<CellPos> expected = new ArrayList<>();
@@ -518,7 +518,7 @@ class FlowlineTracerTest {
         assertEquals(steps, Store.getDistribution(FlowlineTracer.class, "uphillNudgeBlocks").snapshot());
         CommonConfig config = CommonConfig.get();
         CommonConfig.set(new CommonConfig(config.regionSize(), config.cellSize(), config.samplesPerCell(),
-            false, config.enableNudging(), config.nudgingLimit(), config.fallbackApproachCells(), config.awayStepAllowance(), config.sources(), config.caches(), config.localRiverPreview()));
+            false, config.enableNudging(), config.nudgingLimit(), config.fallbackApproachCells(), config.awayStepAllowance(), config.sources(), config.caches()));
         Store.clear();
 
         assertEquals(path, searchTracer(terminus, source).trace(source));
@@ -661,7 +661,7 @@ class FlowlineTracerTest {
     private Flowline nudgedClimb(int sourceHeight, int nextHeight, int limit) {
         CommonConfig config = CommonConfig.get();
         CommonConfig.set(new CommonConfig(config.regionSize(), config.cellSize(), config.samplesPerCell(),
-            config.enableMetrics(), true, limit, config.fallbackApproachCells(), config.awayStepAllowance(), config.sources(), config.caches(), config.localRiverPreview()));
+            config.enableMetrics(), true, limit, config.fallbackApproachCells(), config.awayStepAllowance(), config.sources(), config.caches()));
         CellPos source = new CellPos(1, 2);
         cells.put(source, cellAtHeight(sourceHeight, List.of(FlowDirection.NORTH)));
         cells.put(new CellPos(2, 1), cellAtHeight(nextHeight, List.of(FlowDirection.EAST)));
@@ -702,10 +702,10 @@ class FlowlineTracerTest {
     private void setNudging(boolean enabled) {
         CommonConfig config = CommonConfig.get();
         CommonConfig.set(new CommonConfig(config.regionSize(), config.cellSize(), config.samplesPerCell(),
-            config.enableMetrics(), enabled, config.nudgingLimit(), config.fallbackApproachCells(), config.awayStepAllowance(), config.sources(), config.caches(), config.localRiverPreview()));
+            config.enableMetrics(), enabled, config.nudgingLimit(), config.fallbackApproachCells(), config.awayStepAllowance(), config.sources(), config.caches()));
     }
     private void enableMetrics() {
-        CommonConfig.set(new CommonConfig(8, 1, 1, true, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, true, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
     }
 
     private void assertRatio(String name, long successes, long attempts) {

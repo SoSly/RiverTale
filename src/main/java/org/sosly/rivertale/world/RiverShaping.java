@@ -6,53 +6,73 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
-import org.sosly.rivertale.metric.Store;
-import org.sosly.rivertale.metric.Timer;
+import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.river.RiverRegion;
+import org.sosly.rivertale.river.RiverRegionCache;
 
 public class RiverShaping {
-    private static int seaLevel = 63;
-    private static volatile RandomState randomState;
+    private static volatile ActiveWorld world;
 
     private RiverShaping() {}
 
     public static void init(int waterLevel, RandomState state) {
-        seaLevel = waterLevel;
-        randomState = state;
+        world = new ActiveWorld(state, waterLevel, new RiverRegionCache());
     }
 
     public static void shutdown() {
-        randomState = null;
-        seaLevel = 63;
+        ActiveWorld active = world;
+        if (active != null) {
+            active.rivers().shutdown();
+            world = null;
+        }
     }
 
     public static boolean isActive(RandomState state) {
-        return state != null && state == randomState;
+        return activeWorld(state) != null;
     }
 
     public static int getSeaLevel() {
-        return seaLevel;
+        ActiveWorld active = world;
+        return active == null ? 63 : active.seaLevel();
     }
 
     public static RandomState getRandomState() {
-        return randomState;
+        ActiveWorld active = world;
+        return active == null ? null : active.state();
+    }
+
+    private static ActiveWorld activeWorld(RandomState state) {
+        ActiveWorld active = world;
+        if (state == null || active == null || state != active.state()) {
+            return null;
+        }
+        return active;
     }
 
     public static void shape(ChunkAccess chunk, RandomState state) {
-        if (!isActive(state)) {
+        ActiveWorld active = activeWorld(state);
+        if (active == null) {
             return;
         }
 
-        CellPos pos = new CellPos(chunk.getPos().getMiddleBlockPosition(0));
-        if (pos.getRegion().containsOutOfBoundsCells()) {
+        RegionPos pos = new RegionPos(chunk.getPos().getMiddleBlockPosition(0));
+        if (pos.containsOutOfBoundsCells()) {
             return;
         }
 
-        Timer.Record timer = Store.getTimer(RiverShaping.class, "shape").start();
-        try {
-            preclassify(pos);
-        } finally {
-            timer.stop();
+        active.rivers().getOrBuild(pos);
+    }
+
+    public static void prepareNearby(RegionPos center, RandomState state) {
+        ActiveWorld active = activeWorld(state);
+        if (active != null) {
+            active.rivers().prepareNearby(center);
         }
+    }
+
+    public static RiverRegion getReady(RegionPos pos, RandomState state) {
+        ActiveWorld active = activeWorld(state);
+        return active == null ? null : active.rivers().getReady(pos);
     }
 
     public static Cell preclassify(CellPos pos) {
@@ -65,5 +85,8 @@ public class RiverShaping {
         Cell classified = Feature.classify(cell, null);
         cache.put(classified);
         return classified;
+    }
+
+    private record ActiveWorld(RandomState state, int seaLevel, RiverRegionCache rivers) {
     }
 }

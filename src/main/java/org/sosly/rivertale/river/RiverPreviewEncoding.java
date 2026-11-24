@@ -1,8 +1,8 @@
 package org.sosly.rivertale.river;
 
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -15,9 +15,9 @@ import org.sosly.rivertale.river.PreparedRiverData.CellData;
 final class RiverPreviewEncoding {
     private RiverPreviewEncoding() {}
 
-    static CompoundTag encode(PreparedRiverData data, RegionPos pos, List<Flowline> paths,
-                              Collection<Watershed> watersheds) {
-        Region region = data.region(pos);
+    static CompoundTag encode(RiverRegion data) {
+        Region region = data.region();
+        RegionPos pos = region.pos();
         CompoundTag tag = new CompoundTag();
         tag.putLong("pos", pos.toLong());
         tag.putString("type", region.type().name());
@@ -28,7 +28,7 @@ final class RiverPreviewEncoding {
         tag.put("boundaries", boundaries);
         ListTag cells = new ListTag();
         for (CellPos cellPos : region.cells()) {
-            CellData cell = data.cell(cellPos);
+            CellData cell = data.cells().get(cellPos);
             CompoundTag entry = new CompoundTag();
             entry.putLong("pos", cellPos.toLong());
             entry.putString("feature", cell.feature().name());
@@ -36,13 +36,13 @@ final class RiverPreviewEncoding {
             cells.add(entry);
         }
         tag.put("cells", cells);
-        Set<CellPos> merged = encodeWatersheds(tag, data, watersheds);
-        tag.put("paths", encodePaths(data, paths, merged));
+        Set<CellPos> merged = encodeWatersheds(tag, data.cells(), data.watersheds());
+        tag.put("paths", encodePaths(data.cells(), data.flowlines(), merged));
         return tag;
     }
 
-    private static Set<CellPos> encodeWatersheds(CompoundTag tag, PreparedRiverData data,
-                                                Collection<Watershed> watersheds) {
+    private static Set<CellPos> encodeWatersheds(CompoundTag tag, Map<CellPos, CellData> cells,
+                                                List<Watershed> watersheds) {
         ListTag edges = new ListTag();
         ListTag outlets = new ListTag();
         Set<CellPos> merged = new HashSet<>();
@@ -53,14 +53,14 @@ final class RiverPreviewEncoding {
                 CompoundTag entry = new CompoundTag();
                 if (to == null) {
                     entry.putLong("pos", from.toLong());
-                    entry.putInt("y", data.cell(from).height());
+                    entry.putInt("y", cells.get(from).height());
                     outlets.add(entry);
                     continue;
                 }
                 entry.putLong("from", from.toLong());
                 entry.putLong("to", to.toLong());
-                entry.putInt("fromY", data.cell(from).height());
-                entry.putInt("toY", data.cell(to).height());
+                entry.putInt("fromY", cells.get(from).height());
+                entry.putInt("toY", cells.get(to).height());
                 edges.add(entry);
             }
         }
@@ -69,7 +69,7 @@ final class RiverPreviewEncoding {
         return merged;
     }
 
-    private static ListTag encodePaths(PreparedRiverData data, List<Flowline> paths, Set<CellPos> merged) {
+    private static ListTag encodePaths(Map<CellPos, CellData> cells, List<Flowline> paths, Set<CellPos> merged) {
         ListTag result = new ListTag();
         for (Flowline path : paths) {
             if (!path.isValid() || (!path.cells().isEmpty() && merged.contains(path.cells().get(0)))) {
@@ -80,7 +80,7 @@ final class RiverPreviewEncoding {
             for (int i = 0; i < positions.length; i++) {
                 CellPos pos = path.cells().get(i);
                 positions[i] = pos.toLong();
-                heights[i] = data.cell(pos).height();
+                heights[i] = cells.get(pos).height();
             }
             CompoundTag entry = new CompoundTag();
             entry.putLongArray("cells", positions);

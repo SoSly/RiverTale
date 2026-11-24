@@ -10,12 +10,17 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Duration;
+import java.util.concurrent.locks.LockSupport;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.PositionalRandomFactory;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.server.level.ServerPlayer;
@@ -23,6 +28,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.network.NetworkRegistry;
 import org.sosly.rivertale.cell.CellCache;
@@ -40,6 +46,7 @@ import org.sosly.rivertale.density.DensityField;
 import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.density.SampleProvider;
+import org.sosly.rivertale.event.ServerLifecycleHandler;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionTypeCache;
@@ -50,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -61,13 +69,13 @@ import static org.mockito.Mockito.when;
 class FlowlinePreviewTest {
     private CommonConfig originalConfig;
     private final CellPos source = new CellPos(1, 2);
+    private RandomState randomState;
 
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         RiverShaping.shutdown();
-        WatershedCache.shutdown();
         RegionCache.shutdown();
         RegionTypeCache.shutdown();
         CellCache.shutdown();
@@ -77,7 +85,7 @@ class FlowlinePreviewTest {
         RegionTypeCache.init();
         RegionCache.init();
         // Crater classification draws from RiverShaping's random state; never let it pass the chance roll.
-        RandomState randomState = mock(RandomState.class);
+        randomState = mock(RandomState.class);
         PositionalRandomFactory factory = mock(PositionalRandomFactory.class);
         RandomSource neverCrater = mock(RandomSource.class);
         when(neverCrater.nextFloat()).thenReturn(1.0f);
@@ -89,7 +97,6 @@ class FlowlinePreviewTest {
     @AfterEach
     void tearDown() {
         RiverShaping.shutdown();
-        WatershedCache.shutdown();
         RegionCache.shutdown();
         RegionTypeCache.shutdown();
         CellCache.shutdown();
@@ -107,7 +114,7 @@ class FlowlinePreviewTest {
         assertTrue(path.isValid());
         assertTrue(region.boundaries().stream().anyMatch(boundary -> boundary.land().equals(path.terminus())));
         assertEquals(Feature.SNOWMELT, CellCache.get().getOrCompute(source).feature());
-        assertNull(WatershedCache.get());
+        assertNull(RiverShaping.getReady(region.pos(), randomState));
     }
 
     @Test
@@ -155,7 +162,7 @@ class FlowlinePreviewTest {
         assertEquals(cold.upstream(), warm.upstream());
         List<Watershed> warmWatersheds = WatershedBuilder.build(WatershedPreparation.gather(warm));
         assertEquals(topology(coldWatersheds), topology(warmWatersheds));
-        assertNull(WatershedCache.get());
+        assertNull(RiverShaping.getReady(region.pos(), randomState));
     }
 
     @Test
@@ -184,13 +191,17 @@ class FlowlinePreviewTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void existingVisCommandSendsMergedWatershedsAndTogglesTheWholeOverlayOff() throws Exception {
+    void stationaryVisDoesNotBuildAndSendsNewlyReadyWatershedAfterTwentyTicks() throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
         ServerPlayer player = mock(ServerPlayer.class, RETURNS_DEEP_STUBS);
         when(player.getUUID()).thenReturn(UUID.randomUUID());
         when(player.blockPosition()).thenReturn(source.getRegion().getWorldPosition(100));
         when(player.serverLevel().getChunkSource().getGenerator().getSeaLevel()).thenReturn(63);
+        when(player.serverLevel().getChunkSource().randomState()).thenReturn(randomState);
+        MinecraftServer server = player.serverLevel().getServer();
+        when(server.getPlayerList().getPlayer(player.getUUID())).thenReturn(player);
+        when(server.getTickCount()).thenReturn(5);
         CommandSourceStack commandSource = mock(CommandSourceStack.class);
         when(commandSource.getPlayer()).thenReturn(player);
         CommandContext<CommandSourceStack> context = mock(CommandContext.class);
@@ -205,6 +216,15 @@ class FlowlinePreviewTest {
             });
             assertEquals(1, VisCommand.register().build().getCommand().run(context));
             assertTrue(VisCommand.isEnabled(player));
+            assertEquals(1, messages.size());
+            assertNull(RiverShaping.getReady(source.getRegion(), randomState));
+
+            shape(source);
+            messages.clear();
+            tick(server, 24);
+            assertTrue(messages.isEmpty());
+            tick(server, 25);
+            assertEquals(1, messages.size());
             Map<CellPos, Set<CellPos>> sentLinks = new HashMap<>();
             Set<CellPos> sentOutlets = new HashSet<>();
             for (Message message : messages) {
@@ -227,9 +247,17 @@ class FlowlinePreviewTest {
             assertTrue(sentLinks.containsKey(source), "The existing vis command must send the merged source branch");
             assertTrue(sentLinks.containsKey(new CellPos(-9, 2)), "The incoming source outside the visible ring must be sent");
             assertTrue(sentLinks.values().stream().allMatch(next -> next.size() == 1));
-            Watershed watershed = WatershedCache.get().getWatershed(source);
+            Watershed watershed = RiverShaping.getReady(source.getRegion(), randomState).watershedAt(source);
             assertNotNull(watershed);
             assertTrue(sentOutlets.contains(watershed.terminus(source).orElseThrow()));
+
+            RegionPos next = new RegionPos(1, 0);
+            shape(next.getMinCell());
+            when(player.blockPosition()).thenReturn(next.getWorldPosition(100));
+            messages.clear();
+            tick(server, 26);
+            assertEquals(2, messages.size());
+            assertTrue(messages.stream().allMatch(Region.Packet.class::isInstance));
 
             messages.clear();
             VisCommand.register().build().getCommand().run(context);
@@ -248,8 +276,65 @@ class FlowlinePreviewTest {
         }
     }
 
+    @Test
+    void chunkGenerationBuildsCompleteWatershedsWithVisOff() {
+        assertNull(RiverShaping.getReady(source.getRegion(), randomState));
+
+        shape(source);
+
+        RiverRegion ready = RiverShaping.getReady(source.getRegion(), randomState);
+        assertNotNull(ready);
+        CellPos remoteSource = new CellPos(-9, 2);
+        assertTrue(ready.flowlines().stream().anyMatch(path -> path.cells().get(0).equals(remoteSource)));
+        assertTrue(ready.watershedAt(source).contains(remoteSource));
+    }
+
+    @Test
+    void loginAndRegionEntryPrepareTheNeighborhoodWithVisOff() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+        ServerPlayer player = mock(ServerPlayer.class, RETURNS_DEEP_STUBS);
+        when(player.getUUID()).thenReturn(UUID.randomUUID());
+        when(player.serverLevel().dimension()).thenReturn(Level.OVERWORLD);
+        when(player.serverLevel().getChunkSource().randomState()).thenReturn(randomState);
+        RegionPos first = source.getRegion();
+        when(player.blockPosition()).thenReturn(first.getWorldPosition(100));
+        ServerLifecycleHandler lifecycle = new ServerLifecycleHandler();
+        assertFalse(VisCommand.isEnabled(player));
+
+        lifecycle.onPlayerLogin(new PlayerEvent.PlayerLoggedInEvent(player));
+        awaitNeighborhood(first);
+        assertTrue(RiverShaping.getReady(first, randomState).watershedAt(source).contains(new CellPos(-9, 2)));
+
+        RegionPos second = new RegionPos(1, 0);
+        assertNull(RiverShaping.getReady(new RegionPos(2, 0), randomState));
+        when(player.blockPosition()).thenReturn(second.getWorldPosition(100));
+        lifecycle.onPlayerTick(new TickEvent.PlayerTickEvent(TickEvent.Phase.END, player));
+        awaitNeighborhood(second);
+    }
+
+    private void awaitNeighborhood(RegionPos center) {
+        assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+            while (center.neighborhood().stream().anyMatch(pos -> RiverShaping.getReady(pos, randomState) == null)
+                && !Thread.currentThread().isInterrupted()) {
+                LockSupport.parkNanos(1_000_000);
+            }
+        });
+    }
+
+    private void shape(CellPos cell) {
+        ChunkAccess chunk = mock(ChunkAccess.class);
+        when(chunk.getPos()).thenReturn(new ChunkPos(cell.x(), cell.z()));
+        RiverShaping.shape(chunk, randomState);
+    }
+
+    private void tick(MinecraftServer server, int tick) {
+        when(server.getTickCount()).thenReturn(tick);
+        VisCommand.onServerTick(new TickEvent.ServerTickEvent(TickEvent.Phase.END, () -> true, server));
+    }
+
     private List<Flowline> preparedPreview(Region region) {
-        PreparedRiverData data = RiverPreparation.prepare(region.pos(), Set.of(region.pos()), true);
+        PreparedRiverData data = RiverPreparation.prepare(Set.of(region.pos()));
         return SourceTrace.trace(region, new FlowlineTracer(data));
     }
 

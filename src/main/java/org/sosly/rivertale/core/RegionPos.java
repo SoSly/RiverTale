@@ -71,6 +71,15 @@ public record RegionPos(int x, int z) {
         return new RegionPos(x + dir.dx, z + dir.dz);
     }
 
+    public List<RegionPos> neighborhood() {
+        List<RegionPos> regions = new ArrayList<>(9);
+        regions.add(this);
+        for (FlowDirection direction : FlowDirection.D8) {
+            regions.add(relative(direction));
+        }
+        return regions.stream().filter(pos -> !pos.containsOutOfBoundsCells()).toList();
+    }
+
     public boolean contains(CellPos cell) {
         return cell.getRegion().equals(this);
     }

@@ -37,7 +37,7 @@ class MetricsCommandTest {
         originalConfig = CommonConfig.get();
         originalLocale = Locale.getDefault();
         Locale.setDefault(Locale.ROOT);
-        CommonConfig.set(new CommonConfig(8, 1, 1, true, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, true, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         Store.clear();
     }
 
@@ -90,7 +90,7 @@ class MetricsCommandTest {
 
     @Test
     void disabledMetricsDoNotStoreLengthSamples() {
-        CommonConfig.set(new CommonConfig(8, 1, 1, false, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         Distribution lengths = Store.getDistribution(MetricsCommandTest.class, "sampleDistribution");
         lengths.record(1234);
 

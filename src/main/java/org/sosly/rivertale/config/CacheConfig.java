@@ -29,7 +29,7 @@ public record CacheConfig(
                 .defineInRange("samples", DEFAULT.samples(), 1, Integer.MAX_VALUE);
             cells = builder.comment("Maximum cached cells.")
                 .defineInRange("cells", DEFAULT.cells(), 1, Integer.MAX_VALUE);
-            regions = builder.comment("Maximum cached regions. Eviction also removes affected cached watersheds.")
+            regions = builder.comment("Maximum cached terrain regions. Finished river data is retained separately.")
                 .defineInRange("regions", DEFAULT.regions(), 1, Integer.MAX_VALUE);
             regionTypes = builder.comment("Maximum cached region classifications.")
                 .defineInRange("regionTypes", DEFAULT.regionTypes(), 1, Integer.MAX_VALUE);

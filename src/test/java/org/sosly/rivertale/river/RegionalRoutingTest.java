@@ -43,7 +43,7 @@ class RegionalRoutingTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(8, 1, 1, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+        CommonConfig.set(new CommonConfig(8, 1, 1, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         Store.clear();
         world = new RiverWorld();
     }

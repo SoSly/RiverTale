@@ -171,7 +171,7 @@ class RegionTransitionTest {
 
     private void configure(boolean nudging) {
         CommonConfig.set(new CommonConfig(8, 1, 1, false, nudging, 12,
-            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
     }
 
     private Region region(CellPos terminus, RegionType type) {

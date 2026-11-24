@@ -43,7 +43,7 @@ class CellCacheTest {
 
     private Set<ChunkPos> samplesFor(int samplesPerCell) {
         CommonConfig.set(new CommonConfig(8, CELL_SIZE, samplesPerCell, false, false, 16, 5, 10,
-            SourceConfig.DEFAULT, CacheConfig.DEFAULT, false));
+            SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         CellCache.shutdown();
         CellCache.init();
         return CellCache.get().getOrCompute(POS).samplePositions();

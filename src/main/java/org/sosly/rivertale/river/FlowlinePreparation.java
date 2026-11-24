@@ -28,14 +28,18 @@ public final class FlowlinePreparation {
     }
 
     public static Result prepare(Region region) {
-        return prepare(region, new FlowlineTracer(RiverPreparation.prepare(region.pos(), Set.of(region.pos()), false)));
+        return prepare(region, new FlowlineTracer(RiverPreparation.prepare(Set.of(region.pos()))));
     }
 
     static Result prepare(Region region, FlowlineTracer tracer) {
+        return prepare(Set.of(region.pos()), tracer);
+    }
+
+    static Result prepare(Set<RegionPos> roots, FlowlineTracer tracer) {
         Timer.Record timer = Store.getTimer(FlowlinePreparation.class, "prepare").start();
         try {
             FlowlinePreparation preparation = new FlowlinePreparation(tracer);
-            preparation.include(region.pos());
+            roots.stream().sorted(FlowlinePreparation::compare).forEach(preparation::include);
             preparation.discover();
             Store.getDistribution(FlowlinePreparation.class, "upstreamRegions").record(preparation.upstream.size());
             Store.getDistribution(FlowlinePreparation.class, "examinedRegions").record(preparation.search.regionCount());

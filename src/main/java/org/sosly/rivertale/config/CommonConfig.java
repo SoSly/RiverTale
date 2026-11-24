@@ -13,8 +13,7 @@ public record CommonConfig(
     int fallbackApproachCells,
     int awayStepAllowance,
     SourceConfig sources,
-    CacheConfig caches,
-    boolean localRiverPreview
+    CacheConfig caches
 ) {
     private static final int DEFAULT_REGION_SIZE = 24;
     private static final int DEFAULT_CELL_SIZE = 4;
@@ -24,12 +23,11 @@ public record CommonConfig(
     private static final int DEFAULT_NUDGING_LIMIT = 16;
     private static final int DEFAULT_FALLBACK_APPROACH_CELLS = 5;
     private static final int DEFAULT_AWAY_STEP_ALLOWANCE = 1;
-    private static final boolean DEFAULT_LOCAL_RIVER_PREVIEW = false;
 
     private static CommonConfig instance = new CommonConfig(
         DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_SAMPLES_PER_CELL,
         DEFAULT_ENABLE_METRICS, DEFAULT_ENABLE_NUDGING, DEFAULT_NUDGING_LIMIT, DEFAULT_FALLBACK_APPROACH_CELLS,
-        DEFAULT_AWAY_STEP_ALLOWANCE, SourceConfig.DEFAULT, CacheConfig.DEFAULT, DEFAULT_LOCAL_RIVER_PREVIEW);
+        DEFAULT_AWAY_STEP_ALLOWANCE, SourceConfig.DEFAULT, CacheConfig.DEFAULT);
 
 
     public CommonConfig {
@@ -82,7 +80,6 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue NUDGING_LIMIT;
         public static final ForgeConfigSpec.IntValue FALLBACK_APPROACH_CELLS;
         public static final ForgeConfigSpec.IntValue AWAY_STEP_ALLOWANCE;
-        public static final ForgeConfigSpec.BooleanValue LOCAL_RIVER_PREVIEW;
         private static final SourceConfig.Spec SOURCES;
         private static final CacheConfig.Spec CACHES;
 
@@ -106,7 +103,7 @@ public record CommonConfig(
                 .define("enableMetrics", DEFAULT_ENABLE_METRICS);
 
             ENABLE_NUDGING = builder
-                .comment("Allow river path previews to rotate downhill directions toward their destination. Nudged steps may go uphill.")
+                .comment("Allow river paths to rotate downhill directions toward their destination. Nudged steps may go uphill.")
                 .define("enableNudging", DEFAULT_ENABLE_NUDGING);
 
             NUDGING_LIMIT = builder
@@ -120,10 +117,6 @@ public record CommonConfig(
             AWAY_STEP_ALLOWANCE = builder
                 .comment("Maximum consecutive downhill steps that move farther from or equally far from the selected destination. A closer step resets the count. Zero requires every step to get closer. Forward tracing and upstream discovery share this limit.")
                 .defineInRange("awayStepAllowance", DEFAULT_AWAY_STEP_ALLOWANCE, 0, Integer.MAX_VALUE - 1);
-
-            LOCAL_RIVER_PREVIEW = builder
-                .comment("Diagnostic: trace sources only in the nine visible regions for /rivertale vis. Skip recursive upstream and tributary discovery. Routes can still leave the visible regions; watersheds omit distant sources. Restart after editing.")
-                .define("localRiverPreview", DEFAULT_LOCAL_RIVER_PREVIEW);
 
             builder.comment("Source classification thresholds. Preserve existing comparison boundaries and source precedence. Restart after editing.").push("sources");
             SOURCES = new SourceConfig.Spec(builder);
@@ -147,8 +140,7 @@ public record CommonConfig(
                 FALLBACK_APPROACH_CELLS.get(),
                 AWAY_STEP_ALLOWANCE.get(),
                 SOURCES.load(),
-                CACHES.load(),
-                LOCAL_RIVER_PREVIEW.get()
+                CACHES.load()
             ));
         }
     }
