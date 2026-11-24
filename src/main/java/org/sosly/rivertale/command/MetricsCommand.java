@@ -15,6 +15,7 @@ public class MetricsCommand {
 
     public static LiteralArgumentBuilder<CommandSourceStack> register() {
         return Commands.literal("metrics")
+            .requires(source -> source.hasPermission(2))
             .executes(MetricsCommand::execute);
     }
 

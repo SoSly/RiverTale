@@ -7,8 +7,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import org.sosly.rivertale.poc.carve.CarveCommand;
-import org.sosly.rivertale.poc.fill.FillCommand;
 import org.sosly.rivertale.world.RiverShaping;
 
 @Mod.EventBusSubscriber
@@ -28,13 +26,10 @@ public class RiverTaleCommand {
             .then(BoundariesCommand.register().requires(RiverTaleCommand::supportsTerrain))
             .then(DebugCommand.register().requires(RiverTaleCommand::supportsTerrain))
             .then(MetricsCommand.register())
+            .then(RebuildCommand.register())
             .then(RegionSetCommand.register().requires(RiverTaleCommand::supportsTerrain))
             .then(SampleCommand.register().requires(RiverTaleCommand::supportsTerrain))
             .then(VisCommand.register().requires(RiverTaleCommand::supportsTerrain))
-            .then(Commands.literal("poc").requires(RiverTaleCommand::supportsTerrain)
-                .then(CarveCommand.register())
-                .then(FillCommand.register())
-            )
         );
     }
 

@@ -104,6 +104,10 @@ sequenceDiagram
     RiverShaping -->>- Minecraft: done (no terrain changes yet)
 ```
 
+### On-Demand Rebuild
+
+An operator in the active RTF overworld can run `/rivertale rebuild` only when `disableChunkSaving = true`. It cancels queued and active river preparation, clears the terrain and river caches, and queues the caller's 3×3 with the usual watershed dependencies. Chunk requests interrupted by the reset retry against the fresh cache. Players in that world keep their `/vis` settings, but their old overlays are cleared until fresh data is ready.
+
 ### Visualization
 
 `/vis` does not build river data. It sends whichever regions in the player's 3×3 are ready, immediately on enable or region entry and every 20 server ticks while enabled.

@@ -1,6 +1,7 @@
 package org.sosly.rivertale.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -12,19 +13,21 @@ import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.config.CacheConfig;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.metric.Distribution;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class MetricsCommandTest {
     private CommonConfig originalConfig;
@@ -49,6 +52,15 @@ class MetricsCommandTest {
     }
 
     @Test
+    void rejectsSourcesBelowOperatorPermission() {
+        CommandSourceStack source = mock(CommandSourceStack.class);
+        CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
+        dispatcher.register(MetricsCommand.register());
+
+        assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("metrics", source));
+    }
+
+    @Test
     void formatsTimersDistributionsAndRatiosUnderAHeaderAndReportsEmptyAfterClear() throws Exception {
         Timer timer = Store.getTimer(MetricsCommandTest.class, "sampleTimer");
         timer.record(1_000);
@@ -65,6 +77,7 @@ class MetricsCommandTest {
         int seeded = Store.timers().size() + Store.distributions().size() + Store.ratios().size();
         List<String> messages = new ArrayList<>();
         CommandSourceStack source = mock(CommandSourceStack.class);
+        when(source.hasPermission(2)).thenReturn(true);
         doAnswer(invocation -> {
             Supplier<Component> message = invocation.getArgument(0);
             messages.add(message.get().getString());

@@ -20,21 +20,32 @@ import org.sosly.rivertale.world.RiverShaping;
 
 public final class RiverPreparation {
     private final RiverGraph graph;
+    private final Runnable checkCancelled;
     private final Map<CellPos, Integer> reachable = new HashMap<>();
 
-    private RiverPreparation(RiverGraph graph) {
+    private RiverPreparation(RiverGraph graph, Runnable checkCancelled) {
         this.graph = graph;
+        this.checkCancelled = checkCancelled;
     }
 
     public static PreparedRiverData prepare(Set<RegionPos> roots) {
         return prepare(roots, graph());
     }
 
+    static PreparedRiverData prepare(Set<RegionPos> roots, Runnable checkCancelled) {
+        return prepare(roots, graph(), checkCancelled);
+    }
+
     static PreparedRiverData prepare(Set<RegionPos> roots, RiverGraph graph) {
+        return prepare(roots, graph, () -> { });
+    }
+
+    private static PreparedRiverData prepare(Set<RegionPos> roots, RiverGraph graph, Runnable checkCancelled) {
         Timer.Record timer = Store.getTimer(RiverPreparation.class, "prepare").start();
         try {
-            RiverPreparation preparation = new RiverPreparation(graph);
+            RiverPreparation preparation = new RiverPreparation(graph, checkCancelled);
             for (RegionPos pos : roots) {
+                checkCancelled.run();
                 graph.region(pos).cells().forEach(graph::cell);
             }
             preparation.prepareConnected(preparation.prepareUpstreamRegions(roots));
@@ -56,8 +67,9 @@ public final class RiverPreparation {
         ArrayDeque<RegionPos> pending = new ArrayDeque<>(roots);
         UpstreamSearch search = new UpstreamSearch(graph);
         while (!pending.isEmpty()) {
+            checkCancelled.run();
             RegionPos pos = pending.remove();
-            for (RegionPos upstream : search.expand(graph.region(pos).cells())) {
+            for (RegionPos upstream : search.expand(graph.region(pos).cells(), checkCancelled)) {
                 if (found.add(upstream)) {
                     pending.add(upstream);
                 }
@@ -78,13 +90,14 @@ public final class RiverPreparation {
             }
             prepared.addAll(batch);
             Set<CellPos> targets = prepareSources(batch);
-            pending = search.expand(targets);
+            pending = search.expand(targets, checkCancelled);
         }
     }
 
     private Set<CellPos> prepareSources(Collection<RegionPos> regions) {
         List<CellPos> sources = new ArrayList<>();
         for (RegionPos region : regions) {
+            checkCancelled.run();
             sources.addAll(graph.sources(region));
         }
         return expand(sources);
@@ -95,6 +108,7 @@ public final class RiverPreparation {
         roots.forEach(pos -> include(pos, 0, pending));
         Set<CellPos> targets = new HashSet<>();
         while (!pending.isEmpty()) {
+            checkCancelled.run();
             Visit current = pending.remove();
             if (reachable.get(current.pos()) < current.awaySteps()) {
                 continue;

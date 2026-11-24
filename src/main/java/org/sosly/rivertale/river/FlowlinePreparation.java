@@ -32,15 +32,15 @@ public final class FlowlinePreparation {
     }
 
     static Result prepare(Region region, FlowlineTracer tracer) {
-        return prepare(Set.of(region.pos()), tracer);
+        return prepare(Set.of(region.pos()), tracer, () -> { });
     }
 
-    static Result prepare(Set<RegionPos> roots, FlowlineTracer tracer) {
+    static Result prepare(Set<RegionPos> roots, FlowlineTracer tracer, Runnable checkCancelled) {
         Timer.Record timer = Store.getTimer(FlowlinePreparation.class, "prepare").start();
         try {
             FlowlinePreparation preparation = new FlowlinePreparation(tracer);
             roots.stream().sorted(FlowlinePreparation::compare).forEach(preparation::include);
-            preparation.discover();
+            preparation.discover(checkCancelled);
             Store.getDistribution(FlowlinePreparation.class, "upstreamRegions").record(preparation.upstream.size());
             Store.getDistribution(FlowlinePreparation.class, "examinedRegions").record(preparation.search.regionCount());
             Store.getDistribution(FlowlinePreparation.class, "upstreamCells").record(preparation.search.cellCount());
@@ -59,11 +59,13 @@ public final class FlowlinePreparation {
         traced.values().forEach(paths -> paths.forEach(this::index));
     }
 
-    private void discover() {
+    private void discover(Runnable checkCancelled) {
         while (!pending.isEmpty()) {
+            checkCancelled.run();
             RegionPos target = pending.remove();
             Region region = tracer.region(target);
-            for (RegionPos source : search.expand(region.cells()).stream().sorted(FlowlinePreparation::compare).toList()) {
+            for (RegionPos source : search.expand(region.cells(), checkCancelled).stream().sorted(FlowlinePreparation::compare).toList()) {
+                checkCancelled.run();
                 paths(source);
             }
             paths(target);

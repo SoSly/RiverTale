@@ -7,6 +7,9 @@ import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
+import org.sosly.rivertale.density.SampleCache;
+import org.sosly.rivertale.region.RegionCache;
+import org.sosly.rivertale.region.RegionTypeCache;
 import org.sosly.rivertale.river.RiverRegion;
 import org.sosly.rivertale.river.RiverRegionCache;
 
@@ -68,6 +71,22 @@ public class RiverShaping {
         if (active != null) {
             active.rivers().prepareNearby(center);
         }
+    }
+
+    public static boolean rebuild(RegionPos center, RandomState state) {
+        ActiveWorld active = activeWorld(state);
+        if (active == null) {
+            return false;
+        }
+        active.rivers().rebuild(center, RiverShaping::clearTerrainCaches);
+        return true;
+    }
+
+    private static void clearTerrainCaches() {
+        RegionCache.get().clear();
+        RegionTypeCache.get().clear();
+        CellCache.get().clear();
+        SampleCache.get().clear();
     }
 
     public static RiverRegion getReady(RegionPos pos, RandomState state) {

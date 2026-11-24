@@ -15,6 +15,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraftforge.event.TickEvent;
@@ -143,6 +144,15 @@ public class VisCommand {
         }
     }
 
+    static void clearOverlays(ServerLevel level) {
+        for (ServerPlayer player : level.players()) {
+            if (isEnabled(player)) {
+                LAST_REFRESH.remove(player.getUUID());
+                Network.sendToPlayer(new ClearPacket(), player);
+            }
+        }
+    }
+
     public static boolean isEnabled(ServerPlayer player) {
         EnumSet<VisMode> modes = ENABLED_MODES.get(player.getUUID());
         return modes != null && !modes.isEmpty();
@@ -206,6 +216,27 @@ public class VisCommand {
     }
 
     private record Refresh(RegionPos center, int tick) {
+    }
+
+    public static class ClearPacket extends Message {
+        public static ClearPacket decode(FriendlyByteBuf buf) {
+            return new ClearPacket();
+        }
+
+        public static void encode(ClearPacket msg, FriendlyByteBuf buf) {
+        }
+
+        public static void handle(ClearPacket msg, Supplier<NetworkEvent.Context> ctx) {
+            NetworkEvent.Context context = ctx.get();
+            if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
+                context.enqueueWork(() -> {
+                    if (ClientRegionCache.isEnabled()) {
+                        ClientRegionCache.get().clear();
+                    }
+                });
+            }
+            context.setPacketHandled(true);
+        }
     }
 
     public static class TogglePacket extends Message {

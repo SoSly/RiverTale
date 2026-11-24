@@ -16,19 +16,27 @@ final class RiverNetwork {
     private RiverNetwork() {
     }
 
-    static Map<RegionPos, RiverRegion> build(Set<RegionPos> roots) {
+    static Map<RegionPos, RiverRegion> build(Set<RegionPos> roots, Runnable checkCancelled) {
         Timer.Record timer = Store.getTimer(RiverNetwork.class, "build").start();
         try {
-            return assemble(roots, RiverPreparation.prepare(roots));
+            return assemble(roots, RiverPreparation.prepare(roots, checkCancelled), checkCancelled);
         } finally {
             timer.stop();
         }
     }
 
     static Map<RegionPos, RiverRegion> assemble(Set<RegionPos> roots, PreparedRiverData data) {
-        FlowlinePreparation.Result traced = FlowlinePreparation.prepare(roots, new FlowlineTracer(data));
+        return assemble(roots, data, () -> { });
+    }
+
+    private static Map<RegionPos, RiverRegion> assemble(Set<RegionPos> roots, PreparedRiverData data, Runnable checkCancelled) {
+        checkCancelled.run();
+        FlowlinePreparation.Result traced = FlowlinePreparation.prepare(roots, new FlowlineTracer(data), checkCancelled);
+        checkCancelled.run();
         List<Flowline> flowlines = WatershedPreparation.gather(traced);
+        checkCancelled.run();
         List<Watershed> watersheds = WatershedBuilder.build(flowlines);
+        checkCancelled.run();
         Map<RegionPos, List<Flowline>> pathsByRegion = index(roots, flowlines, Flowline::cells);
         Map<RegionPos, List<Watershed>> watershedsByRegion = index(roots, watersheds, Watershed::allCells);
         Map<RegionPos, RiverRegion> result = new HashMap<>();

@@ -32,12 +32,17 @@ final class UpstreamSearch {
     }
 
     Set<RegionPos> expand(Collection<CellPos> targets) {
+        return expand(targets, () -> { });
+    }
+
+    Set<RegionPos> expand(Collection<CellPos> targets, Runnable checkCancelled) {
         ArrayDeque<Visit> pending = new ArrayDeque<>();
         for (CellPos target : targets) {
             include(target, 0, pending);
         }
         Set<RegionPos> discovered = new HashSet<>();
         while (!pending.isEmpty()) {
+            checkCancelled.run();
             Visit current = pending.remove();
             if (visited.get(current.pos()) < current.awaySteps()) {
                 continue;
