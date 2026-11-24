@@ -3,6 +3,7 @@ package org.sosly.rivertale.metric;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.LongSummaryStatistics;
 
 public class Timer {
     private final List<Long> samples = Collections.synchronizedList(new ArrayList<>());
@@ -16,47 +17,41 @@ public class Timer {
     }
 
     public double avg() {
-        if (samples.isEmpty()) {
-            return 0;
-        }
-        long sum = 0;
-        for (long sample : samples) {
-            sum += sample;
-        }
-        return toMicros(sum / (double) samples.size());
+        return toMicros(summarize(copySamples()).getAverage());
     }
 
     public double min() {
-        if (samples.isEmpty()) {
-            return 0;
-        }
-        long min = Long.MAX_VALUE;
-        for (long sample : samples) {
-            min = Math.min(min, sample);
-        }
-        return toMicros(min);
+        LongSummaryStatistics summary = summarize(copySamples());
+        return summary.getCount() == 0 ? 0 : toMicros(summary.getMin());
     }
 
     public double max() {
-        if (samples.isEmpty()) {
-            return 0;
-        }
-        long max = Long.MIN_VALUE;
-        for (long sample : samples) {
-            max = Math.max(max, sample);
-        }
-        return toMicros(max);
+        LongSummaryStatistics summary = summarize(copySamples());
+        return summary.getCount() == 0 ? 0 : toMicros(summary.getMax());
     }
 
     public double total() {
-        if (samples.isEmpty()) {
-            return 0;
+        return toMicros(summarize(copySamples()).getSum());
+    }
+
+    public Snapshot snapshot() {
+        List<Long> copy = copySamples();
+        if (copy.isEmpty()) {
+            return new Snapshot(0, 0, 0, 0, 0);
         }
-        long sum = 0;
-        for (long sample : samples) {
-            sum += sample;
+        LongSummaryStatistics summary = summarize(copy);
+        return new Snapshot(copy.size(), toMicros(summary.getAverage()), toMicros(summary.getMin()),
+            toMicros(summary.getMax()), percentile(copy, 50));
+    }
+
+    private List<Long> copySamples() {
+        synchronized (samples) {
+            return new ArrayList<>(samples);
         }
-        return toMicros(sum);
+    }
+
+    private static LongSummaryStatistics summarize(List<Long> copy) {
+        return copy.stream().mapToLong(Long::longValue).summaryStatistics();
     }
 
     public double median() {
@@ -64,25 +59,31 @@ public class Timer {
     }
 
     public double percentile(double p) {
-        if (samples.isEmpty()) {
+        return percentile(copySamples(), p);
+    }
+
+    private static double percentile(List<Long> copy, double p) {
+        if (copy.isEmpty()) {
             return 0;
         }
-        List<Long> sorted = new ArrayList<>(samples);
-        Collections.sort(sorted);
-        int idx = (int) Math.ceil((p / 100.0) * sorted.size()) - 1;
-        return toMicros(sorted.get(Math.max(0, idx)));
+        Collections.sort(copy);
+        int idx = (int) Math.ceil((p / 100.0) * copy.size()) - 1;
+        return toMicros(copy.get(Math.max(0, idx)));
     }
 
     public void reset() {
         samples.clear();
     }
 
-    private double toMicros(double nanos) {
+    private static double toMicros(double nanos) {
         return nanos / 1_000.0;
     }
 
     public Record start() {
         return new Record();
+    }
+
+    public record Snapshot(int count, double avg, double min, double max, double median) {
     }
 
     public class Record {

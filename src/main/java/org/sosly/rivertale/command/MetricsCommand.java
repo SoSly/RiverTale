@@ -34,8 +34,8 @@ public class MetricsCommand {
 
         for (Map.Entry<String, Timer> entry : timers.entrySet()) {
             String name = simplifyName(entry.getKey());
-            Timer timer = entry.getValue();
-            source.sendSuccess(() -> formatTimer(name, timer), false);
+            Timer.Snapshot snapshot = entry.getValue().snapshot();
+            source.sendSuccess(() -> formatTimer(name, snapshot), false);
         }
 
         for (Map.Entry<String, Distribution> entry : distributions.entrySet()) {
@@ -61,9 +61,9 @@ public class MetricsCommand {
         return fullName;
     }
 
-    private static Component formatTimer(String name, Timer timer) {
+    private static Component formatTimer(String name, Timer.Snapshot snapshot) {
         String msg = String.format("%s: %d calls | avg=%.1fus min=%.1fus max=%.1fus med=%.1fus",
-            name, timer.count(), timer.avg(), timer.min(), timer.max(), timer.median());
+            name, snapshot.count(), snapshot.avg(), snapshot.min(), snapshot.max(), snapshot.median());
         return Component.literal(msg);
     }
 
