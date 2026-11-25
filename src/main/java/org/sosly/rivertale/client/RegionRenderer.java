@@ -112,6 +112,10 @@ public class RegionRenderer {
         tesselator.end();
         RenderSystem.enableDepthTest();
         RenderSystem.disableBlend();
+
+        if (ClientRegionCache.isModeEnabled(VisMode.CELLS)) {
+            RiverCellLabels.render(cache.getRegions(), poseStack, buffer, camPos);
+        }
     }
 
     private static void renderRegionBorder(ClientRegionCache.Region region,

@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,11 +76,66 @@ class WatershedPreviewEncodingTest {
         assertEquals(List.of(point(4, 2)), sent.outlets());
     }
 
+    @Test
+    void sendsAssignedElevationsForRiverBordersPathsAndMarkers() {
+        CellPos source = new CellPos(2, 2);
+        CellPos terminus = new CellPos(3, 2);
+        CellPos other = new CellPos(1, 2);
+        Map<CellPos, CellData> samples = Map.of(
+            source, new CellData(Feature.NONE, List.of(), height(source)),
+            terminus, new CellData(Feature.NONE, List.of(), height(terminus)));
+        PreparedRiverData data = new PreparedRiverData(Map.of(), samples, Map.of(), Map.of(), Map.of(), Map.of(), 0, 63);
+        Watershed watershed = Watershed.fromLinks(terminus, Map.of(source, terminus)).withElevations(data, 0.25);
+
+        ClientRegionCache.Region sent = send(List.of(flowline(1, 2, 2, 2, 3, 2)), List.of(watershed));
+
+        int assignedY = height(source);
+        ClientRegionCache.Point outlet = new ClientRegionCache.Point(terminus, assignedY);
+        ClientRegionCache.Cell river = cell(sent, terminus);
+        ClientRegionCache.Cell nonRiver = cell(sent, other);
+        assertEquals(assignedY, river.y());
+        assertEquals(OptionalInt.of(height(terminus)), river.averageY());
+        assertEquals(OptionalInt.of(assignedY), cell(sent, source).averageY());
+        assertEquals(height(other), nonRiver.y());
+        assertEquals(OptionalInt.empty(), nonRiver.averageY());
+        assertEquals(List.of(new ClientRegionCache.Edge(source, terminus, assignedY, assignedY)), sent.edges());
+        assertEquals(List.of(outlet), sent.outlets());
+        assertEquals(List.of(point(1, 2), point(2, 2), outlet), sent.paths().get(0).points());
+    }
+
+    @Test
+    void sendsSourceLabelHeightsOnlyForSourcesInAnElevatedWatershed() {
+        CellPos source = new CellPos(2, 2);
+        CellPos terminus = new CellPos(3, 2);
+        CellPos outside = new CellPos(4, 2);
+        Map<CellPos, CellData> samples = Map.of(
+            source, new CellData(Feature.SNOWMELT, List.of(), height(source)),
+            terminus, new CellData(Feature.NONE, List.of(), height(terminus)));
+        PreparedRiverData data = new PreparedRiverData(Map.of(), samples, Map.of(), Map.of(), Map.of(), Map.of(), 0, 63);
+        Watershed watershed = Watershed.fromLinks(terminus, Map.of(source, terminus)).withElevations(data, 0.25);
+
+        ClientRegionCache.Region sent = send(List.of(), List.of(watershed),
+            Map.of(source, Feature.SNOWMELT, outside, Feature.SNOWMELT));
+
+        assertEquals(new ClientRegionCache.Cell(source, Feature.SNOWMELT, height(source), OptionalInt.of(height(source))),
+            cell(sent, source));
+        assertEquals(OptionalInt.empty(), cell(sent, outside).averageY());
+    }
+
+    private ClientRegionCache.Cell cell(ClientRegionCache.Region region, CellPos pos) {
+        return region.cells().stream().filter(cell -> cell.pos().equals(pos)).findFirst().orElseThrow();
+    }
+
     private ClientRegionCache.Region send(List<Flowline> flowlines, List<Watershed> watersheds) {
+        return send(flowlines, watersheds, Map.of());
+    }
+
+    private ClientRegionCache.Region send(List<Flowline> flowlines, List<Watershed> watersheds,
+                                          Map<CellPos, Feature> features) {
         Region region = new Region(CENTER, RegionType.FLUVIAL);
         Map<CellPos, CellData> cells = new HashMap<>();
         for (CellPos pos : region.cells()) {
-            cells.put(pos, new CellData(Feature.NONE, List.of(), height(pos)));
+            cells.put(pos, new CellData(features.getOrDefault(pos, Feature.NONE), List.of(), height(pos)));
         }
         RiverRegion result = new RiverRegion(region, cells, flowlines, watersheds);
         return ClientRegionCache.Region.decode(result.encode());

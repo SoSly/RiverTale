@@ -6,6 +6,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -29,12 +30,13 @@ public class ClientRegionCache {
     private final Map<Long, Region> cache;
     private final int capacity;
 
-    public record Cell(CellPos pos, Feature feature, int y) {
+    public record Cell(CellPos pos, Feature feature, int y, OptionalInt averageY) {
         public static Cell decode(CompoundTag tag) {
             return new Cell(
                 new CellPos(tag.getLong("pos")),
                 Feature.valueOf(tag.getString("feature")),
-                tag.getInt("y")
+                tag.getInt("y"),
+                tag.contains("averageY", Tag.TAG_INT) ? OptionalInt.of(tag.getInt("averageY")) : OptionalInt.empty()
             );
         }
     }

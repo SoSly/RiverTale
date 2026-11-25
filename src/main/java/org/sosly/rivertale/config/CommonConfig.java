@@ -12,6 +12,7 @@ public record CommonConfig(
     int nudgingLimit,
     int fallbackApproachCells,
     int awayStepAllowance,
+    double riseRunRatio,
     SourceConfig sources,
     CacheConfig caches
 ) {
@@ -23,12 +24,19 @@ public record CommonConfig(
     private static final int DEFAULT_NUDGING_LIMIT = 16;
     private static final int DEFAULT_FALLBACK_APPROACH_CELLS = 5;
     private static final int DEFAULT_AWAY_STEP_ALLOWANCE = 1;
+    private static final double DEFAULT_RISE_RUN_RATIO = 0.25;
 
     private static CommonConfig instance = new CommonConfig(
         DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_SAMPLES_PER_CELL,
         DEFAULT_ENABLE_METRICS, DEFAULT_ENABLE_NUDGING, DEFAULT_NUDGING_LIMIT, DEFAULT_FALLBACK_APPROACH_CELLS,
-        DEFAULT_AWAY_STEP_ALLOWANCE, SourceConfig.DEFAULT, CacheConfig.DEFAULT);
+        DEFAULT_AWAY_STEP_ALLOWANCE, DEFAULT_RISE_RUN_RATIO, SourceConfig.DEFAULT, CacheConfig.DEFAULT);
 
+    public CommonConfig(int regionSize, int cellSize, int samplesPerCell, boolean enableMetrics, boolean enableNudging,
+                        int nudgingLimit, int fallbackApproachCells, int awayStepAllowance, SourceConfig sources,
+                        CacheConfig caches) {
+        this(regionSize, cellSize, samplesPerCell, enableMetrics, enableNudging, nudgingLimit, fallbackApproachCells,
+            awayStepAllowance, DEFAULT_RISE_RUN_RATIO, sources, caches);
+    }
 
     public CommonConfig {
         Objects.requireNonNull(sources, "sources");
@@ -38,6 +46,9 @@ public record CommonConfig(
         }
         if (nudgingLimit < 0) {
             throw new IllegalArgumentException("nudgingLimit must be nonnegative");
+        }
+        if (!Double.isFinite(riseRunRatio) || riseRunRatio < 0) {
+            throw new IllegalArgumentException("riseRunRatio must be finite and nonnegative");
         }
         if (cellSize < 1 || cellSize > 8) {
             throw new IllegalArgumentException("cellSize must be 1-8 chunks");
@@ -81,6 +92,7 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue NUDGING_LIMIT;
         public static final ForgeConfigSpec.IntValue FALLBACK_APPROACH_CELLS;
         public static final ForgeConfigSpec.IntValue AWAY_STEP_ALLOWANCE;
+        public static final ForgeConfigSpec.DoubleValue RISE_RUN_RATIO;
         private static final SourceConfig.Spec SOURCES;
         private static final CacheConfig.Spec CACHES;
 
@@ -125,6 +137,10 @@ public record CommonConfig(
                 .comment("Maximum consecutive downhill steps that move farther from or equally far from the selected destination. A closer step resets the count. Zero requires every step to get closer. Forward tracing and upstream discovery share this limit.")
                 .defineInRange("awayStepAllowance", DEFAULT_AWAY_STEP_ALLOWANCE, 0, Integer.MAX_VALUE - 1);
 
+            RISE_RUN_RATIO = builder
+                .comment("Minimum rise in water elevation per river cell step upriver. 0.25 raises the minimum one block every four cells; 2 raises it two blocks per cell. Zero disables the minimum grade.")
+                .defineInRange("riseRunRatio", DEFAULT_RISE_RUN_RATIO, 0.0, Double.MAX_VALUE);
+
             builder.comment("Source classification thresholds. Preserve existing comparison boundaries and source precedence. Restart after editing.").push("sources");
             SOURCES = new SourceConfig.Spec(builder);
             builder.pop();
@@ -146,6 +162,7 @@ public record CommonConfig(
                 NUDGING_LIMIT.get(),
                 FALLBACK_APPROACH_CELLS.get(),
                 AWAY_STEP_ALLOWANCE.get(),
+                RISE_RUN_RATIO.get(),
                 SOURCES.load(),
                 CACHES.load()
             ));

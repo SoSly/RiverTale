@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
@@ -35,7 +36,12 @@ final class RiverNetwork {
         checkCancelled.run();
         List<Flowline> flowlines = WatershedPreparation.gather(traced);
         checkCancelled.run();
-        List<Watershed> watersheds = WatershedBuilder.build(flowlines);
+        List<Watershed> watersheds = new ArrayList<>();
+        double riseRunRatio = CommonConfig.get().riseRunRatio();
+        for (Watershed watershed : WatershedBuilder.build(flowlines)) {
+            checkCancelled.run();
+            watersheds.add(watershed.withElevations(data, riseRunRatio));
+        }
         checkCancelled.run();
         Map<RegionPos, List<Flowline>> pathsByRegion = index(roots, flowlines, Flowline::cells);
         Map<RegionPos, List<Watershed>> watershedsByRegion = index(roots, watersheds, Watershed::allCells);

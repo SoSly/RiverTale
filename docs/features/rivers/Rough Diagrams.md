@@ -26,9 +26,8 @@ flowchart TD
 	end
 
 	subgraph "Per Watershed"
-		W1[Watershed Validation]:::planned
-		W1 --> W2a[Elevation Assignment]:::planned
-		W1 --> W2b[Flow Accumulation]:::planned
+		W2a[Elevation Assignment]
+		W2b[Flow Accumulation]:::planned
 		W2a --> W3[Feature Classification]:::planned
 		W2b --> W3
 		W3 --> W4[Spline Building]:::planned
@@ -45,8 +44,9 @@ flowchart TD
 	BP --> B1
 	CG -->|region not finished| B1
 	B1 --> R1
-	B3 --> W1
-	B3 --> WC
+	B3 --> W2a
+	B3 --> W2b
+	W2a --> WC
 	CG -->|region finished| WC
 	WC --> Vis
 	WC --> C1
@@ -144,12 +144,14 @@ sequenceDiagram
     Note over Build,WatershedBuilder: Watershed Building
     Build ->>+ WatershedBuilder: build from flowlines
     WatershedBuilder -->>- Build: one watershed per outlet
+
+    loop Each watershed
+        Build ->> Watershed: assign elevations
+    end
     Build ->> RiverRegionCache: publish ready regions
 
     Note over Build,Watershed: Later steps (not yet built)
     loop Each watershed
-        Build ->> Watershed: validate
-        Build ->> Watershed: assign elevations
         Build ->> Watershed: determine accumulation
         Build ->> Watershed: classify features
         Build ->> Watershed: build splines (triggers waypoint calculation)
@@ -432,7 +434,6 @@ sequenceDiagram
     participant Build as Region Build
     participant WatershedBuilder
     participant Watershed
-    participant RiverRegionCache
 
     Build ->>+ WatershedBuilder: build from flowlines
 
@@ -449,80 +450,21 @@ sequenceDiagram
     end
 
     WatershedBuilder -->>- Build: watersheds
-
-    Build ->> RiverRegionCache: store finished river data
 ```
 
 ## Per Watershed
 
-None of these steps are built yet. Their results are stored on the watershed's RiverCells, never in CellCache. Tracing reads CellCache, so writing results there would change the next build's routing.
-
-### Watershed Validation
-
-Watershed Validation prunes river segments that are too short to be meaningful, iterating until no more pruning is needed.
-
-```mermaid
-sequenceDiagram
-    participant Build as Region Build
-    participant Watershed
-
-    Note over Build,Watershed: Not yet built
-
-    loop For each watershed
-        Build ->>+ Watershed: validate
-
-        loop Until no more pruning needed
-            Watershed ->> Watershed: find source cells (no upstream)
-            loop For each source
-                Watershed ->> Watershed: trace to confluence or terminus
-                opt Segment shorter than minPathLength
-                    Watershed ->> Watershed: remove segment from watershed
-                end
-            end
-        end
-
-        Watershed -->>- Build: validated watershed
-    end
-```
+These passes store their results on the watershed, never in CellCache. Tracing reads CellCache, so writing results there would change the next build's routing.
 
 ### Elevation Assignment
 
-Elevation Assignment determines entryY and exitY for each cell in the watershed, ensuring water flows downhill with a minimum slope. Adjacent cells share boundary values (upstream's exitY = downstream's entryY). How the Y profile varies within the cell is feature-specific and handled during terrain shaping.
+Elevation Assignment assigns `cellY`, one reference water elevation per cell. It reads the cell's average terrain sample from prepared data and clamps it to the top water block (configured sea level minus one). A source-to-outlet pass lowers a cell if one of its immediate upstream neighbors has a lower reference elevation.
 
-```mermaid
-sequenceDiagram
-    participant Build as Region Build
-    participant Watershed
-    participant RiverCell
+An outlet-to-source pass enforces `riseRunRatio` along every reach. From the top water block or a higher terrain-based reference, the minimum rises by the ratio times the number of cell steps, rounded down to whole blocks. The default `0.25` requires one block of rise every four steps; `2` requires two blocks every step; `0` disables the grade. Each tributary inherits the grade at its confluence and continues independently.
 
-    Note over Build,RiverCell: Not yet built
+The last land cell can sit above sea level. If the assigned elevation is above the terrain sample, shaping can build up banks later. Entrance and exit heights are not assigned by this pass; they depend in part on the cell's feature classification.
 
-    loop For each watershed
-        Build ->>+ Watershed: assign elevations
-
-        Note over Watershed: Assign boundary elevations (downstream pass)
-        loop For each source cell (no upstream)
-            Watershed ->> Watershed: trace downstream
-            loop For each cell in path
-                Watershed ->> RiverCell: get terrain height
-                RiverCell -->> Watershed: height
-                Watershed ->> Watershed: constrain exitY (must descend by minSlope from entryY)
-                Watershed ->> RiverCell: store entryY and exitY
-            end
-        end
-
-        Note over Watershed: Propagate constraints upstream
-        loop For each terminus cell
-            Watershed ->> Watershed: trace upstream
-            loop For each cell
-                Watershed ->> Watershed: ensure entryY >= downstream entryY + minSlope
-                Watershed ->> RiverCell: store adjusted entryY and exitY
-            end
-        end
-
-        Watershed -->>- Build: watershed with elevations
-    end
-```
+**Future investigation:** A stretch where `CellY` stays well below `AverageY` could flag a candidate subterranean reach. Check the terrain directly above the route to see whether it can stay covered and where the river would go underground (a swallet) and return to the surface (a resurgence). The elevation gap alone does not distinguish a tunnel from an open cut.
 
 ### Flow Accumulation
 
@@ -569,7 +511,7 @@ sequenceDiagram
 
         loop For each cell (sources to terminus)
             Watershed ->>+ Features: classify
-            Features ->> RiverCell: get cell data (entryY, exitY, width, depth, upstreamCount, downstreamCount)
+            Features ->> RiverCell: get cell data (cellY, width, depth, upstreamCount, downstreamCount)
             RiverCell -->> Features: cell data
             opt Needs neighbor context (e.g., Plunge Pool)
                 Features ->> RiverCell: get upstream neighbor's feature
@@ -601,7 +543,7 @@ sequenceDiagram
         Build ->>+ Watershed: build splines
 
         loop For each cell (sources to terminus)
-            Watershed ->> RiverCell: get cell data (entryY, exitY, feature)
+            Watershed ->> RiverCell: get cell data (cellY, feature)
             RiverCell -->> Watershed: cell data
             Watershed ->> CellCache: get waypoints (current + neighbors, triggers waypoint calculation)
             Watershed ->> Features: get Y profile for feature type
@@ -792,6 +734,7 @@ record Watershed {
     downstream: Map<CellPos, CellPos?>     // terminus maps to null
     upstream: Map<CellPos, Set<CellPos>>
     accumulation: Map<CellPos, int>        // upstream cell count
+    elevations: Map<CellPos, int>          // assigned cellY
     cells: Map<CellPos, RiverCell>         // planned
     spline: List<SplinePoint>              // planned: coarse sample points
     splineGeometry: SplineCurve            // planned: Catmull-Rom curve data
@@ -802,10 +745,6 @@ record RiverCell {                // planned: Cell values plus watershed results
     flowDirections: List<FlowDirection>
     height: int
     preclassified: Feature        // copied from Cell.feature
-
-    // Set during Elevation Assignment
-    entryY: int
-    exitY: int
 
     // Set during Flow Accumulation
     width: int

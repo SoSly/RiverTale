@@ -3,6 +3,7 @@ package org.sosly.rivertale.river;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -32,12 +33,16 @@ final class RiverPreviewEncoding {
             CompoundTag entry = new CompoundTag();
             entry.putLong("pos", cellPos.toLong());
             entry.putString("feature", cell.feature().name());
-            entry.putInt("y", cell.height());
+            OptionalInt cellY = assignedHeight(cellPos, data.watershedAt(cellPos));
+            entry.putInt("y", cellY.orElse(cell.height()));
+            if (cellY.isPresent()) {
+                entry.putInt("averageY", cell.height());
+            }
             cells.add(entry);
         }
         tag.put("cells", cells);
         Set<CellPos> merged = encodeWatersheds(tag, data.cells(), data.watersheds());
-        tag.put("paths", encodePaths(data.cells(), data.flowlines(), merged));
+        tag.put("paths", encodePaths(data, merged));
         return tag;
     }
 
@@ -53,14 +58,14 @@ final class RiverPreviewEncoding {
                 CompoundTag entry = new CompoundTag();
                 if (to == null) {
                     entry.putLong("pos", from.toLong());
-                    entry.putInt("y", cells.get(from).height());
+                    entry.putInt("y", previewHeight(from, watershed, cells.get(from).height()));
                     outlets.add(entry);
                     continue;
                 }
                 entry.putLong("from", from.toLong());
                 entry.putLong("to", to.toLong());
-                entry.putInt("fromY", cells.get(from).height());
-                entry.putInt("toY", cells.get(to).height());
+                entry.putInt("fromY", previewHeight(from, watershed, cells.get(from).height()));
+                entry.putInt("toY", previewHeight(to, watershed, cells.get(to).height()));
                 edges.add(entry);
             }
         }
@@ -69,9 +74,9 @@ final class RiverPreviewEncoding {
         return merged;
     }
 
-    private static ListTag encodePaths(Map<CellPos, CellData> cells, List<Flowline> paths, Set<CellPos> merged) {
+    private static ListTag encodePaths(RiverRegion data, Set<CellPos> merged) {
         ListTag result = new ListTag();
-        for (Flowline path : paths) {
+        for (Flowline path : data.flowlines()) {
             if (!path.isValid() || (!path.cells().isEmpty() && merged.contains(path.cells().get(0)))) {
                 continue;
             }
@@ -80,7 +85,7 @@ final class RiverPreviewEncoding {
             for (int i = 0; i < positions.length; i++) {
                 CellPos pos = path.cells().get(i);
                 positions[i] = pos.toLong();
-                heights[i] = cells.get(pos).height();
+                heights[i] = previewHeight(pos, data.watershedAt(pos), data.cells().get(pos).height());
             }
             CompoundTag entry = new CompoundTag();
             entry.putLongArray("cells", positions);
@@ -88,5 +93,13 @@ final class RiverPreviewEncoding {
             result.add(entry);
         }
         return result;
+    }
+
+    private static int previewHeight(CellPos pos, Watershed watershed, int sampledHeight) {
+        return assignedHeight(pos, watershed).orElse(sampledHeight);
+    }
+
+    private static OptionalInt assignedHeight(CellPos pos, Watershed watershed) {
+        return watershed == null ? OptionalInt.empty() : watershed.cellY(pos);
     }
 }
