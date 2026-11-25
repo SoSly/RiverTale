@@ -67,6 +67,20 @@ class CommonConfigTest {
     }
 
     @Test
+    void loadsFlowDefaultsAndOverridesFromToml() {
+        load("");
+        assertEquals(1.0, CommonConfig.get().sourceFlow());
+        assertEquals(0.5, CommonConfig.get().flowPerCell());
+
+        load("""
+            sourceFlow = 2
+            flowPerCell = 0.125
+            """);
+        assertEquals(2.0, CommonConfig.get().sourceFlow());
+        assertEquals(0.125, CommonConfig.get().flowPerCell());
+    }
+
+    @Test
     void disablingChunkSavingIsOptIn() {
         load("");
         assertFalse(CommonConfig.Spec.DISABLE_CHUNK_SAVING.get());
@@ -81,6 +95,8 @@ class CommonConfigTest {
             awayStepAllowance = -1
             fallbackApproachCells = -1
             riseRunRatio = -0.25
+            sourceFlow = -1
+            flowPerCell = -0.5
             [sources]
             craterChance = 2.0
             [caches]
@@ -89,6 +105,8 @@ class CommonConfigTest {
         assertEquals(0, CommonConfig.get().awayStepAllowance());
         assertEquals(0, CommonConfig.get().fallbackApproachCells());
         assertEquals(0.0, CommonConfig.get().riseRunRatio());
+        assertEquals(0.0, CommonConfig.get().sourceFlow());
+        assertEquals(0.0, CommonConfig.get().flowPerCell());
         assertEquals(1.0, CommonConfig.get().sources().craterChance());
         assertEquals(1, CommonConfig.get().caches().samples());
     }
@@ -102,6 +120,10 @@ class CommonConfigTest {
             5, Integer.MAX_VALUE, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         assertThrows(IllegalArgumentException.class, () -> new CommonConfig(8, 1, 1, false, false, 16,
             5, 10, Double.POSITIVE_INFINITY, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
+        assertThrows(IllegalArgumentException.class, () -> new CommonConfig(8, 1, 1, false, false, 16,
+            5, 10, 0.25, Double.NaN, 0.5, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
+        assertThrows(IllegalArgumentException.class, () -> new CommonConfig(8, 1, 1, false, false, 16,
+            5, 10, 0.25, 1.0, Double.POSITIVE_INFINITY, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
     }
 
     private void load(String toml) {

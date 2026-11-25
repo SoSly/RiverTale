@@ -37,10 +37,11 @@ final class RiverNetwork {
         List<Flowline> flowlines = WatershedPreparation.gather(traced);
         checkCancelled.run();
         List<Watershed> watersheds = new ArrayList<>();
-        double riseRunRatio = CommonConfig.get().riseRunRatio();
+        CommonConfig config = CommonConfig.get();
         for (Watershed watershed : WatershedBuilder.build(flowlines)) {
             checkCancelled.run();
-            watersheds.add(watershed.withElevations(data, riseRunRatio));
+            watersheds.add(watershed.withElevations(data, config.riseRunRatio())
+                .withFlowAccumulation(config.sourceFlow(), config.flowPerCell()));
         }
         checkCancelled.run();
         Map<RegionPos, List<Flowline>> pathsByRegion = index(roots, flowlines, Flowline::cells);

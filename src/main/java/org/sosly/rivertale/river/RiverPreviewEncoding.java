@@ -33,10 +33,14 @@ final class RiverPreviewEncoding {
             CompoundTag entry = new CompoundTag();
             entry.putLong("pos", cellPos.toLong());
             entry.putString("feature", cell.feature().name());
-            OptionalInt cellY = assignedHeight(cellPos, data.watershedAt(cellPos));
+            Watershed watershed = data.watershedAt(cellPos);
+            OptionalInt cellY = assignedHeight(cellPos, watershed);
             entry.putInt("y", cellY.orElse(cell.height()));
             if (cellY.isPresent()) {
                 entry.putInt("averageY", cell.height());
+            }
+            if (watershed != null) {
+                watershed.flow(cellPos).ifPresent(flow -> entry.putDouble("flow", flow));
             }
             cells.add(entry);
         }

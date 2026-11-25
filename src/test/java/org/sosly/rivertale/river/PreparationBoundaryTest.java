@@ -86,7 +86,7 @@ class PreparationBoundaryTest {
 
     @Test
     void remoteUpstreamsAndWatershedGatheringUseOnlyPreparedData() {
-        CommonConfig.set(new CommonConfig(8, 1, 1, true, false, 12, 0, 0, 2.0,
+        CommonConfig.set(new CommonConfig(8, 1, 1, true, false, 12, 0, 0, 2.0, 2.0, 0.125,
             SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         RegionPos center = outlet.getRegion();
         Set<RegionPos> roots = Set.copyOf(center.neighborhood());
@@ -101,6 +101,8 @@ class PreparationBoundaryTest {
         assertEquals(outlet, watershed.terminus(source).orElseThrow());
         assertEquals(RiverWorld.LAND_HEIGHT + 2 * (outlet.x() - source.x()), watershed.cellY(source).orElseThrow());
         assertEquals(RiverWorld.LAND_HEIGHT, watershed.cellY(outlet).orElseThrow());
+        assertEquals(2.0, watershed.flow(source).orElseThrow());
+        assertEquals(3.125, watershed.flow(outlet).orElseThrow());
     }
 
     @Test

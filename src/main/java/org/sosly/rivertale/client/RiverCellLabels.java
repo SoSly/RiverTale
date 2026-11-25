@@ -53,6 +53,9 @@ final class RiverCellLabels {
         draw(font, buffer, pose, CELL_Y_PREFIX, 0, 2 * LINE_SPACING, GRAY);
         draw(font, buffer, pose, Integer.toString(cell.y()), font.width(CELL_Y_PREFIX), 2 * LINE_SPACING,
             cellYColor(cell.y(), averageY));
+        if (cell.flow().isPresent()) {
+            draw(font, buffer, pose, "Flow: " + cell.flow().getAsDouble(), 0, 3 * LINE_SPACING, GRAY);
+        }
         pose.popPose();
     }
 

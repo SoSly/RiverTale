@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -117,9 +118,23 @@ class WatershedPreviewEncodingTest {
         ClientRegionCache.Region sent = send(List.of(), List.of(watershed),
             Map.of(source, Feature.SNOWMELT, outside, Feature.SNOWMELT));
 
-        assertEquals(new ClientRegionCache.Cell(source, Feature.SNOWMELT, height(source), OptionalInt.of(height(source))),
-            cell(sent, source));
+        assertEquals(new ClientRegionCache.Cell(source, Feature.SNOWMELT, height(source), OptionalInt.of(height(source)),
+            OptionalDouble.empty()), cell(sent, source));
         assertEquals(OptionalInt.empty(), cell(sent, outside).averageY());
+    }
+
+    @Test
+    void sendsFractionalAndZeroFlowOnlyForWatershedCells() {
+        CellPos source = new CellPos(2, 2);
+        CellPos terminus = new CellPos(3, 2);
+        CellPos outside = new CellPos(4, 2);
+        Watershed watershed = Watershed.fromLinks(terminus, Map.of(source, terminus)).withFlowAccumulation(0.0, 0.5);
+
+        ClientRegionCache.Region sent = send(List.of(), List.of(watershed));
+
+        assertEquals(OptionalDouble.of(0.0), cell(sent, source).flow());
+        assertEquals(OptionalDouble.of(0.5), cell(sent, terminus).flow());
+        assertEquals(OptionalDouble.empty(), cell(sent, outside).flow());
     }
 
     private ClientRegionCache.Cell cell(ClientRegionCache.Region region, CellPos pos) {

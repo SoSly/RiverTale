@@ -27,7 +27,7 @@ flowchart TD
 
 	subgraph "Per Watershed"
 		W2a[Elevation Assignment]
-		W2b[Flow Accumulation]:::planned
+		W2b[Flow Accumulation]
 		W2a --> W3[Feature Classification]:::planned
 		W2b --> W3
 		W3 --> W4[Spline Building]:::planned

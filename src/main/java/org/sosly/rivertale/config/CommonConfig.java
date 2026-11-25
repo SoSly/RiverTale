@@ -13,6 +13,8 @@ public record CommonConfig(
     int fallbackApproachCells,
     int awayStepAllowance,
     double riseRunRatio,
+    double sourceFlow,
+    double flowPerCell,
     SourceConfig sources,
     CacheConfig caches
 ) {
@@ -25,17 +27,27 @@ public record CommonConfig(
     private static final int DEFAULT_FALLBACK_APPROACH_CELLS = 5;
     private static final int DEFAULT_AWAY_STEP_ALLOWANCE = 1;
     private static final double DEFAULT_RISE_RUN_RATIO = 0.25;
+    private static final double DEFAULT_SOURCE_FLOW = 1.0;
+    private static final double DEFAULT_FLOW_PER_CELL = 0.5;
 
     private static CommonConfig instance = new CommonConfig(
         DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_SAMPLES_PER_CELL,
         DEFAULT_ENABLE_METRICS, DEFAULT_ENABLE_NUDGING, DEFAULT_NUDGING_LIMIT, DEFAULT_FALLBACK_APPROACH_CELLS,
-        DEFAULT_AWAY_STEP_ALLOWANCE, DEFAULT_RISE_RUN_RATIO, SourceConfig.DEFAULT, CacheConfig.DEFAULT);
+        DEFAULT_AWAY_STEP_ALLOWANCE, DEFAULT_RISE_RUN_RATIO, DEFAULT_SOURCE_FLOW, DEFAULT_FLOW_PER_CELL,
+        SourceConfig.DEFAULT, CacheConfig.DEFAULT);
 
     public CommonConfig(int regionSize, int cellSize, int samplesPerCell, boolean enableMetrics, boolean enableNudging,
                         int nudgingLimit, int fallbackApproachCells, int awayStepAllowance, SourceConfig sources,
                         CacheConfig caches) {
         this(regionSize, cellSize, samplesPerCell, enableMetrics, enableNudging, nudgingLimit, fallbackApproachCells,
             awayStepAllowance, DEFAULT_RISE_RUN_RATIO, sources, caches);
+    }
+
+    public CommonConfig(int regionSize, int cellSize, int samplesPerCell, boolean enableMetrics, boolean enableNudging,
+                        int nudgingLimit, int fallbackApproachCells, int awayStepAllowance, double riseRunRatio,
+                        SourceConfig sources, CacheConfig caches) {
+        this(regionSize, cellSize, samplesPerCell, enableMetrics, enableNudging, nudgingLimit, fallbackApproachCells,
+            awayStepAllowance, riseRunRatio, DEFAULT_SOURCE_FLOW, DEFAULT_FLOW_PER_CELL, sources, caches);
     }
 
     public CommonConfig {
@@ -49,6 +61,12 @@ public record CommonConfig(
         }
         if (!Double.isFinite(riseRunRatio) || riseRunRatio < 0) {
             throw new IllegalArgumentException("riseRunRatio must be finite and nonnegative");
+        }
+        if (!Double.isFinite(sourceFlow) || sourceFlow < 0) {
+            throw new IllegalArgumentException("sourceFlow must be finite and nonnegative");
+        }
+        if (!Double.isFinite(flowPerCell) || flowPerCell < 0) {
+            throw new IllegalArgumentException("flowPerCell must be finite and nonnegative");
         }
         if (cellSize < 1 || cellSize > 8) {
             throw new IllegalArgumentException("cellSize must be 1-8 chunks");
@@ -93,6 +111,8 @@ public record CommonConfig(
         public static final ForgeConfigSpec.IntValue FALLBACK_APPROACH_CELLS;
         public static final ForgeConfigSpec.IntValue AWAY_STEP_ALLOWANCE;
         public static final ForgeConfigSpec.DoubleValue RISE_RUN_RATIO;
+        public static final ForgeConfigSpec.DoubleValue SOURCE_FLOW;
+        public static final ForgeConfigSpec.DoubleValue FLOW_PER_CELL;
         private static final SourceConfig.Spec SOURCES;
         private static final CacheConfig.Spec CACHES;
 
@@ -141,6 +161,14 @@ public record CommonConfig(
                 .comment("Minimum rise in water elevation per river cell step upriver. 0.25 raises the minimum one block every four cells; 2 raises it two blocks per cell. Zero disables the minimum grade.")
                 .defineInRange("riseRunRatio", DEFAULT_RISE_RUN_RATIO, 0.0, Double.MAX_VALUE);
 
+            SOURCE_FLOW = builder
+                .comment("Starting flow at a watershed cell with no upstream links.")
+                .defineInRange("sourceFlow", DEFAULT_SOURCE_FLOW, 0.0, Double.MAX_VALUE);
+
+            FLOW_PER_CELL = builder
+                .comment("Flow added once at each non-source watershed cell, after summing incoming flows.")
+                .defineInRange("flowPerCell", DEFAULT_FLOW_PER_CELL, 0.0, Double.MAX_VALUE);
+
             builder.comment("Source classification thresholds. Preserve existing comparison boundaries and source precedence. Restart after editing.").push("sources");
             SOURCES = new SourceConfig.Spec(builder);
             builder.pop();
@@ -163,6 +191,8 @@ public record CommonConfig(
                 FALLBACK_APPROACH_CELLS.get(),
                 AWAY_STEP_ALLOWANCE.get(),
                 RISE_RUN_RATIO.get(),
+                SOURCE_FLOW.get(),
+                FLOW_PER_CELL.get(),
                 SOURCES.load(),
                 CACHES.load()
             ));
