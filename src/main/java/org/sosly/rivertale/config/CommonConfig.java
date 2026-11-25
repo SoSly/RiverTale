@@ -29,6 +29,7 @@ public record CommonConfig(
     private static final int DEFAULT_REGION_SIZE = 24;
     private static final int DEFAULT_CELL_SIZE = 4;
     private static final int DEFAULT_SAMPLES_PER_CELL = 5;
+    private static final int MAX_SAMPLES_PER_CELL = 64;
     private static final boolean DEFAULT_ENABLE_METRICS = false;
     private static final boolean DEFAULT_ENABLE_NUDGING = true;
     private static final int DEFAULT_NUDGING_LIMIT = 16;
@@ -89,9 +90,10 @@ public record CommonConfig(
         if (regionSize < 8 || regionSize > 64) {
             throw new IllegalArgumentException("regionSize must be 8-64 cells");
         }
-        if (samplesPerCell < 1 || samplesPerCell > cellSize * cellSize) {
-            throw new IllegalArgumentException("samplesPerCell must be 1 to cellSize squared");
+        if (samplesPerCell < 1 || samplesPerCell > MAX_SAMPLES_PER_CELL) {
+            throw new IllegalArgumentException("samplesPerCell must be 1-" + MAX_SAMPLES_PER_CELL);
         }
+        samplesPerCell = Math.min(samplesPerCell, cellSize * cellSize);
     }
 
     public static CommonConfig get() {
@@ -144,8 +146,8 @@ public record CommonConfig(
                 .defineInRange("cellSize", DEFAULT_CELL_SIZE, 1, 8);
 
             SAMPLES_PER_CELL = builder
-                .comment("Chunks sampled per cell (1 = center only)")
-                .defineInRange("samplesPerCell", DEFAULT_SAMPLES_PER_CELL, 1, 64);
+                .comment("Chunks sampled per cell (1 = center only). The effective count is capped at cellSize squared.")
+                .defineInRange("samplesPerCell", DEFAULT_SAMPLES_PER_CELL, 1, MAX_SAMPLES_PER_CELL);
 
             DISABLE_CHUNK_SAVING = builder
                 .comment(

@@ -61,6 +61,17 @@ class CommonConfigTest {
     }
 
     @Test
+    void startupCapsSamplesAtTheNumberOfChunksWithoutChangingTheRequestedCount() {
+        load("cellSize = 2\nsamplesPerCell = 5");
+
+        assertEquals(4, CommonConfig.get().samplesPerCell());
+        assertEquals(5, CommonConfig.Spec.SAMPLES_PER_CELL.get().intValue());
+
+        load("cellSize = 4\nsamplesPerCell = 5");
+        assertEquals(5, CommonConfig.get().samplesPerCell());
+    }
+
+    @Test
     void loadsWholeAndFractionalRiseRunRatios() {
         load("");
         assertEquals(0.25, CommonConfig.get().riseRunRatio());
@@ -145,7 +156,21 @@ class CommonConfigTest {
     }
 
     @Test
-    void rejectsInvalidTuningAgainstTheActiveGrid(@TempDir Path directory) throws IOException {
+    void rebuildCapsSamplesAgainstTheActiveGridWithoutRewritingToml(@TempDir Path directory) throws IOException {
+        load("cellSize = 2\nsamplesPerCell = 4");
+        Path file = directory.resolve(CommonConfig.Spec.FILE_NAME);
+        String toml = "cellSize = 8\nsamplesPerCell = 5";
+        Files.writeString(file, toml);
+
+        CommonConfig tuning = CommonConfig.Spec.readTuning(file);
+
+        assertEquals(2, tuning.cellSize());
+        assertEquals(4, tuning.samplesPerCell());
+        assertEquals(toml, Files.readString(file));
+    }
+
+    @Test
+    void rejectsInvalidTuning(@TempDir Path directory) throws IOException {
         load("");
         CommonConfig active = CommonConfig.get();
         Path file = directory.resolve(CommonConfig.Spec.FILE_NAME);
@@ -154,7 +179,7 @@ class CommonConfigTest {
         Files.writeString(file, "nudgingLimit = [");
         assertThrows(ParsingException.class, () -> CommonConfig.Spec.readTuning(file));
 
-        Files.writeString(file, "cellSize = 8\nsamplesPerCell = 17");
+        Files.writeString(file, "samplesPerCell = 65");
         assertThrows(IllegalArgumentException.class, () -> CommonConfig.Spec.readTuning(file));
 
         Files.writeString(file, "nudgingLimit = 0.5");
