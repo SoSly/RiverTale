@@ -1,12 +1,16 @@
 package org.sosly.rivertale.river;
 
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Boundary;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
@@ -27,52 +31,71 @@ final class RiverPreviewEncoding {
             boundaries.add(boundary.encode());
         }
         tag.put("boundaries", boundaries);
-        ListTag cells = new ListTag();
-        for (CellPos cellPos : region.cells()) {
-            CellData cell = data.cells().get(cellPos);
-            CompoundTag entry = new CompoundTag();
-            entry.putLong("pos", cellPos.toLong());
-            entry.putString("feature", cell.feature().name());
-            Watershed watershed = data.watershedAt(cellPos);
-            OptionalInt cellY = assignedHeight(cellPos, watershed);
-            entry.putInt("y", cellY.orElse(cell.height()));
-            if (cellY.isPresent()) {
-                entry.putInt("averageY", cell.height());
-            }
-            if (watershed != null) {
-                watershed.flow(cellPos).ifPresent(flow -> entry.putDouble("flow", flow));
-            }
-            cells.add(entry);
-        }
-        tag.put("cells", cells);
+        tag.put("cells", encodeCells(data));
         Set<CellPos> merged = encodeWatersheds(tag, data.cells(), data.watersheds());
         tag.put("paths", encodePaths(data, merged));
         return tag;
     }
 
+    private static CompoundTag encodeCells(RiverRegion data) {
+        List<CellPos> positions = data.region().cells();
+        byte[] features = new byte[positions.size()];
+        int[] heights = new int[positions.size()];
+        IntArrayList averageYByIndex = new IntArrayList();
+        LongArrayList flowByIndex = new LongArrayList();
+        for (int i = 0; i < positions.size(); i++) {
+            CellPos pos = positions.get(i);
+            CellData cell = data.cells().get(pos);
+            Watershed watershed = data.watershedAt(pos);
+            OptionalInt cellY = assignedHeight(pos, watershed);
+            features[i] = (byte) cell.feature().ordinal();
+            heights[i] = cellY.orElse(cell.height());
+            if (cellY.isPresent()) {
+                averageYByIndex.add(i);
+                averageYByIndex.add(cell.height());
+            }
+            OptionalDouble flow = watershed == null ? OptionalDouble.empty() : watershed.flow(pos);
+            if (flow.isPresent()) {
+                flowByIndex.add(i);
+                flowByIndex.add(Double.doubleToRawLongBits(flow.getAsDouble()));
+            }
+        }
+        CompoundTag cells = new CompoundTag();
+        cells.putInt("side", CommonConfig.get().cellsPerRegion());
+        cells.putByteArray("features", features);
+        cells.putIntArray("heights", heights);
+        cells.putIntArray("averageYByIndex", averageYByIndex.toIntArray());
+        cells.putLongArray("flowByIndex", flowByIndex.toLongArray());
+        return cells;
+    }
+
     private static Set<CellPos> encodeWatersheds(CompoundTag tag, Map<CellPos, CellData> cells,
                                                 List<Watershed> watersheds) {
-        ListTag edges = new ListTag();
+        LongArrayList edgePositions = new LongArrayList();
+        IntArrayList edgeHeights = new IntArrayList();
         ListTag outlets = new ListTag();
         Set<CellPos> merged = new HashSet<>();
         for (Watershed watershed : watersheds) {
             merged.addAll(watershed.allCells());
             for (CellPos from : watershed.allCells()) {
                 CellPos to = watershed.downstream(from);
-                CompoundTag entry = new CompoundTag();
+                int fromY = previewHeight(from, watershed, cells.get(from).height());
                 if (to == null) {
-                    entry.putLong("pos", from.toLong());
-                    entry.putInt("y", previewHeight(from, watershed, cells.get(from).height()));
-                    outlets.add(entry);
+                    CompoundTag outlet = new CompoundTag();
+                    outlet.putLong("pos", from.toLong());
+                    outlet.putInt("y", fromY);
+                    outlets.add(outlet);
                     continue;
                 }
-                entry.putLong("from", from.toLong());
-                entry.putLong("to", to.toLong());
-                entry.putInt("fromY", previewHeight(from, watershed, cells.get(from).height()));
-                entry.putInt("toY", previewHeight(to, watershed, cells.get(to).height()));
-                edges.add(entry);
+                edgePositions.add(from.toLong());
+                edgePositions.add(to.toLong());
+                edgeHeights.add(fromY);
+                edgeHeights.add(previewHeight(to, watershed, cells.get(to).height()));
             }
         }
+        CompoundTag edges = new CompoundTag();
+        edges.putLongArray("positions", edgePositions.toLongArray());
+        edges.putIntArray("heights", edgeHeights.toIntArray());
         tag.put("watershed", edges);
         tag.put("outlets", outlets);
         return merged;

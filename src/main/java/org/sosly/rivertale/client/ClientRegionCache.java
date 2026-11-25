@@ -32,26 +32,9 @@ public class ClientRegionCache {
     private final int capacity;
 
     public record Cell(CellPos pos, Feature feature, int y, OptionalInt averageY, OptionalDouble flow) {
-        public static Cell decode(CompoundTag tag) {
-            return new Cell(
-                new CellPos(tag.getLong("pos")),
-                Feature.valueOf(tag.getString("feature")),
-                tag.getInt("y"),
-                tag.contains("averageY", Tag.TAG_INT) ? OptionalInt.of(tag.getInt("averageY")) : OptionalInt.empty(),
-                tag.contains("flow", Tag.TAG_DOUBLE) ? OptionalDouble.of(tag.getDouble("flow")) : OptionalDouble.empty()
-            );
-        }
     }
 
     public record Edge(CellPos from, CellPos to, int fromY, int toY) {
-        public static Edge decode(CompoundTag tag) {
-            return new Edge(
-                new CellPos(tag.getLong("from")),
-                new CellPos(tag.getLong("to")),
-                tag.getInt("fromY"),
-                tag.getInt("toY")
-            );
-        }
     }
 
     public record Point(CellPos pos, int y) {
@@ -88,17 +71,8 @@ public class ClientRegionCache {
                 boundaries.add(Boundary.decode(boundaryList.getCompound(i)));
             }
 
-            List<Cell> cells = new ArrayList<>();
-            ListTag cellList = tag.getList("cells", Tag.TAG_COMPOUND);
-            for (int i = 0; i < cellList.size(); i++) {
-                cells.add(Cell.decode(cellList.getCompound(i)));
-            }
-
-            List<Edge> edges = new ArrayList<>();
-            ListTag edgeList = tag.getList("watershed", Tag.TAG_COMPOUND);
-            for (int i = 0; i < edgeList.size(); i++) {
-                edges.add(Edge.decode(edgeList.getCompound(i)));
-            }
+            List<Cell> cells = decodeCells(pos, tag.getCompound("cells"));
+            List<Edge> edges = decodeEdges(tag.getCompound("watershed"));
 
             List<Flowline> paths = new ArrayList<>();
             ListTag pathList = tag.getList("paths", Tag.TAG_COMPOUND);
@@ -113,6 +87,60 @@ public class ClientRegionCache {
                 outlets.add(new Point(new CellPos(outlet.getLong("pos")), outlet.getInt("y")));
             }
             return new Region(pos, type, boundaries, cells, edges, paths, outlets);
+        }
+
+        private static List<Cell> decodeCells(RegionPos region, CompoundTag tag) {
+            int side = tag.getInt("side");
+            byte[] ids = tag.getByteArray("features");
+            int[] heights = tag.getIntArray("heights");
+            int[] averages = tag.getIntArray("averageYByIndex");
+            long[] flows = tag.getLongArray("flowByIndex");
+            if (side < 8 || side > 64 || ids.length != side * side || ids.length != heights.length
+                || averages.length % 2 != 0 || flows.length % 2 != 0) {
+                throw new IllegalArgumentException("Invalid preview cell arrays");
+            }
+
+            Feature[] features = Feature.values();
+            int minX = region.x() * side;
+            int minZ = region.z() * side;
+            List<Cell> cells = new ArrayList<>(ids.length);
+            int averageIndex = 0;
+            int flowIndex = 0;
+            for (int i = 0; i < ids.length; i++) {
+                int featureId = Byte.toUnsignedInt(ids[i]);
+                if (featureId >= features.length) {
+                    throw new IllegalArgumentException("Invalid preview feature ID: " + featureId);
+                }
+                CellPos pos = new CellPos(minX + i / side, minZ + i % side);
+                OptionalInt average = OptionalInt.empty();
+                if (averageIndex < averages.length && averages[averageIndex] == i) {
+                    average = OptionalInt.of(averages[averageIndex + 1]);
+                    averageIndex += 2;
+                }
+                OptionalDouble flow = OptionalDouble.empty();
+                if (flowIndex < flows.length && flows[flowIndex] == i) {
+                    flow = OptionalDouble.of(Double.longBitsToDouble(flows[flowIndex + 1]));
+                    flowIndex += 2;
+                }
+                cells.add(new Cell(pos, features[featureId], heights[i], average, flow));
+            }
+            if (averageIndex != averages.length || flowIndex != flows.length) {
+                throw new IllegalArgumentException("Invalid preview cell indices");
+            }
+            return cells;
+        }
+
+        private static List<Edge> decodeEdges(CompoundTag tag) {
+            long[] positions = tag.getLongArray("positions");
+            int[] heights = tag.getIntArray("heights");
+            if (positions.length != heights.length || positions.length % 2 != 0) {
+                throw new IllegalArgumentException("Invalid preview edge arrays");
+            }
+            List<Edge> edges = new ArrayList<>(positions.length / 2);
+            for (int i = 0; i < positions.length; i += 2) {
+                edges.add(new Edge(new CellPos(positions[i]), new CellPos(positions[i + 1]), heights[i], heights[i + 1]));
+            }
+            return edges;
         }
     }
 

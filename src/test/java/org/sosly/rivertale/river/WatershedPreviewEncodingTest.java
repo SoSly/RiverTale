@@ -1,5 +1,6 @@
 package org.sosly.rivertale.river;
 
+import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -8,6 +9,7 @@ import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.Set;
+import net.minecraft.network.FriendlyByteBuf;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,7 @@ import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.river.PreparedRiverData.CellData;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WatershedPreviewEncodingTest {
     private static final RegionPos CENTER = new RegionPos(0, 0);
@@ -135,6 +138,56 @@ class WatershedPreviewEncodingTest {
         assertEquals(OptionalDouble.of(0.0), cell(sent, source).flow());
         assertEquals(OptionalDouble.of(0.5), cell(sent, terminus).flow());
         assertEquals(OptionalDouble.empty(), cell(sent, outside).flow());
+    }
+
+    @Test
+    void decodesALargeRegionWithinTheDefaultPacketBudget() {
+        int side = 64;
+        CommonConfig.set(new CommonConfig(side, 1, 1, false, false, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
+        Region region = new Region(new RegionPos(-2, 1), RegionType.INLAND);
+        CellPos corner = region.pos().getMinCell();
+        Map<CellPos, CellData> cells = new HashMap<>();
+        for (CellPos pos : region.cells()) {
+            Feature feature = pos.equals(corner) ? Feature.SNOWMELT : Feature.NONE;
+            cells.put(pos, new CellData(feature, List.of(), height(pos)));
+        }
+
+        List<CellPos> route = new ArrayList<>();
+        for (int z = 0; z < side; z++) {
+            for (int x = 0; x < side; x++) {
+                route.add(new CellPos(corner.x() + (z % 2 == 0 ? x : side - 1 - x), corner.z() + z));
+            }
+        }
+        Map<CellPos, CellPos> links = new HashMap<>();
+        Set<ClientRegionCache.Edge> expectedEdges = new HashSet<>();
+        int edgeCount = 1_500;
+        for (int i = 0; i < edgeCount; i++) {
+            CellPos from = route.get(i);
+            CellPos to = route.get(i + 1);
+            links.put(from, to);
+            expectedEdges.add(edge(from, to));
+        }
+        Watershed watershed = Watershed.fromLinks(route.get(edgeCount), links);
+        RiverRegion snapshot = new RiverRegion(region, cells, List.of(), List.of(watershed));
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        try {
+            Region.Packet.encode(new Region.Packet(snapshot.encode()), buffer);
+            assertTrue(buffer.readableBytes() < 64 * 1024, "Payload size: " + buffer.readableBytes());
+            CommonConfig.set(originalConfig);
+            ClientRegionCache.Region decoded = ClientRegionCache.Region.decode(buffer.readNbt());
+
+            assertEquals(region.pos(), decoded.pos());
+            assertEquals(region.type(), decoded.type());
+            assertEquals(4_096, decoded.cells().size());
+            for (ClientRegionCache.Cell cell : decoded.cells()) {
+                assertEquals(cells.get(cell.pos()).feature(), cell.feature());
+                assertEquals(height(cell.pos()), cell.y());
+            }
+            assertEquals(expectedEdges, new HashSet<>(decoded.edges()));
+            assertEquals(List.of(point(route.get(edgeCount).x(), route.get(edgeCount).z())), decoded.outlets());
+        } finally {
+            buffer.release();
+        }
     }
 
     private ClientRegionCache.Cell cell(ClientRegionCache.Region region, CellPos pos) {
