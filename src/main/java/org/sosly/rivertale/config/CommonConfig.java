@@ -156,7 +156,8 @@ public record CommonConfig(
                 .define("disableChunkSaving", false);
 
             ENABLE_METRICS = builder
-                .comment("Enable performance metrics collection. Useful for debugging but consumes memory.")
+                .comment("Enable detailed performance metrics. Useful for debugging but consumes memory.",
+                    "Whole network build time is recorded even when this is off.")
                 .define("enableMetrics", DEFAULT_ENABLE_METRICS);
 
             ENABLE_NUDGING = builder

@@ -48,6 +48,7 @@ import org.sosly.rivertale.density.Sample;
 import org.sosly.rivertale.density.SampleCache;
 import org.sosly.rivertale.density.SampleProvider;
 import org.sosly.rivertale.event.ServerLifecycleHandler;
+import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionTypeCache;
@@ -103,6 +104,24 @@ class FlowlinePreviewTest {
         CellCache.shutdown();
         SampleCache.shutdown();
         CommonConfig.set(originalConfig);
+    }
+
+    @Test
+    void networkBuildRecordsOnlyItsTotalWhenMetricsAreDisabled() {
+        Store.clear();
+        try {
+            assertFalse(CommonConfig.get().enableMetrics());
+            RegionPos pos = source.getRegion();
+            assertTrue(RiverNetwork.build(Set.of(pos), () -> { }).containsKey(pos));
+
+            String buildMetric = RiverNetwork.class.getName() + "_build";
+            assertEquals(Set.of(buildMetric), Store.timers().keySet());
+            assertEquals(1, Store.timers().get(buildMetric).count());
+            assertTrue(Store.ratios().isEmpty());
+            assertTrue(Store.distributions().isEmpty());
+        } finally {
+            Store.clear();
+        }
     }
 
     @Test

@@ -63,6 +63,10 @@ public class Store {
         if (!isEnabled()) {
             return NOOP_TIMER;
         }
+        return getAlwaysOnTimer(clazz, name);
+    }
+
+    public static Timer getAlwaysOnTimer(Class<?> clazz, String name) {
         String metricName = clazz.getName() + "_" + name;
         return getInstance().timers.computeIfAbsent(metricName, k -> new Timer());
     }

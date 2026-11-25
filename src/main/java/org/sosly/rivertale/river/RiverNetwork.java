@@ -22,7 +22,7 @@ final class RiverNetwork {
     }
 
     static Map<RegionPos, RiverRegion> build(Set<RegionPos> roots, Runnable checkCancelled) {
-        Timer.Record timer = Store.getTimer(RiverNetwork.class, "build").start();
+        Timer.Record timer = Store.getAlwaysOnTimer(RiverNetwork.class, "build").start();
         try {
             return assemble(roots, RiverPreparation.prepare(roots, checkCancelled), checkCancelled);
         } finally {

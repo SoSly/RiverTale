@@ -201,6 +201,22 @@ class MetricsCommandTest {
     }
 
     @Test
+    void overviewStillShowsWholeNetworkBuildWhenMetricsAreDisabled() throws Exception {
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
+        Store.getAlwaysOnTimer(riverType("RiverNetwork"), "build").record(14_000_000_000L);
+        Store.getTimer(riverType("RiverPreparation"), "prepare").record(9_000_000_000L);
+
+        dispatcher.execute("rivertale metrics", source);
+
+        assertEquals(List.of(
+            "RiverTale Metrics · 1 network build",
+            "Pipeline (ms) Avg Min Max",
+            "Whole network build 14000.0 14000.0 14000.0",
+            FOOTER
+        ), messages.stream().map(line -> line.strip().replaceAll(" +", " ")).toList());
+    }
+
+    @Test
     void disabledMetricsDoNotStoreLengthSamples() {
         CommonConfig.set(new CommonConfig(8, 1, 1, false, true, 16, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         Distribution lengths = Store.getDistribution(FlowlineTracer.class, "lengthBlocks");
