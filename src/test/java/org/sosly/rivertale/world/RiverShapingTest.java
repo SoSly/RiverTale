@@ -31,6 +31,7 @@ import org.sosly.rivertale.river.Watershed;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -127,6 +128,26 @@ class RiverShapingTest {
 
         assertTrue(provider.requested.isEmpty());
         assertSame(ready, RiverShaping.getReady(CENTER.getRegion(), overworldState));
+    }
+
+    @Test
+    void rebuildUsesNewTuningForCellClassification() {
+        RiverShaping.init(78, overworldState);
+        RegionPos region = CENTER.getRegion();
+        ChunkAccess chunk = chunkAt(CENTER);
+        RiverShaping.shape(chunk, overworldState);
+        RiverRegion original = RiverShaping.getReady(region, overworldState);
+        assertEquals(Feature.SNOWMELT, original.cells().get(CENTER).feature());
+
+        SourceConfig sources = new SourceConfig(1_000, 0.2, 0.125, 0.5, 0.4, 0.3, 100, 0.2, 0.05);
+        CommonConfig tuning = new CommonConfig(8, 1, 1, false, false, 0, 5, 10, sources, CacheConfig.DEFAULT);
+        assertTrue(RiverShaping.rebuild(region, overworldState, tuning));
+        RiverShaping.shape(chunk, overworldState);
+
+        RiverRegion rebuilt = RiverShaping.getReady(region, overworldState);
+        assertSame(tuning, CommonConfig.get());
+        assertNotSame(original, rebuilt);
+        assertNotEquals(Feature.SNOWMELT, rebuilt.cells().get(CENTER).feature());
     }
 
     @Test

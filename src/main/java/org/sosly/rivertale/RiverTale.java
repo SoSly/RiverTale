@@ -23,7 +23,7 @@ public class RiverTale {
         LOGGER.info("Loading RiverTale");
 
 
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, CommonConfig.Spec.SPEC);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, CommonConfig.Spec.SPEC, CommonConfig.Spec.FILE_NAME);
 
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 

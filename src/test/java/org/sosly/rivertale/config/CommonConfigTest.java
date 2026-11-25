@@ -1,13 +1,19 @@
 package org.sosly.rivertale.config;
 
 import com.electronwill.nightconfig.core.CommentedConfig;
+import com.electronwill.nightconfig.core.io.ParsingException;
 import com.electronwill.nightconfig.toml.TomlParser;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -83,10 +89,80 @@ class CommonConfigTest {
     @Test
     void disablingChunkSavingIsOptIn() {
         load("");
-        assertFalse(CommonConfig.Spec.DISABLE_CHUNK_SAVING.get());
+        assertFalse(CommonConfig.get().disableChunkSaving());
 
         load("disableChunkSaving = true");
-        assertTrue(CommonConfig.Spec.DISABLE_CHUNK_SAVING.get());
+        assertTrue(CommonConfig.get().disableChunkSaving());
+
+        CommonConfig.Spec.SPEC.setConfig(new TomlParser().parse("disableChunkSaving = false"));
+        assertTrue(CommonConfig.get().disableChunkSaving());
+    }
+
+    @Test
+    void readsFreshTuningWithoutApplyingRestartOnlyEdits(@TempDir Path directory) throws IOException {
+        load("disableChunkSaving = true");
+        CommonConfig active = CommonConfig.get();
+        Path file = directory.resolve(CommonConfig.Spec.FILE_NAME);
+        Files.writeString(file, """
+            regionSize = 32
+            cellSize = 1
+            samplesPerCell = 8
+            disableChunkSaving = false
+            enableMetrics = true
+            enableNudging = false
+            nudgingLimit = 12
+            fallbackApproachCells = 0
+            awayStepAllowance = 2
+            riseRunRatio = 0.5
+            sourceFlow = 2
+            flowPerCell = 0.75
+            [sources]
+            springMinGrade = 0.25
+            [caches]
+            cells = 12
+            """);
+
+        CommonConfig tuning = CommonConfig.Spec.readTuning(file);
+
+        assertEquals(active.regionSize(), tuning.regionSize());
+        assertEquals(active.cellSize(), tuning.cellSize());
+        assertSame(active.caches(), tuning.caches());
+        assertTrue(tuning.disableChunkSaving());
+        assertEquals(8, tuning.samplesPerCell());
+        assertTrue(tuning.enableMetrics());
+        assertFalse(tuning.enableNudging());
+        assertEquals(12, tuning.nudgingLimit());
+        assertEquals(0, tuning.fallbackApproachCells());
+        assertEquals(2, tuning.awayStepAllowance());
+        assertEquals(0.5, tuning.riseRunRatio());
+        assertEquals(2, tuning.sourceFlow());
+        assertEquals(0.75, tuning.flowPerCell());
+        assertEquals(0.25, tuning.sources().springMinGrade());
+        assertSame(active, CommonConfig.get());
+
+        Files.writeString(file, "nudgingLimit = 0");
+        assertEquals(0, CommonConfig.Spec.readTuning(file).nudgingLimit());
+    }
+
+    @Test
+    void rejectsInvalidTuningAgainstTheActiveGrid(@TempDir Path directory) throws IOException {
+        load("");
+        CommonConfig active = CommonConfig.get();
+        Path file = directory.resolve(CommonConfig.Spec.FILE_NAME);
+        assertThrows(IOException.class, () -> CommonConfig.Spec.readTuning(file));
+
+        Files.writeString(file, "nudgingLimit = [");
+        assertThrows(ParsingException.class, () -> CommonConfig.Spec.readTuning(file));
+
+        Files.writeString(file, "cellSize = 8\nsamplesPerCell = 17");
+        assertThrows(IllegalArgumentException.class, () -> CommonConfig.Spec.readTuning(file));
+
+        Files.writeString(file, "nudgingLimit = 0.5");
+        assertThrows(IllegalArgumentException.class, () -> CommonConfig.Spec.readTuning(file));
+
+        Files.writeString(file, "[sources]\ncraterChance = 2.0");
+        assertThrows(IllegalArgumentException.class, () -> CommonConfig.Spec.readTuning(file));
+        assertSame(active, CommonConfig.get());
     }
 
     @Test

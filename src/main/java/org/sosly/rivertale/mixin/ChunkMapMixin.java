@@ -20,7 +20,7 @@ public abstract class ChunkMapMixin {
         cancellable = true
     )
     private void skipDiskWrite(ChunkAccess chunk, CallbackInfoReturnable<Boolean> cir) {
-        if (CommonConfig.Spec.DISABLE_CHUNK_SAVING.get()) {
+        if (CommonConfig.get().disableChunkSaving()) {
             cir.setReturnValue(true);
         }
     }

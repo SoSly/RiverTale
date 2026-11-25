@@ -6,6 +6,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.SampleCache;
@@ -75,12 +76,15 @@ public class RiverShaping {
         }
     }
 
-    public static boolean rebuild(RegionPos center, RandomState state) {
+    public static boolean rebuild(RegionPos center, RandomState state, CommonConfig tuning) {
         ActiveWorld active = activeWorld(state);
         if (active == null) {
             return false;
         }
-        active.rivers().rebuild(center, RiverShaping::clearTerrainCaches);
+        active.rivers().rebuild(center, () -> {
+            CommonConfig.set(tuning);
+            clearTerrainCaches();
+        });
         return true;
     }
 

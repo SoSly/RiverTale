@@ -87,5 +87,19 @@ public record SourceConfig(
                 craterChance.get()
             );
         }
+
+        SourceConfig load(TuningConfigValues values) {
+            return new SourceConfig(
+                values.get(snowmeltMinHeight),
+                values.get(snowmeltMaxTemperature),
+                values.get(springMinGrade),
+                values.get(springMaxRidges),
+                values.get(seepMinVegetation),
+                values.get(seepMaxErosion),
+                values.get(craterMinHeight),
+                values.get(craterMinTemperature),
+                values.get(craterChance)
+            );
+        }
     }
 }

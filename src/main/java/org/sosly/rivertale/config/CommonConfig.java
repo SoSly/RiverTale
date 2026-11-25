@@ -1,5 +1,12 @@
 package org.sosly.rivertale.config;
 
+import com.electronwill.nightconfig.core.CommentedConfig;
+import com.electronwill.nightconfig.core.UnmodifiableConfig;
+import com.electronwill.nightconfig.toml.TomlParser;
+import java.io.IOException;
+import java.io.Reader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Objects;
 import net.minecraftforge.common.ForgeConfigSpec;
 
@@ -16,7 +23,8 @@ public record CommonConfig(
     double sourceFlow,
     double flowPerCell,
     SourceConfig sources,
-    CacheConfig caches
+    CacheConfig caches,
+    boolean disableChunkSaving
 ) {
     private static final int DEFAULT_REGION_SIZE = 24;
     private static final int DEFAULT_CELL_SIZE = 4;
@@ -30,7 +38,7 @@ public record CommonConfig(
     private static final double DEFAULT_SOURCE_FLOW = 1.0;
     private static final double DEFAULT_FLOW_PER_CELL = 0.5;
 
-    private static CommonConfig instance = new CommonConfig(
+    private static volatile CommonConfig instance = new CommonConfig(
         DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_SAMPLES_PER_CELL,
         DEFAULT_ENABLE_METRICS, DEFAULT_ENABLE_NUDGING, DEFAULT_NUDGING_LIMIT, DEFAULT_FALLBACK_APPROACH_CELLS,
         DEFAULT_AWAY_STEP_ALLOWANCE, DEFAULT_RISE_RUN_RATIO, DEFAULT_SOURCE_FLOW, DEFAULT_FLOW_PER_CELL,
@@ -48,6 +56,13 @@ public record CommonConfig(
                         SourceConfig sources, CacheConfig caches) {
         this(regionSize, cellSize, samplesPerCell, enableMetrics, enableNudging, nudgingLimit, fallbackApproachCells,
             awayStepAllowance, riseRunRatio, DEFAULT_SOURCE_FLOW, DEFAULT_FLOW_PER_CELL, sources, caches);
+    }
+
+    public CommonConfig(int regionSize, int cellSize, int samplesPerCell, boolean enableMetrics, boolean enableNudging,
+                        int nudgingLimit, int fallbackApproachCells, int awayStepAllowance, double riseRunRatio,
+                        double sourceFlow, double flowPerCell, SourceConfig sources, CacheConfig caches) {
+        this(regionSize, cellSize, samplesPerCell, enableMetrics, enableNudging, nudgingLimit, fallbackApproachCells,
+            awayStepAllowance, riseRunRatio, sourceFlow, flowPerCell, sources, caches, false);
     }
 
     public CommonConfig {
@@ -100,11 +115,12 @@ public record CommonConfig(
     }
 
     public static class Spec {
+        public static final String FILE_NAME = "rivertale-common.toml";
         public static final ForgeConfigSpec SPEC;
         public static final ForgeConfigSpec.IntValue REGION_SIZE;
         public static final ForgeConfigSpec.IntValue CELL_SIZE;
         public static final ForgeConfigSpec.IntValue SAMPLES_PER_CELL;
-        public static final ForgeConfigSpec.BooleanValue DISABLE_CHUNK_SAVING;
+        private static final ForgeConfigSpec.BooleanValue DISABLE_CHUNK_SAVING;
         public static final ForgeConfigSpec.BooleanValue ENABLE_METRICS;
         public static final ForgeConfigSpec.BooleanValue ENABLE_NUDGING;
         public static final ForgeConfigSpec.IntValue NUDGING_LIMIT;
@@ -120,11 +136,11 @@ public record CommonConfig(
             ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
             REGION_SIZE = builder
-                .comment("Cells per side of each region")
+                .comment("Cells per side of each region. Restart after editing.")
                 .defineInRange("regionSize", DEFAULT_REGION_SIZE, 8, 64);
 
             CELL_SIZE = builder
-                .comment("Chunks per side of each cell")
+                .comment("Chunks per side of each cell. Restart after editing.")
                 .defineInRange("cellSize", DEFAULT_CELL_SIZE, 1, 8);
 
             SAMPLES_PER_CELL = builder
@@ -134,7 +150,7 @@ public record CommonConfig(
             DISABLE_CHUNK_SAVING = builder
                 .comment(
                     "For development use only. Do not enable this setting unless directed by a RiverTale developer.",
-                    "When enabled, chunk changes will not be saved to disk.")
+                    "When enabled, chunk changes will not be saved to disk. Restart after editing.")
                 .define("disableChunkSaving", false);
 
             ENABLE_METRICS = builder
@@ -169,7 +185,7 @@ public record CommonConfig(
                 .comment("Flow added once at each non-source watershed cell, after summing incoming flows.")
                 .defineInRange("flowPerCell", DEFAULT_FLOW_PER_CELL, 0.0, Double.MAX_VALUE);
 
-            builder.comment("Source classification thresholds. Preserve existing comparison boundaries and source precedence. Restart after editing.").push("sources");
+            builder.comment("Source classification thresholds. Preserve existing comparison boundaries and source precedence.").push("sources");
             SOURCES = new SourceConfig.Spec(builder);
             builder.pop();
 
@@ -194,8 +210,38 @@ public record CommonConfig(
                 SOURCE_FLOW.get(),
                 FLOW_PER_CELL.get(),
                 SOURCES.load(),
-                CACHES.load()
+                CACHES.load(),
+                DISABLE_CHUNK_SAVING.get()
             ));
+        }
+
+        public static CommonConfig readTuning(Path path) throws IOException {
+            CommentedConfig data;
+            try (Reader file = Files.newBufferedReader(path)) {
+                data = new TomlParser().parse(file);
+            }
+            if (data.contains("sources") && !(data.get("sources") instanceof UnmodifiableConfig)) {
+                throw new IllegalArgumentException("sources must be a TOML table");
+            }
+
+            TuningConfigValues values = new TuningConfigValues(SPEC, data);
+            CommonConfig active = get();
+            return new CommonConfig(
+                active.regionSize(),
+                active.cellSize(),
+                values.get(SAMPLES_PER_CELL),
+                values.get(ENABLE_METRICS),
+                values.get(ENABLE_NUDGING),
+                values.get(NUDGING_LIMIT),
+                values.get(FALLBACK_APPROACH_CELLS),
+                values.get(AWAY_STEP_ALLOWANCE),
+                values.get(RISE_RUN_RATIO),
+                values.get(SOURCE_FLOW),
+                values.get(FLOW_PER_CELL),
+                SOURCES.load(values),
+                active.caches(),
+                active.disableChunkSaving()
+            );
         }
     }
 }

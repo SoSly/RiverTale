@@ -22,7 +22,7 @@ Planning heights come from ReTerraForged's base terrain, before erosion and smoo
 - Timing metrics (`/rivertale metrics`)
 - Manual carving and filling experiments
 
-Tuning lives in `config/rivertale-common.toml`. The file's own comments are the reference. Restart after editing.
+Tuning lives in `config/rivertale-common.toml`. With `disableChunkSaving` enabled at startup, operators can edit the file and run `/rivertale rebuild` to apply river tuning, including `samplesPerCell`. Changes to `cellSize`, `regionSize`, cache capacities, and `disableChunkSaving` still require a restart.
 
 ## Requirements
 
