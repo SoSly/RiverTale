@@ -17,13 +17,13 @@ public record RiverRegion(Region region, Map<CellPos, CellData> cells, List<Flow
         watersheds = List.copyOf(watersheds);
     }
 
-    static RiverRegion snapshot(RegionPos pos, PreparedRiverData data, List<Flowline> flowlines,
+    static RiverRegion snapshot(RegionPos pos, PreparedRiverData data, Map<CellPos, CellData> classified, List<Flowline> flowlines,
                                 List<Watershed> watersheds) {
         Region region = data.region(pos);
         Map<CellPos, CellData> cells = new HashMap<>();
         region.cells().forEach(cell -> cells.put(cell, data.cell(cell)));
         flowlines.forEach(path -> path.cells().forEach(cell -> cells.put(cell, data.cell(cell))));
-        watersheds.forEach(watershed -> watershed.allCells().forEach(cell -> cells.put(cell, data.cell(cell))));
+        watersheds.forEach(watershed -> watershed.allCells().forEach(cell -> cells.put(cell, classified.get(cell))));
         return new RiverRegion(region, cells, flowlines, watersheds);
     }
 

@@ -6,6 +6,6 @@ import org.sosly.rivertale.river.Watershed;
 public class Cascade implements FeatureHandler {
     @Override
     public boolean classify(Cell cell, Watershed watershed) {
-        return false;
+        return CourseDrop.classify(cell.pos(), watershed) == Feature.CASCADE;
     }
 }

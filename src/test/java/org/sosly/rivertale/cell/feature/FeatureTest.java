@@ -40,10 +40,8 @@ class FeatureTest {
 
     @Test
     void classifyReturnsNoneWhenNoSourceHandlerMatches() {
-        // Height 99 is below every height gate (crater 100, spring 113, snowmelt 175).
-        // Vegetation 0.1 fails seep. Everything else is chosen so it would not block anything.
         CellPos pos = new CellPos(10, 20);
-        Cell original = cellWith(pos, 99, 0.1);
+        Cell original = cellWith(pos, 73, 0.1);
 
         Cell classified = Feature.classify(original, null);
 
@@ -54,8 +52,6 @@ class FeatureTest {
 
     @Test
     void raisingOnlyTheHeightOfTheNoMatchCellMakesItASource() {
-        // Same fixture as the no-match case with one change: height 99 -> 180.
-        // That proves height was the deliberate reason nothing matched.
         Cell cell = cellWith(new CellPos(10, 20), 180, 0.1);
 
         assertEquals(Feature.SNOWMELT, Feature.classify(cell, null).feature());
@@ -63,7 +59,7 @@ class FeatureTest {
 
     @Test
     void classifyReplacesTheExistingFeature() {
-        Cell original = cellWith(new CellPos(5, 5), 99, 0.1).withFeature(Feature.RUN);
+        Cell original = cellWith(new CellPos(5, 5), 73, 0.1).withFeature(Feature.RUN);
 
         Cell classified = Feature.classify(original, null);
 
@@ -103,7 +99,7 @@ class FeatureTest {
             // erosion 0.1, ridges 0.1, temperature 0.1: none of these block snowmelt/spring, and erosion allows seep.
             provider.putSample(chunk, new Sample(chunk, ocean ? -0.5 : 0.5, height, ocean, 0.1, 0.1, 0.1, vegetation));
         }
-        return cell;
+        return CellCache.get().getOrComputeWithFlow(pos);
     }
 
     private static class TestSampleProvider implements SampleProvider {

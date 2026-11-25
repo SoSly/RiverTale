@@ -33,7 +33,7 @@ class CommonConfigTest {
             [sources]
             snowmeltMinHeight = 210
             snowmeltMaxTemperature = -0.1
-            springMinHeight = 130
+            springMinGrade = 0.25
             springMaxRidges = 0.7
             seepMinVegetation = 0.6
             seepMaxErosion = 0.15
@@ -50,7 +50,7 @@ class CommonConfigTest {
         CommonConfig config = CommonConfig.get();
         assertEquals(2, config.fallbackApproachCells());
         assertEquals(3, config.awayStepAllowance());
-        assertEquals(new SourceConfig(210, -0.1, 130, 0.7, 0.6, 0.15, 140, 0.35, 0.25), config.sources());
+        assertEquals(new SourceConfig(210, -0.1, 0.25, 0.7, 0.6, 0.15, 140, 0.35, 0.25), config.sources());
         assertEquals(new CacheConfig(2000, 200, 20, 30, 40), config.caches());
     }
 
@@ -114,8 +114,10 @@ class CommonConfigTest {
     @Test
     void directConfigurationRejectsInvalidLimitsAndProbabilities() {
         assertThrows(IllegalArgumentException.class, () -> new CacheConfig(0, 1, 1, 1, 1));
-        assertThrows(IllegalArgumentException.class, () -> new SourceConfig(175, Double.NaN, 113, 0.5, 0.4, 0.3, 100, 0.2, 0.05));
-        assertThrows(IllegalArgumentException.class, () -> new SourceConfig(175, 0.2, 113, 0.5, 0.4, 0.3, 100, 0.2, 1.1));
+        assertThrows(IllegalArgumentException.class, () -> new SourceConfig(175, Double.NaN, 0.125, 0.5, 0.4, 0.3, 100, 0.2, 0.05));
+        assertThrows(IllegalArgumentException.class, () -> new SourceConfig(175, 0.2, -0.125, 0.5, 0.4, 0.3, 100, 0.2, 0.05));
+        assertThrows(IllegalArgumentException.class, () -> new SourceConfig(175, 0.2, Double.NaN, 0.5, 0.4, 0.3, 100, 0.2, 0.05));
+        assertThrows(IllegalArgumentException.class, () -> new SourceConfig(175, 0.2, 0.125, 0.5, 0.4, 0.3, 100, 0.2, 1.1));
         assertThrows(IllegalArgumentException.class, () -> new CommonConfig(8, 1, 1, false, false, 16,
             5, Integer.MAX_VALUE, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         assertThrows(IllegalArgumentException.class, () -> new CommonConfig(8, 1, 1, false, false, 16,

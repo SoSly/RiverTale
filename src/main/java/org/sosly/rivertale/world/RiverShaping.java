@@ -1,5 +1,6 @@
 package org.sosly.rivertale.world;
 
+import javax.annotation.Nullable;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.RandomState;
 import org.sosly.rivertale.cell.Cell;
@@ -12,6 +13,7 @@ import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionTypeCache;
 import org.sosly.rivertale.river.RiverRegion;
 import org.sosly.rivertale.river.RiverRegionCache;
+import org.sosly.rivertale.river.Watershed;
 
 public class RiverShaping {
     private static volatile ActiveWorld world;
@@ -95,15 +97,17 @@ public class RiverShaping {
     }
 
     public static Cell preclassify(CellPos pos) {
+        return qualify(pos, null);
+    }
+
+    public static Cell qualify(CellPos pos, @Nullable Watershed watershed) {
         CellCache cache = CellCache.get();
-        Cell cell = cache.getOrComputeWithFlow(pos);
-        if (cell.isOcean()) {
+        Cell cell = watershed == null ? cache.getOrComputeWithFlow(pos) : cache.getOrCompute(pos);
+        if (cell.feature() != Feature.NONE) {
             return cell;
         }
 
-        Cell classified = Feature.classify(cell, null);
-        cache.put(classified);
-        return classified;
+        return cache.setFeatureIfNone(Feature.classify(cell, watershed));
     }
 
     private record ActiveWorld(RandomState state, int seaLevel, RiverRegionCache rivers) {

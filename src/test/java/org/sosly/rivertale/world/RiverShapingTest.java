@@ -1,6 +1,7 @@
 package org.sosly.rivertale.world;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -8,12 +9,14 @@ import net.minecraft.world.level.levelgen.RandomState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.config.CacheConfig;
 import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.density.DensityField;
 import org.sosly.rivertale.density.Sample;
@@ -24,6 +27,7 @@ import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.region.RegionTypeCache;
 import org.sosly.rivertale.river.RiverRegion;
+import org.sosly.rivertale.river.Watershed;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -159,6 +163,32 @@ class RiverShapingTest {
         assertNull(RiverShaping.getRandomState());
         assertEquals(63, RiverShaping.getSeaLevel());
         assertTrue(provider.requested.isEmpty());
+    }
+
+    @Test
+    void preclassifyKeepsTheFeatureAssignedByQualify() {
+        CellPos cell = new CellPos(CENTER.x() + 1, CENTER.z());
+        CellPos outlet = new CellPos(CENTER.x() + 2, CENTER.z());
+        Watershed watershed = Watershed.fromLinks(outlet, Map.of(
+            CENTER, cell, cell.relative(FlowDirection.NORTH), cell, cell, outlet));
+
+        assertEquals(Feature.NONE, RiverShaping.preclassify(cell).feature());
+        assertEquals(Feature.CONFLUENCE, RiverShaping.qualify(cell, watershed).feature());
+        assertEquals(Feature.CONFLUENCE, RiverShaping.preclassify(cell).feature());
+        assertEquals(Feature.CONFLUENCE, CellCache.get().getIfPresent(cell).feature());
+    }
+
+    @Test
+    void qualifyKeepsAnExistingFeature() {
+        CellPos cell = new CellPos(CENTER.x() + 1, CENTER.z());
+        CellPos outlet = new CellPos(CENTER.x() + 2, CENTER.z());
+        Watershed watershed = Watershed.fromLinks(outlet, Map.of(cell, outlet));
+        Cell candidate = CellCache.get().getOrComputeWithFlow(cell);
+        CellCache.get().setFeatureIfNone(candidate.withFeature(Feature.WATERFALL));
+
+        assertEquals(Feature.WATERFALL, RiverShaping.qualify(cell, watershed).feature());
+        assertEquals(Feature.WATERFALL, CellCache.get().setFeatureIfNone(candidate.withFeature(Feature.RUN)).feature());
+        assertEquals(Feature.WATERFALL, CellCache.get().getIfPresent(cell).feature());
     }
 
     private ChunkAccess chunkAt(CellPos pos) {

@@ -1,5 +1,6 @@
 package org.sosly.rivertale.cell.feature;
 
+import java.util.Arrays;
 import javax.annotation.Nullable;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellType;
@@ -10,7 +11,6 @@ import org.sosly.rivertale.river.Watershed;
 public enum Feature {
     // Sources (ordered by specificity: most specific first)
     SNOWMELT(CellType.SOURCE, new Snowmelt()),
-    RESURGENCE(CellType.SOURCE, new Resurgence()),
     SEEP(CellType.SOURCE, new Seep()),
     CRATER(CellType.SOURCE, new Crater()),
     SPRING(CellType.SOURCE, new Spring()),
@@ -24,7 +24,6 @@ public enum Feature {
     // Junctions
     CONFLUENCE(CellType.JUNCTION, new Confluence()),
     BIFURCATION(CellType.JUNCTION, new Bifurcation()),
-    BRAID(CellType.JUNCTION, new Braid()),
 
     // Lakes
     ENDORHEIC(CellType.LAKE, new Endorheic()),
@@ -33,11 +32,17 @@ public enum Feature {
     LAGOON(CellType.LAKE, new Lagoon()),
     TECTONIC(CellType.LAKE, new Tectonic()),
 
-    // Courses (ordered by drop size: largest first, then fallback)
+    // Underground
+    SWALLET(CellType.UNDERGROUND, new Swallet()),
+    SUBTERRANEAN(CellType.UNDERGROUND, new Subterranean()),
+    RESURGENCE(CellType.UNDERGROUND, new Resurgence()),
+
+    // Courses (drop-based features first, then braid, then fallback)
     PLUNGE_POOL(CellType.COURSE, new PlungePool()),
     WATERFALL(CellType.COURSE, new Waterfall()),
     CASCADE(CellType.COURSE, new Cascade()),
     RAPIDS(CellType.COURSE, new Rapids()),
+    BRAID(CellType.COURSE, new Braid()),
     RUN(CellType.COURSE, new Run()),
 
     // Fallback
@@ -47,6 +52,9 @@ public enum Feature {
     public final CellType type;
     public final FeatureHandler handler;
     private static final Feature[] VALUES = values();
+    private static final Feature[] WATERSHED_FEATURES = Arrays.stream(VALUES)
+        .filter(feature -> feature.type == CellType.JUNCTION || feature.type == CellType.COURSE)
+        .toArray(Feature[]::new);
 
     Feature(CellType type, FeatureHandler handler) {
         this.handler = handler;
@@ -54,13 +62,14 @@ public enum Feature {
     }
 
     public static Cell classify(Cell cell, @Nullable Watershed watershed) {
-        if (cell.isOcean()) {
+        if (watershed == null && cell.isOcean()) {
             return cell.withFeature(NONE);
         }
 
         Timer.Record record = Store.getTimer(Feature.class, "classify").start();
 
-        for (Feature feature : VALUES) {
+        Feature[] candidates = watershed == null ? VALUES : WATERSHED_FEATURES;
+        for (Feature feature : candidates) {
             if (feature.handler.classify(cell, watershed)) {
                 record.stop();
                 return cell.withFeature(feature);

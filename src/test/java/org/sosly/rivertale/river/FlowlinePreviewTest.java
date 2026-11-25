@@ -32,6 +32,7 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.network.NetworkRegistry;
 import org.sosly.rivertale.cell.CellCache;
+import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.config.CommonConfig;
@@ -287,6 +288,15 @@ class FlowlinePreviewTest {
         CellPos remoteSource = new CellPos(-9, 2);
         assertTrue(ready.flowlines().stream().anyMatch(path -> path.cells().get(0).equals(remoteSource)));
         assertTrue(ready.watershedAt(source).contains(remoteSource));
+        ClientRegionCache.Region preview = ClientRegionCache.Region.decode(ready.encode());
+        assertTrue(preview.cells().stream().anyMatch(cell -> cell.feature().type == CellType.COURSE));
+        for (ClientRegionCache.Cell cell : preview.cells()) {
+            if (ready.watershedAt(cell.pos()) == null) {
+                continue;
+            }
+            assertEquals(ready.cells().get(cell.pos()).feature(), cell.feature());
+            assertEquals(CellCache.get().getIfPresent(cell.pos()).feature(), cell.feature());
+        }
     }
 
     @Test

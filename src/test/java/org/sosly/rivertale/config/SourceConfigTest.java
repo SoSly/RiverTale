@@ -2,6 +2,7 @@ package org.sosly.rivertale.config;
 
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.toml.TomlParser;
+import java.util.List;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.PositionalRandomFactory;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -10,11 +11,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Crater;
 import org.sosly.rivertale.cell.feature.Seep;
 import org.sosly.rivertale.cell.feature.Snowmelt;
 import org.sosly.rivertale.cell.feature.Spring;
 import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.world.RiverShaping;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,7 +40,7 @@ class SourceConfigTest {
             [sources]
             snowmeltMinHeight = 210
             snowmeltMaxTemperature = -0.1
-            springMinHeight = 130
+            springMinGrade = 0.25
             springMaxRidges = 0.7
             seepMinVegetation = 0.6
             seepMaxErosion = 0.15
@@ -72,16 +75,26 @@ class SourceConfigTest {
     }
 
     @Test
-    void springsUseConfiguredHeightAndRidgesBoundaries() {
+    void springsUseConfiguredGradeAndRidgesBoundaries() {
         Spring handler = new Spring();
-        when(cell.averageEstimatedTerrainHeight()).thenReturn(131);
+        CellCache cellCache = mock(CellCache.class);
+        Cell neighbor = mock(Cell.class);
+        CellPos center = new CellPos(0, 0);
+        when(cell.pos()).thenReturn(center);
+        when(cell.flowDirections()).thenReturn(List.of(FlowDirection.EAST));
+        when(cell.averageEstimatedTerrainHeight()).thenReturn(100);
         when(cell.averageRidges()).thenReturn(0.6);
-        assertTrue(handler.classify(cell, null));
-        when(cell.averageEstimatedTerrainHeight()).thenReturn(130);
-        assertFalse(handler.classify(cell, null));
-        when(cell.averageEstimatedTerrainHeight()).thenReturn(131);
-        when(cell.averageRidges()).thenReturn(0.7);
-        assertFalse(handler.classify(cell, null));
+        when(cellCache.getOrCompute(center.relative(FlowDirection.EAST))).thenReturn(neighbor);
+        try (MockedStatic<CellCache> cache = mockStatic(CellCache.class)) {
+            cache.when(CellCache::get).thenReturn(cellCache);
+            int minimumDrop = CommonConfig.get().cellBlocks() / 4;
+            when(neighbor.averageEstimatedTerrainHeight()).thenReturn(100 - minimumDrop + 1);
+            assertFalse(handler.classify(cell, null));
+            when(neighbor.averageEstimatedTerrainHeight()).thenReturn(100 - minimumDrop);
+            assertTrue(handler.classify(cell, null));
+            when(cell.averageRidges()).thenReturn(0.7);
+            assertFalse(handler.classify(cell, null));
+        }
     }
 
     @Test

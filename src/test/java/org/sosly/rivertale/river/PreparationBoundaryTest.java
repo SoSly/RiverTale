@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CacheConfig;
 import org.sosly.rivertale.config.CommonConfig;
@@ -24,7 +25,6 @@ import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionExplorer;
-import org.sosly.rivertale.world.RiverShaping;
 import org.sosly.rivertale.region.RegionType;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,6 +46,8 @@ class PreparationBoundaryTest {
         CommonConfig.set(new CommonConfig(8, 1, 1, true, false, 12, 0, 0,
             SourceConfig.DEFAULT, CacheConfig.DEFAULT));
         Store.clear();
+        CellCache.shutdown();
+        CellCache.init();
         regions.put(source.getRegion(), new Region(source.getRegion(), RegionType.INLAND));
         regions.put(new RegionPos(2, 0), new Region(new RegionPos(2, 0), RegionType.FLUVIAL));
         regions.put(outlet.getRegion(), new Region(outlet.getRegion(), RegionType.COASTAL,
@@ -59,6 +61,7 @@ class PreparationBoundaryTest {
 
     @AfterEach
     void tearDown() {
+        CellCache.shutdown();
         CommonConfig.set(original);
         Store.clear();
     }
@@ -101,6 +104,11 @@ class PreparationBoundaryTest {
         assertEquals(outlet, watershed.terminus(source).orElseThrow());
         assertEquals(RiverWorld.LAND_HEIGHT + 2 * (outlet.x() - source.x()), watershed.cellY(source).orElseThrow());
         assertEquals(RiverWorld.LAND_HEIGHT, watershed.cellY(outlet).orElseThrow());
+        assertEquals(Feature.SNOWMELT, result.cells().get(source).feature());
+        CellPos rapids = new CellPos(source.x() + 1, source.z());
+        assertEquals(Feature.RAPIDS, result.cells().get(rapids).feature());
+        assertEquals(Feature.RAPIDS, CellCache.get().getIfPresent(rapids).feature());
+        assertEquals(Feature.NONE, data.cell(rapids).feature());
         assertEquals(2.0, watershed.flow(source).orElseThrow());
         assertEquals(3.125, watershed.flow(outlet).orElseThrow());
     }
@@ -189,9 +197,7 @@ class PreparationBoundaryTest {
         tracing.set(true);
         try (MockedStatic<RegionCache> cache = mockStatic(RegionCache.class, call -> forbidden());
              MockedStatic<RegionExplorer> explorer = mockStatic(RegionExplorer.class, call -> forbidden());
-             MockedStatic<SampleCache> samples = mockStatic(SampleCache.class, call -> forbidden());
-             MockedStatic<RiverShaping> shaping = mockStatic(RiverShaping.class, call -> forbidden());
-             MockedStatic<Feature> features = mockStatic(Feature.class, call -> forbidden())) {
+             MockedStatic<SampleCache> samples = mockStatic(SampleCache.class, call -> forbidden())) {
             Map<RegionPos, RiverRegion> result = RiverNetwork.assemble(roots, data);
             assertEquals(roots, result.keySet());
             for (RegionPos pos : roots) {

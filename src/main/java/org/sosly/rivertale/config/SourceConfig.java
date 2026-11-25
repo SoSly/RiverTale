@@ -5,7 +5,7 @@ import net.minecraftforge.common.ForgeConfigSpec;
 public record SourceConfig(
     int snowmeltMinHeight,
     double snowmeltMaxTemperature,
-    int springMinHeight,
+    double springMinGrade,
     double springMaxRidges,
     double seepMinVegetation,
     double seepMaxErosion,
@@ -13,11 +13,14 @@ public record SourceConfig(
     double craterMinTemperature,
     double craterChance
 ) {
-    public static final SourceConfig DEFAULT = new SourceConfig(175, 0.2, 113, 0.5, 0.4, 0.3, 100, 0.2, 0.05);
+    public static final SourceConfig DEFAULT = new SourceConfig(175, 0.2, 0.125, 0.5, 0.4, 0.3, 100, 0.2, 0.05);
 
     public SourceConfig {
         if (!Double.isFinite(snowmeltMaxTemperature)) {
             throw new IllegalArgumentException("snowmeltMaxTemperature must be finite");
+        }
+        if (!Double.isFinite(springMinGrade) || springMinGrade < 0) {
+            throw new IllegalArgumentException("springMinGrade must be finite and nonnegative");
         }
         if (!Double.isFinite(springMaxRidges)) {
             throw new IllegalArgumentException("springMaxRidges must be finite");
@@ -42,7 +45,7 @@ public record SourceConfig(
     static final class Spec {
         private final ForgeConfigSpec.IntValue snowmeltMinHeight;
         private final ForgeConfigSpec.DoubleValue snowmeltMaxTemperature;
-        private final ForgeConfigSpec.IntValue springMinHeight;
+        private final ForgeConfigSpec.DoubleValue springMinGrade;
         private final ForgeConfigSpec.DoubleValue springMaxRidges;
         private final ForgeConfigSpec.DoubleValue seepMinVegetation;
         private final ForgeConfigSpec.DoubleValue seepMaxErosion;
@@ -55,8 +58,8 @@ public record SourceConfig(
                 .defineInRange("snowmeltMinHeight", DEFAULT.snowmeltMinHeight(), Integer.MIN_VALUE, Integer.MAX_VALUE);
             snowmeltMaxTemperature = builder.comment("Snowmelt sources require sampled temperature below this value (exclusive).")
                 .defineInRange("snowmeltMaxTemperature", DEFAULT.snowmeltMaxTemperature(), -Double.MAX_VALUE, Double.MAX_VALUE);
-            springMinHeight = builder.comment("Spring sources require absolute Y above this value (exclusive).")
-                .defineInRange("springMinHeight", DEFAULT.springMinHeight(), Integer.MIN_VALUE, Integer.MAX_VALUE);
+            springMinGrade = builder.comment("Minimum downhill grade from a spring to a land neighbor (vertical drop / horizontal distance, inclusive).")
+                .defineInRange("springMinGrade", DEFAULT.springMinGrade(), 0.0, Double.MAX_VALUE);
             springMaxRidges = builder.comment("Spring sources require sampled ridges below this value (exclusive).")
                 .defineInRange("springMaxRidges", DEFAULT.springMaxRidges(), -Double.MAX_VALUE, Double.MAX_VALUE);
             seepMinVegetation = builder.comment("Seep sources require sampled vegetation/moisture above this value (exclusive).")
@@ -75,7 +78,7 @@ public record SourceConfig(
             return new SourceConfig(
                 snowmeltMinHeight.get(),
                 snowmeltMaxTemperature.get(),
-                springMinHeight.get(),
+                springMinGrade.get(),
                 springMaxRidges.get(),
                 seepMinVegetation.get(),
                 seepMaxErosion.get(),

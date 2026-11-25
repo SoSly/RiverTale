@@ -124,18 +124,55 @@ class CellFlowTest {
     }
 
     @Test
-    void springThresholdUsesNativeHeightAbove113() {
-        CellPos center = new CellPos(0, 0);
-        provider.defaultHeight = 100;
-        provider.put(center, 113, false);
-        Spring spring = new Spring();
+    void springUsesDownhillGradeInsteadOfAbsoluteHeight() {
+        CellPos hillside = new CellPos(0, 0);
+        provider.defaultHeight = 105;
+        provider.put(hillside.relative(FlowDirection.EAST), 103, false);
 
-        assertFalse(spring.classify(CellCache.get().getOrCompute(center), null));
-        provider.put(center, 114, false);
+        assertEquals(Feature.SPRING, Feature.classify(CellCache.get().getOrComputeWithFlow(hillside), null).feature());
+
+        CellPos plateau = new CellPos(10, 0);
+        provider.put(plateau, 130, false);
+        for (FlowDirection direction : FlowDirection.D8) {
+            provider.put(plateau.relative(direction), 129, false);
+        }
+        assertFalse(new Spring().classify(CellCache.get().getOrComputeWithFlow(plateau), null));
+    }
+
+    @Test
+    void diagonalSpringOutletNeedsMoreDropThanACardinalOutlet() {
+        CellPos center = new CellPos(0, 0);
+        CellPos outlet = center.relative(FlowDirection.NORTHEAST);
+        provider.put(outlet, 118, false);
+        Spring spring = new Spring();
+        assertFalse(spring.classify(CellCache.get().getOrComputeWithFlow(center), null));
+
+        provider.put(outlet, 117, false);
         CellCache.get().clear();
         SampleCache.get().clear();
-        assertTrue(spring.classify(CellCache.get().getOrCompute(center), null));
-        assertEquals(Feature.SPRING, Feature.classify(CellCache.get().getOrCompute(center), null).feature());
+        assertTrue(spring.classify(CellCache.get().getOrComputeWithFlow(center), null));
+    }
+
+    @Test
+    void springSkipsWaterOutletsAndChecksOtherOutgoingDirections() {
+        CellPos center = new CellPos(0, 0);
+        provider.put(center.relative(FlowDirection.NORTH), 60, true);
+        provider.put(center.relative(FlowDirection.SOUTH), 60, false);
+        Spring spring = new Spring();
+        assertFalse(spring.classify(CellCache.get().getOrComputeWithFlow(center), null));
+
+        provider.put(center.relative(FlowDirection.EAST), 118, false);
+        CellCache.get().clear();
+        SampleCache.get().clear();
+        assertTrue(spring.classify(CellCache.get().getOrComputeWithFlow(center), null));
+    }
+
+    @Test
+    void springRejectsAnOtherwiseEligibleCellWithIncomingTerrainFlow() {
+        CellPos center = new CellPos(0, 0);
+        provider.put(center.relative(FlowDirection.EAST), 118, false);
+        provider.put(center.relative(FlowDirection.WEST), 121, false);
+        assertFalse(new Spring().classify(CellCache.get().getOrComputeWithFlow(center), null));
     }
 
     private static class TestSampleProvider implements SampleProvider {

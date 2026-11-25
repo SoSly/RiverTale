@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.world.level.ChunkPos;
+import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
@@ -72,9 +73,8 @@ public class CellCache {
 
         Set<ChunkPos> samplePositions = collectSamplePositions(pos);
         Cell cell = new Cell(pos, samplePositions);
-        cache.put(key, cell);
-
-        return cell;
+        Cell existing = cache.putIfAbsent(key, cell);
+        return existing == null ? cell : existing;
     }
 
     public Cell getOrComputeWithFlow(CellPos pos) {
@@ -88,13 +88,22 @@ public class CellCache {
         }
 
         List<FlowDirection> flowDirections = computeFlowDirections(cell);
-        Cell enriched = cell.withFlowDirections(flowDirections);
-        put(enriched);
-        return enriched;
+        return cache.compute(pos.toLong(), (key, cached) -> {
+            Cell current = cached == null ? cell : cached;
+            return current.withFlowDirections(flowDirections);
+        });
     }
 
-    public void put(Cell cell) {
-        cache.put(cell.pos().toLong(), cell);
+    public Cell setFeatureIfNone(Cell classified) {
+        return cache.compute(classified.pos().toLong(), (key, cached) -> {
+            if (cached == null) {
+                return classified;
+            }
+            if (cached.feature() != Feature.NONE || classified.feature() == Feature.NONE) {
+                return cached;
+            }
+            return cached.withFeature(classified.feature());
+        });
     }
 
     public void clear() {
