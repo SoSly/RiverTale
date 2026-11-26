@@ -17,6 +17,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -130,7 +131,7 @@ public class VisCommand {
     private static void sendUpdate(ServerPlayer player) {
         EnumSet<VisMode> modes = ENABLED_MODES.getOrDefault(player.getUUID(), EnumSet.noneOf(VisMode.class));
         int seaLevel = player.serverLevel().getChunkSource().getGenerator().getSeaLevel();
-        Network.sendToPlayer(new TogglePacket(modes, seaLevel), player);
+        Network.sendToPlayer(new TogglePacket(modes, seaLevel, BiomeManager.obfuscateSeed(player.serverLevel().getSeed())), player);
     }
 
     private static void sendRegions(ServerPlayer player, RegionPos center, int tick) {
@@ -242,12 +243,14 @@ public class VisCommand {
     public static class TogglePacket extends Message {
         private final EnumSet<VisMode> modes;
         private final int seaLevel;
+        private final long meanderSeed;
 
-        public TogglePacket(Set<VisMode> modes, int seaLevel) {
+        public TogglePacket(Set<VisMode> modes, int seaLevel, long meanderSeed) {
             this.modes = modes.isEmpty()
                 ? EnumSet.noneOf(VisMode.class)
                 : EnumSet.copyOf(modes);
             this.seaLevel = seaLevel;
+            this.meanderSeed = meanderSeed;
         }
 
         public static TogglePacket decode(FriendlyByteBuf buf) {
@@ -259,7 +262,7 @@ public class VisCommand {
                 }
                 modes.add(mode);
             }
-            return new TogglePacket(modes, buf.readInt());
+            return new TogglePacket(modes, buf.readInt(), buf.readLong());
         }
 
         public static void encode(TogglePacket msg, FriendlyByteBuf buf) {
@@ -272,6 +275,7 @@ public class VisCommand {
             }
             buf.writeInt(flags);
             buf.writeInt(msg.seaLevel);
+            buf.writeLong(msg.meanderSeed);
         }
 
         public static void handle(TogglePacket msg, Supplier<NetworkEvent.Context> ctx) {
@@ -279,6 +283,7 @@ public class VisCommand {
             if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
                 context.enqueueWork(() -> {
                     RegionRenderer.setSeaLevel(msg.modes.isEmpty() ? null : msg.seaLevel);
+                    ClientRegionCache.get().setMeanderSeed(msg.meanderSeed);
                     ClientRegionCache.setEnabledModes(msg.modes);
                 });
             }

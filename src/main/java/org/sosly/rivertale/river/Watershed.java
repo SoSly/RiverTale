@@ -14,20 +14,21 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.Set;
+import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.core.CellPos;
 
 public class Watershed {
     private final Map<CellPos, CellPos> downstream;
     private final Map<CellPos, Set<CellPos>> upstream;
     private final Map<CellPos, Integer> upstreamCountCache;
-    private final Map<CellPos, Integer> elevations;
+    private final Map<CellPos, Cell> elevatedCells;
     private final Map<CellPos, Double> flows;
 
     private Watershed(CellPos terminus, Map<CellPos, CellPos> links) {
         downstream = new HashMap<>();
         upstream = new HashMap<>();
         upstreamCountCache = new HashMap<>();
-        elevations = Map.of();
+        elevatedCells = Map.of();
         flows = Map.of();
         if (links.containsKey(terminus) || links.values().stream().anyMatch(value -> value == null)) {
             throw new IllegalArgumentException("Only nonterminal downstream links are accepted");
@@ -54,11 +55,11 @@ public class Watershed {
         }
     }
 
-    private Watershed(Watershed topology, Map<CellPos, Integer> elevations, Map<CellPos, Double> flows) {
+    private Watershed(Watershed topology, Map<CellPos, Cell> elevatedCells, Map<CellPos, Double> flows) {
         downstream = topology.downstream;
         upstream = topology.upstream;
         upstreamCountCache = topology.upstreamCountCache;
-        this.elevations = Map.copyOf(elevations);
+        this.elevatedCells = Map.copyOf(elevatedCells);
         this.flows = Map.copyOf(flows);
     }
 
@@ -73,7 +74,9 @@ public class Watershed {
         if (riseRunRatio > 0) {
             applyMinimumGrade(assigned, floor, ordered, BigDecimal.valueOf(riseRunRatio));
         }
-        return new Watershed(this, assigned, flows);
+        Map<CellPos, Cell> cells = new HashMap<>();
+        assigned.forEach((pos, height) -> cells.put(pos, data.cell(pos).cell().withCellY(height)));
+        return new Watershed(this, cells, flows);
     }
 
     Watershed withFlowAccumulation(double sourceFlow, double flowPerCell) {
@@ -89,7 +92,7 @@ public class Watershed {
                 assigned.merge(next, flow, Double::sum);
             }
         }
-        return new Watershed(this, elevations, assigned);
+        return new Watershed(this, elevatedCells, assigned);
     }
 
     private Map<CellPos, Integer> terrainElevations(PreparedRiverData data, int floor, List<CellPos> ordered) {
@@ -130,9 +133,13 @@ public class Watershed {
         }
     }
 
+    Cell elevatedCell(CellPos pos) {
+        return elevatedCells.get(pos);
+    }
+
     public OptionalInt cellY(CellPos cell) {
-        Integer elevation = elevations.get(cell);
-        return elevation == null ? OptionalInt.empty() : OptionalInt.of(elevation);
+        Cell elevated = elevatedCells.get(cell);
+        return elevated == null ? OptionalInt.empty() : elevated.cellY();
     }
 
     public OptionalDouble flow(CellPos cell) {

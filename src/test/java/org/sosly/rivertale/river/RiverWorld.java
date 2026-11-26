@@ -24,8 +24,10 @@ import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.world.RiverShaping;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 /**
@@ -66,18 +68,12 @@ final class RiverWorld implements AutoCloseable {
 
     /**
      * Builds a coherent land cell: not ocean, not a basin, at an explicit height with explicit flow and feature.
-     * The cell is a mock, so {@link Cell#withFeature} and {@link Cell#withFlowDirections} return null; pass every
-     * value here instead.
      */
     static Cell land(CellPos pos, int height, Feature feature, List<FlowDirection> directions) {
-        List<FlowDirection> flow = List.copyOf(directions);
-        Cell cell = mock(Cell.class);
-        when(cell.pos()).thenReturn(pos);
-        when(cell.isOcean()).thenReturn(false);
-        when(cell.isBasin()).thenReturn(false);
-        when(cell.averageEstimatedTerrainHeight()).thenReturn(height);
-        when(cell.flowDirections()).thenReturn(flow);
-        when(cell.feature()).thenReturn(feature);
+        Cell cell = spy(new Cell(pos, Set.of(), List.copyOf(directions), feature));
+        doReturn(false).when(cell).isOcean();
+        doReturn(false).when(cell).isBasin();
+        doReturn(height).when(cell).averageEstimatedTerrainHeight();
         return cell;
     }
 

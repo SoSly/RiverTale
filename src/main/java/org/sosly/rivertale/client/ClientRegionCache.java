@@ -30,6 +30,8 @@ public class ClientRegionCache {
 
     private final Map<Long, Region> cache;
     private final int capacity;
+    private long meanderSeed;
+    private WatershedPreview preview;
 
     public record Cell(CellPos pos, Feature feature, int y, OptionalInt averageY, OptionalDouble flow) {
     }
@@ -191,7 +193,9 @@ public class ClientRegionCache {
     }
 
     public void put(Region region) {
-        cache.put(region.pos().toLong(), region);
+        if (!region.equals(cache.put(region.pos().toLong(), region))) {
+            preview = null;
+        }
     }
 
     public Region get(RegionPos pos) {
@@ -202,7 +206,22 @@ public class ClientRegionCache {
         return cache.values();
     }
 
+    public void setMeanderSeed(long seed) {
+        if (seed != meanderSeed) {
+            meanderSeed = seed;
+            preview = null;
+        }
+    }
+
+    WatershedPreview preview() {
+        if (preview == null) {
+            preview = WatershedPreview.build(cache.values(), meanderSeed);
+        }
+        return preview;
+    }
+
     public void clear() {
+        preview = null;
         cache.clear();
     }
 }

@@ -10,7 +10,7 @@ import org.sosly.rivertale.command.VisCommand;
 import org.sosly.rivertale.region.Region;
 
 public class Network {
-    private static final String PROTOCOL_VERSION = "6";
+    private static final String PROTOCOL_VERSION = "7";
 
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
         new ResourceLocation(RiverTale.MOD_ID, "main"),

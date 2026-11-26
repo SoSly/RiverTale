@@ -4,9 +4,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
+import java.util.Set;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
-import org.sosly.rivertale.cell.feature.Feature;
+import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.river.PreparedRiverData.CellData;
 
@@ -36,6 +38,7 @@ class WatershedElevationTest {
 
         assertEquals(List.of(66, 80, 66), elevations(junction.withElevations(data, 0)));
         assertEquals(72, data.cell(C).height());
+        assertEquals(OptionalInt.empty(), data.cell(C).cell().cellY());
     }
 
     @Test
@@ -79,7 +82,7 @@ class WatershedElevationTest {
     void aTributaryInheritsTheConfluenceGradeWithoutAffectingItsSibling() {
         CellPos outlet = new CellPos(3, 0);
         Watershed junction = Watershed.fromLinks(outlet, Map.of(A, C, B, C, C, outlet));
-        PreparedRiverData data = samples(63, Map.of(A, sample(66), B, sample(80), C, sample(65), outlet, sample(64)));
+        PreparedRiverData data = samples(63, Map.of(A, sample(A, 66), B, sample(B, 80), C, sample(C, 65), outlet, sample(outlet, 64)));
         Watershed graded = junction.withElevations(data, 2);
 
         assertEquals(List.of(68, 80, 66), elevations(graded));
@@ -92,7 +95,7 @@ class WatershedElevationTest {
         Map<CellPos, CellData> samples = new HashMap<>();
         for (int i = 0; i < heights.length; i++) {
             CellPos pos = positions.get(i);
-            samples.put(pos, sample(heights[i]));
+            samples.put(pos, sample(pos, heights[i]));
             if (i > 0) {
                 links.put(pos, positions.get(i - 1));
             }
@@ -112,14 +115,14 @@ class WatershedElevationTest {
     }
 
     private PreparedRiverData samples(int seaLevel, int a, int b, int c) {
-        return samples(seaLevel, Map.of(A, sample(a), B, sample(b), C, sample(c)));
+        return samples(seaLevel, Map.of(A, sample(A, a), B, sample(B, b), C, sample(C, c)));
     }
 
     private PreparedRiverData samples(int seaLevel, Map<CellPos, CellData> samples) {
         return new PreparedRiverData(Map.of(), samples, Map.of(), Map.of(), Map.of(), Map.of(), 0, seaLevel);
     }
 
-    private CellData sample(int height) {
-        return new CellData(Feature.NONE, List.of(), height);
+    private CellData sample(CellPos pos, int height) {
+        return new CellData(new Cell(pos, Set.of()), height);
     }
 }

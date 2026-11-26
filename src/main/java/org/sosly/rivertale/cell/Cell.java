@@ -1,6 +1,7 @@
 package org.sosly.rivertale.cell;
 
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.Set;
 import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.feature.Feature;
@@ -15,8 +16,13 @@ public record Cell(
     CellPos pos,
     Set<ChunkPos> samplePositions,
     List<FlowDirection> flowDirections,
-    Feature feature
+    Feature feature,
+    OptionalInt cellY
 ) {
+    public Cell(CellPos pos, Set<ChunkPos> samplePositions, List<FlowDirection> flowDirections, Feature feature) {
+        this(pos, samplePositions, flowDirections, feature, OptionalInt.empty());
+    }
+
     public Cell(CellPos pos, Set<ChunkPos> samplePositions) {
         this(pos, samplePositions, List.of(), Feature.NONE);
     }
@@ -136,10 +142,14 @@ public record Cell(
     }
 
     public Cell withFlowDirections(List<FlowDirection> flowDirections) {
-        return new Cell(pos, samplePositions, flowDirections, feature);
+        return new Cell(pos, samplePositions, flowDirections, feature, cellY);
     }
 
     public Cell withFeature(Feature feature) {
-        return new Cell(pos, samplePositions, flowDirections, feature);
+        return new Cell(pos, samplePositions, flowDirections, feature, cellY);
+    }
+
+    public Cell withCellY(int height) {
+        return new Cell(pos, samplePositions, flowDirections, feature, OptionalInt.of(height));
     }
 }

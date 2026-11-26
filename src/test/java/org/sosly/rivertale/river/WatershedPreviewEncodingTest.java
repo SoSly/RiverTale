@@ -13,6 +13,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.client.ClientRegionCache;
 import org.sosly.rivertale.config.CacheConfig;
@@ -86,8 +87,7 @@ class WatershedPreviewEncodingTest {
         CellPos terminus = new CellPos(3, 2);
         CellPos other = new CellPos(1, 2);
         Map<CellPos, CellData> samples = Map.of(
-            source, new CellData(Feature.NONE, List.of(), height(source)),
-            terminus, new CellData(Feature.NONE, List.of(), height(terminus)));
+            source, sample(source, Feature.NONE), terminus, sample(terminus, Feature.NONE));
         PreparedRiverData data = new PreparedRiverData(Map.of(), samples, Map.of(), Map.of(), Map.of(), Map.of(), 0, 63);
         Watershed watershed = Watershed.fromLinks(terminus, Map.of(source, terminus)).withElevations(data, 0.25);
 
@@ -113,8 +113,7 @@ class WatershedPreviewEncodingTest {
         CellPos terminus = new CellPos(3, 2);
         CellPos outside = new CellPos(4, 2);
         Map<CellPos, CellData> samples = Map.of(
-            source, new CellData(Feature.SNOWMELT, List.of(), height(source)),
-            terminus, new CellData(Feature.NONE, List.of(), height(terminus)));
+            source, sample(source, Feature.SNOWMELT), terminus, sample(terminus, Feature.NONE));
         PreparedRiverData data = new PreparedRiverData(Map.of(), samples, Map.of(), Map.of(), Map.of(), Map.of(), 0, 63);
         Watershed watershed = Watershed.fromLinks(terminus, Map.of(source, terminus)).withElevations(data, 0.25);
 
@@ -149,7 +148,7 @@ class WatershedPreviewEncodingTest {
         Map<CellPos, CellData> cells = new HashMap<>();
         for (CellPos pos : region.cells()) {
             Feature feature = pos.equals(corner) ? Feature.SNOWMELT : Feature.NONE;
-            cells.put(pos, new CellData(feature, List.of(), height(pos)));
+            cells.put(pos, sample(pos, feature));
         }
 
         List<CellPos> route = new ArrayList<>();
@@ -203,10 +202,14 @@ class WatershedPreviewEncodingTest {
         Region region = new Region(CENTER, RegionType.FLUVIAL);
         Map<CellPos, CellData> cells = new HashMap<>();
         for (CellPos pos : region.cells()) {
-            cells.put(pos, new CellData(features.getOrDefault(pos, Feature.NONE), List.of(), height(pos)));
+            cells.put(pos, sample(pos, features.getOrDefault(pos, Feature.NONE)));
         }
         RiverRegion result = new RiverRegion(region, cells, flowlines, watersheds);
         return ClientRegionCache.Region.decode(result.encode());
+    }
+
+    private static CellData sample(CellPos pos, Feature feature) {
+        return new CellData(new Cell(pos, Set.of(), List.of(), feature), height(pos));
     }
 
     private static int height(CellPos pos) {

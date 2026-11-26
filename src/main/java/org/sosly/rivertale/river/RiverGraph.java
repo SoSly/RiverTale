@@ -61,7 +61,7 @@ final class RiverGraph {
     CellData cell(CellPos pos) {
         return preparedCells.computeIfAbsent(pos, key -> {
             Cell value = cellLoader.apply(key);
-            return new CellData(value.feature(), value.flowDirections(), value.averageEstimatedTerrainHeight());
+            return new CellData(value, value.averageEstimatedTerrainHeight());
         });
     }
 

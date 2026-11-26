@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
@@ -70,9 +71,13 @@ public record PreparedRiverData(
         return value;
     }
 
-    public record CellData(Feature feature, List<FlowDirection> flowDirections, int height) {
-        public CellData {
-            flowDirections = List.copyOf(flowDirections);
+    public record CellData(Cell cell, int height) {
+        public Feature feature() {
+            return cell.feature();
+        }
+
+        public List<FlowDirection> flowDirections() {
+            return cell.flowDirections();
         }
     }
 

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
@@ -67,12 +68,11 @@ final class RiverNetwork {
             for (CellPos pos : cells) {
                 checkCancelled.run();
                 CellData cell = data.cell(pos);
-                if (cell.feature() != Feature.NONE) {
-                    classified.put(pos, cell);
-                    continue;
+                Cell elevated = watershed.elevatedCell(pos);
+                if (elevated.feature() == Feature.NONE) {
+                    elevated = elevated.withFeature(RiverShaping.qualify(pos, watershed).feature());
                 }
-                Feature feature = RiverShaping.qualify(pos, watershed).feature();
-                classified.put(pos, new CellData(feature, cell.flowDirections(), cell.height()));
+                classified.put(pos, new CellData(elevated, cell.height()));
             }
         }
         return classified;

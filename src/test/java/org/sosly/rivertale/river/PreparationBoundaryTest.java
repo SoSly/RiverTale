@@ -109,6 +109,9 @@ class PreparationBoundaryTest {
         assertEquals(Feature.RAPIDS, result.cells().get(rapids).feature());
         assertEquals(Feature.RAPIDS, CellCache.get().getIfPresent(rapids).feature());
         assertEquals(Feature.NONE, data.cell(rapids).feature());
+        assertTrue(data.cell(rapids).cell().cellY().isEmpty());
+        assertEquals(watershed.cellY(rapids), result.cells().get(rapids).cell().cellY());
+        assertEquals(watershed.cellY(source), result.cells().get(source).cell().cellY());
         assertEquals(2.0, watershed.flow(source).orElseThrow());
         assertEquals(3.125, watershed.flow(outlet).orElseThrow());
     }

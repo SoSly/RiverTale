@@ -36,8 +36,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -467,11 +469,9 @@ class RegionExplorerTest {
         try (MockedStatic<RiverShaping> shaping = mockStatic(RiverShaping.class)) {
             shaping.when(() -> RiverShaping.preclassify(any(CellPos.class))).thenAnswer(invocation -> {
                 CellPos pos = invocation.getArgument(0);
-                Cell cell = mock(Cell.class);
-                // Preparation reads exactly these three values from a prepared cell.
-                when(cell.feature()).thenReturn(pos.equals(source) ? Feature.SNOWMELT : Feature.NONE);
-                when(cell.flowDirections()).thenReturn(List.of(FlowDirection.EAST));
-                when(cell.averageEstimatedTerrainHeight()).thenReturn(100);
+                Feature feature = pos.equals(source) ? Feature.SNOWMELT : Feature.NONE;
+                Cell cell = spy(new Cell(pos, Set.of(), List.of(FlowDirection.EAST), feature));
+                doReturn(100).when(cell).averageEstimatedTerrainHeight();
                 return cell;
             });
             RegionPos region = source.getRegion();
