@@ -24,7 +24,8 @@ public record CommonConfig(
     double flowPerCell,
     SourceConfig sources,
     CacheConfig caches,
-    boolean disableChunkSaving
+    boolean disableChunkSaving,
+    int carvingSearchRadius
 ) {
     private static final int DEFAULT_REGION_SIZE = 24;
     private static final int DEFAULT_CELL_SIZE = 4;
@@ -38,6 +39,8 @@ public record CommonConfig(
     private static final double DEFAULT_RISE_RUN_RATIO = 0.25;
     private static final double DEFAULT_SOURCE_FLOW = 1.0;
     private static final double DEFAULT_FLOW_PER_CELL = 0.5;
+    private static final int DEFAULT_CARVING_SEARCH_RADIUS = 64;
+    private static final int MAX_CARVING_SEARCH_RADIUS = 512;
 
     private static volatile CommonConfig instance = new CommonConfig(
         DEFAULT_REGION_SIZE, DEFAULT_CELL_SIZE, DEFAULT_SAMPLES_PER_CELL,
@@ -63,7 +66,7 @@ public record CommonConfig(
                         int nudgingLimit, int fallbackApproachCells, int awayStepAllowance, double riseRunRatio,
                         double sourceFlow, double flowPerCell, SourceConfig sources, CacheConfig caches) {
         this(regionSize, cellSize, samplesPerCell, enableMetrics, enableNudging, nudgingLimit, fallbackApproachCells,
-            awayStepAllowance, riseRunRatio, sourceFlow, flowPerCell, sources, caches, false);
+            awayStepAllowance, riseRunRatio, sourceFlow, flowPerCell, sources, caches, false, DEFAULT_CARVING_SEARCH_RADIUS);
     }
 
     public CommonConfig {
@@ -92,6 +95,9 @@ public record CommonConfig(
         }
         if (samplesPerCell < 1 || samplesPerCell > MAX_SAMPLES_PER_CELL) {
             throw new IllegalArgumentException("samplesPerCell must be 1-" + MAX_SAMPLES_PER_CELL);
+        }
+        if (carvingSearchRadius < 0 || carvingSearchRadius > MAX_CARVING_SEARCH_RADIUS) {
+            throw new IllegalArgumentException("carvingSearchRadius must be 0-" + MAX_CARVING_SEARCH_RADIUS + " blocks");
         }
         samplesPerCell = Math.min(samplesPerCell, cellSize * cellSize);
     }
@@ -131,6 +137,7 @@ public record CommonConfig(
         public static final ForgeConfigSpec.DoubleValue RISE_RUN_RATIO;
         public static final ForgeConfigSpec.DoubleValue SOURCE_FLOW;
         public static final ForgeConfigSpec.DoubleValue FLOW_PER_CELL;
+        private static final ForgeConfigSpec.IntValue CARVING_SEARCH_RADIUS;
         private static final SourceConfig.Spec SOURCES;
         private static final CacheConfig.Spec CACHES;
 
@@ -188,6 +195,10 @@ public record CommonConfig(
                 .comment("Flow added once at each non-source watershed cell, after summing incoming flows.")
                 .defineInRange("flowPerCell", DEFAULT_FLOW_PER_CELL, 0.0, Double.MAX_VALUE);
 
+            CARVING_SEARCH_RADIUS = builder
+                .comment("Blocks beyond each chunk edge to search for river features during terrain generation.")
+                .defineInRange("carvingSearchRadius", DEFAULT_CARVING_SEARCH_RADIUS, 0, MAX_CARVING_SEARCH_RADIUS);
+
             builder.comment("Source classification thresholds. Preserve existing comparison boundaries and source precedence.").push("sources");
             SOURCES = new SourceConfig.Spec(builder);
             builder.pop();
@@ -214,7 +225,8 @@ public record CommonConfig(
                 FLOW_PER_CELL.get(),
                 SOURCES.load(),
                 CACHES.load(),
-                DISABLE_CHUNK_SAVING.get()
+                DISABLE_CHUNK_SAVING.get(),
+                CARVING_SEARCH_RADIUS.get()
             ));
         }
 
@@ -243,7 +255,8 @@ public record CommonConfig(
                 values.get(FLOW_PER_CELL),
                 SOURCES.load(values),
                 active.caches(),
-                active.disableChunkSaving()
+                active.disableChunkSaving(),
+                values.get(CARVING_SEARCH_RADIUS)
             );
         }
     }

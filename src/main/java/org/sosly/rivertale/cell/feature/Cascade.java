@@ -2,9 +2,11 @@ package org.sosly.rivertale.cell.feature;
 
 import java.util.List;
 import java.util.Optional;
+import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.river.RiverSpline;
 import org.sosly.rivertale.river.Watershed;
+import org.sosly.rivertale.terrain.CarveProposal;
 
 public class Cascade implements FeatureHandler {
     private static final int MAX_LEDGE_DROP = 3;
@@ -13,6 +15,11 @@ public class Cascade implements FeatureHandler {
     @Override
     public boolean classify(Cell cell, Watershed watershed) {
         return CourseDrop.classify(cell.pos(), watershed) == Feature.CASCADE;
+    }
+
+    @Override
+    public List<CarveProposal> carve(Cell cell, Watershed watershed, ChunkPos chunk, long meanderSeed) {
+        return CourseCarver.carve(this, cell, watershed, chunk, meanderSeed);
     }
 
     @Override

@@ -1,6 +1,8 @@
 package org.sosly.rivertale.world;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.world.level.ChunkPos;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.CellCache;
 import org.sosly.rivertale.cell.feature.Feature;
+import org.sosly.rivertale.cell.feature.FeatureHandler;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.config.CacheConfig;
 import org.sosly.rivertale.config.SourceConfig;
@@ -26,6 +29,7 @@ import org.sosly.rivertale.region.Region;
 import org.sosly.rivertale.region.RegionCache;
 import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.region.RegionTypeCache;
+import org.sosly.rivertale.river.PreparedRiverData.CellData;
 import org.sosly.rivertale.river.RiverRegion;
 import org.sosly.rivertale.river.Watershed;
 
@@ -38,6 +42,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class RiverShapingTest {
@@ -75,7 +81,7 @@ class RiverShapingTest {
 
     @Test
     void initializationMakesRtfSeaLevelAvailableBeforeAnyChunk() {
-        RiverShaping.init(78, overworldState);
+        RiverShaping.init(78, overworldState, 0);
 
         assertEquals(78, RiverShaping.getSeaLevel());
         assertSame(overworldState, RiverShaping.getRandomState());
@@ -92,7 +98,7 @@ class RiverShapingTest {
 
     @Test
     void foreignDimensionStateDoesNotSampleOrClassify() {
-        RiverShaping.init(78, overworldState);
+        RiverShaping.init(78, overworldState, 0);
 
         RiverShaping.shape(chunkAt(CENTER), mock(RandomState.class));
 
@@ -103,11 +109,14 @@ class RiverShapingTest {
 
     @Test
     void activeInlandChunkBuildsRiverDataThatSurvivesTerrainCacheEviction() {
-        RiverShaping.init(78, overworldState);
+        RiverShaping.init(78, overworldState, 0);
         assertNull(RiverShaping.getReady(CENTER.getRegion(), overworldState));
 
-        RiverShaping.shape(chunkAt(CENTER), overworldState);
+        ChunkAccess chunk = chunkAt(CENTER);
+        RiverShaping.shape(chunk, overworldState);
 
+        verify(chunk).getPos();
+        verifyNoMoreInteractions(chunk);
         RiverRegion ready = RiverShaping.getReady(CENTER.getRegion(), overworldState);
         assertNotNull(ready);
         assertEquals(Feature.SNOWMELT, ready.cells().get(CENTER).feature());
@@ -131,8 +140,43 @@ class RiverShapingTest {
     }
 
     @Test
+    void callsNearbyCarverAcrossRegionBorderWhenTheChunksRegionHasNoWatersheds() {
+        ChunkPos chunk = new ChunkPos(0, 1);
+        RegionPos local = new RegionPos(0, 0);
+        RegionPos west = new RegionPos(-1, 0);
+        CellPos near = new CellPos(-1, 1);
+        CellPos far = new CellPos(-2, 1);
+        CellPos unconnected = new CellPos(-1, 0);
+        Cell nearRun = new Cell(near, Set.of()).withFeature(Feature.RUN);
+        Cell farRun = new Cell(far, Set.of()).withFeature(Feature.RUN);
+        Cell unconnectedRun = new Cell(unconnected, Set.of()).withFeature(Feature.RUN);
+        CellPos outlet = new CellPos(-1, 2);
+        Watershed watershed = Watershed.fromLinks(outlet, Map.of(far, near, near, outlet));
+        RiverRegion neighbor = new RiverRegion(new Region(west, RegionType.INLAND), Map.of(
+            near, new CellData(nearRun, 120), far, new CellData(farRun, 120),
+            unconnected, new CellData(unconnectedRun, 120)), List.of(), List.of(watershed));
+        RiverRegion empty = new RiverRegion(new Region(local, RegionType.INLAND), Map.of(), List.of(), List.of());
+        Map<RegionPos, RiverRegion> snapshots = Map.of(west, neighbor, local, empty);
+        List<RegionPos> requested = new ArrayList<>();
+        FeatureHandler handler = mock(FeatureHandler.class);
+        when(handler.carve(nearRun, watershed, chunk, 42)).thenCallRealMethod();
+
+        assertTrue(RiverShaping.carveNearby(chunk, 1, 42, pos -> {
+            requested.add(pos);
+            return snapshots.get(pos);
+        }, feature -> {
+            assertEquals(Feature.RUN, feature);
+            return handler;
+        }).isEmpty());
+
+        assertEquals(List.of(west, local), requested);
+        verify(handler).carve(nearRun, watershed, chunk, 42);
+        verifyNoMoreInteractions(handler);
+    }
+
+    @Test
     void rebuildUsesNewTuningForCellClassification() {
-        RiverShaping.init(78, overworldState);
+        RiverShaping.init(78, overworldState, 0);
         RegionPos region = CENTER.getRegion();
         ChunkAccess chunk = chunkAt(CENTER);
         RiverShaping.shape(chunk, overworldState);
@@ -153,7 +197,7 @@ class RiverShapingTest {
     @Test
     void oceanChunkRemainsUnclassified() {
         provider.ocean = true;
-        RiverShaping.init(78, overworldState);
+        RiverShaping.init(78, overworldState, 0);
 
         RiverShaping.shape(chunkAt(CENTER), overworldState);
 
@@ -166,7 +210,7 @@ class RiverShapingTest {
 
     @Test
     void outOfBoundsChunkDoesNotSampleTerrain() {
-        RiverShaping.init(78, overworldState);
+        RiverShaping.init(78, overworldState, 0);
 
         RiverShaping.shape(chunkAt(new CellPos(2_000_000, 0)), overworldState);
 
@@ -175,7 +219,7 @@ class RiverShapingTest {
 
     @Test
     void shutdownClearsWorldStateAndStopsClassification() {
-        RiverShaping.init(78, overworldState);
+        RiverShaping.init(78, overworldState, 0);
         RiverShaping.shutdown();
 
         RiverShaping.shape(chunkAt(CENTER), overworldState);

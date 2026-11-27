@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import org.sosly.rivertale.cell.feature.Feature;
 
 @OnlyIn(Dist.CLIENT)
 final class RiverCellLabels {
@@ -38,11 +39,11 @@ final class RiverCellLabels {
 
     private static void renderLabel(ClientRegionCache.Cell cell, PoseStack pose, Vec3 camera, Font font,
                                     MultiBufferSource buffer) {
-        if (cell.averageY().isEmpty()) {
+        if (cell.averageY().isEmpty() && cell.feature() != Feature.NONE) {
             return;
         }
 
-        int averageY = cell.averageY().getAsInt();
+        int averageY = cell.averageY().orElse(cell.y());
         pose.pushPose();
         pose.translate(cell.pos().getMinBlockX() + INSET - camera.x, averageY + Y_OFFSET - camera.y,
             cell.pos().getMinBlockZ() + INSET - camera.z);
@@ -50,9 +51,11 @@ final class RiverCellLabels {
         pose.scale(SCALE, SCALE, SCALE);
         draw(font, buffer, pose, "Class: " + cell.feature().name(), 0, 0, GRAY);
         draw(font, buffer, pose, "AverageY: " + averageY, 0, LINE_SPACING, GRAY);
-        draw(font, buffer, pose, CELL_Y_PREFIX, 0, 2 * LINE_SPACING, GRAY);
-        draw(font, buffer, pose, Integer.toString(cell.y()), font.width(CELL_Y_PREFIX), 2 * LINE_SPACING,
-            cellYColor(cell.y(), averageY));
+        if (cell.averageY().isPresent()) {
+            draw(font, buffer, pose, CELL_Y_PREFIX, 0, 2 * LINE_SPACING, GRAY);
+            draw(font, buffer, pose, Integer.toString(cell.y()), font.width(CELL_Y_PREFIX), 2 * LINE_SPACING,
+                cellYColor(cell.y(), averageY));
+        }
         if (cell.flow().isPresent()) {
             draw(font, buffer, pose, "Flow: " + cell.flow().getAsDouble(), 0, 3 * LINE_SPACING, GRAY);
         }

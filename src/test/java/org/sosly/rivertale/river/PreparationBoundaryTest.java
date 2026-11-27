@@ -188,8 +188,45 @@ class PreparationBoundaryTest {
         assertTrue(Store.getDistribution(FlowlineTracer.class, "awaySteps").snapshot().max() > 0);
     }
 
-    private void flowing(CellPos pos, FlowDirection direction) {
-        cells.put(pos, land(pos, Feature.NONE, direction));
+    @Test
+    void firstPublishedWatershedResolvesBothUpstreamsRegardlessOfRequestedRegion() {
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 0, 0, 8, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
+        CellPos east = new CellPos(0, 2);
+        CellPos west = new CellPos(-3, 3);
+        CellPos bend = new CellPos(-2, 3);
+        CellPos join = new CellPos(-1, 2);
+        CellPos alternate = new CellPos(-2, 2);
+        CellPos mouth = new CellPos(-1, 1);
+        regions.clear();
+        cells.clear();
+        regions.put(east.getRegion(), new Region(east.getRegion(), RegionType.FLUVIAL));
+        regions.put(west.getRegion(), new Region(west.getRegion(), RegionType.COASTAL,
+            List.of(new Boundary(mouth, new CellPos(-1, 0), BoundaryType.OCEAN))));
+        cells.put(west, land(west, Feature.SNOWMELT, FlowDirection.EAST));
+        cells.put(east, land(east, Feature.SNOWMELT, FlowDirection.WEST));
+        flowing(bend, FlowDirection.NORTHEAST, FlowDirection.NORTH);
+        flowing(join, FlowDirection.SOUTHWEST, FlowDirection.NORTH);
+        flowing(alternate, FlowDirection.NORTHEAST);
+
+        for (List<RegionPos> order : List.of(List.of(east.getRegion(), west.getRegion()),
+                List.of(west.getRegion(), east.getRegion()))) {
+            CellCache.get().clear();
+            for (RegionPos root : order) {
+                Set<RegionPos> roots = Set.of(root);
+                PreparedRiverData data = RiverPreparation.prepare(roots, graph());
+                RiverRegion published = RiverNetwork.assemble(roots, data).get(root);
+                Watershed watershed = published.watershedAt(join);
+                assertEquals(Set.of(bend, east), watershed.upstream(join));
+                assertEquals(Set.of(west, east, bend, join, mouth), watershed.allCells());
+                assertEquals(mouth, watershed.downstream(join));
+                assertEquals(3.0, watershed.flow(join).orElseThrow());
+                assertEquals(Feature.CONFLUENCE, published.cells().get(join).feature());
+            }
+        }
+    }
+
+    private void flowing(CellPos pos, FlowDirection... directions) {
+        cells.put(pos, land(pos, Feature.NONE, directions));
     }
 
     private Cell land(CellPos pos, Feature feature, FlowDirection... directions) {

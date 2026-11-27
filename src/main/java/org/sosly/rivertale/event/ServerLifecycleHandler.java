@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.biome.BiomeManager;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -59,7 +60,7 @@ public class ServerLifecycleHandler {
         RegionTypeCache.init();
         RegionCache.init();
 
-        RiverShaping.init(context.levels.waterLevel, randomState);
+        RiverShaping.init(context.levels.waterLevel, randomState, BiomeManager.obfuscateSeed(serverLevel.getSeed()));
         RiverTale.LOGGER.info("Rivertale initialized with RTF base terrain samples and sea level {}", context.levels.waterLevel);
     }
 

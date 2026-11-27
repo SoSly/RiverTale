@@ -4,13 +4,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import javax.annotation.Nullable;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.river.RiverSpline;
 import org.sosly.rivertale.river.Watershed;
+import org.sosly.rivertale.terrain.CarveProposal;
 
 public interface FeatureHandler {
     boolean classify(Cell cell, @Nullable Watershed watershed);
+
+    /** Returns proposed bed heights for columns in the target chunk without changing blocks. */
+    default List<CarveProposal> carve(Cell cell, Watershed watershed, ChunkPos chunk, long meanderSeed) {
+        return List.of();
+    }
 
     /** Returns independent downstream paths, sharing the outgoing leg when tributaries merge. */
     default List<RiverSpline> buildSplines(Cell cell, List<Cell> entries, Optional<Cell> exit, long meanderSeed) {

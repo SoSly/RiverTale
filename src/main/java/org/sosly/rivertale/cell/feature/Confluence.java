@@ -4,10 +4,14 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalDouble;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import org.sosly.rivertale.cell.Cell;
+import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.river.RiverSpline;
 import org.sosly.rivertale.river.Watershed;
+import org.sosly.rivertale.terrain.CarveProposal;
 
 public class Confluence implements FeatureHandler {
     private static final double MERGE = 0.5;
@@ -18,14 +22,40 @@ public class Confluence implements FeatureHandler {
     }
 
     @Override
-    public List<RiverSpline> buildSplines(Cell cell, List<Cell> entries, Optional<Cell> exit, long meanderSeed) {
-        if (entries.size() < 2 || exit.isEmpty()) {
-            return FeatureHandler.super.buildSplines(cell, entries, exit, meanderSeed);
+    public List<CarveProposal> carve(Cell cell, Watershed watershed, ChunkPos chunk, long meanderSeed) {
+        OptionalDouble outflow = watershed.flow(cell.pos());
+        if (cell.cellY().isEmpty() || outflow.isEmpty()) {
+            return List.of();
         }
-        Vec3 downstream = direction(cell, exit.get());
-        List<Cell> ranked = entries.stream().sorted(Comparator
+        Optional<Cell> exit = Optional.ofNullable(watershed.downstream(cell.pos())).map(watershed::elevatedCell);
+        List<Cell> entries = watershed.upstream(cell.pos()).stream().map(watershed::elevatedCell).toList();
+        List<Cell> ranked = rankEntries(cell, entries, exit);
+        List<RiverSpline> paths = buildRankedSplines(cell, ranked, exit, meanderSeed);
+        List<CarveProposal> proposals = new ArrayList<>();
+        int cellBlocks = CommonConfig.get().cellBlocks();
+        for (int i = 0; i < paths.size(); i++) {
+            double flow = i < ranked.size() ? watershed.flow(ranked.get(i).pos()).orElseThrow() : outflow.getAsDouble();
+            proposals.addAll(CourseCarver.carve(List.of(paths.get(i)), flow, flow, chunk, cellBlocks));
+        }
+        return proposals;
+    }
+
+    @Override
+    public List<RiverSpline> buildSplines(Cell cell, List<Cell> entries, Optional<Cell> exit, long meanderSeed) {
+        return buildRankedSplines(cell, rankEntries(cell, entries, exit), exit, meanderSeed);
+    }
+
+    private List<Cell> rankEntries(Cell cell, List<Cell> entries, Optional<Cell> exit) {
+        Vec3 downstream = exit.map(next -> direction(cell, next)).orElse(Vec3.ZERO);
+        return entries.stream().sorted(Comparator
             .comparingDouble((Cell entry) -> direction(entry, cell).dot(downstream)).reversed()
             .thenComparingLong(entry -> entry.pos().toLong())).toList();
+    }
+
+    private List<RiverSpline> buildRankedSplines(Cell cell, List<Cell> ranked, Optional<Cell> exit, long meanderSeed) {
+        if (ranked.size() < 2 || exit.isEmpty()) {
+            return FeatureHandler.super.buildSplines(cell, ranked, exit, meanderSeed);
+        }
         RiverSpline main = new RunSpline(cell, Optional.of(ranked.get(0)), exit, meanderSeed);
         Vec3 merge = main.pointAt(MERGE);
         Vec3 tangent = main.pointAt(MERGE + 0.001).subtract(main.pointAt(MERGE - 0.001)).normalize();

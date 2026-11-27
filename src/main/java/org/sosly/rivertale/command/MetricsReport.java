@@ -26,7 +26,8 @@ final class MetricsReport {
             new NamedMetric("Coastal_boundaries", "Coastal boundaries"),
             new NamedMetric("Fluvial_boundaries", "Fluvial boundaries"),
             new NamedMetric("Feature_classify", "Cell feature classification"),
-            new NamedMetric("RtfSampleProvider_sampleCore", "Terrain sampling")
+            new NamedMetric("RtfSampleProvider_sampleCore", "Terrain sampling"),
+            new NamedMetric("RtfSampleProvider_centerlineHeight", "Centerline height samples")
         )),
         new Stage(new NamedMetric("FlowlinePreparation_prepare", "Prepare flowlines"), "FlowlinePreparation", List.of(
             new NamedMetric("SourceTrace_trace", "Trace region sources"),

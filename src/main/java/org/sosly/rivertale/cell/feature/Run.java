@@ -2,9 +2,11 @@ package org.sosly.rivertale.cell.feature;
 
 import java.util.List;
 import java.util.Optional;
+import net.minecraft.world.level.ChunkPos;
 import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.river.RiverSpline;
 import org.sosly.rivertale.river.Watershed;
+import org.sosly.rivertale.terrain.CarveProposal;
 
 public class Run implements FeatureHandler {
     @Override
@@ -13,6 +15,11 @@ public class Run implements FeatureHandler {
             return false;
         }
         return watershed.contains(cell.pos());
+    }
+
+    @Override
+    public List<CarveProposal> carve(Cell cell, Watershed watershed, ChunkPos chunk, long meanderSeed) {
+        return CourseCarver.carve(this, cell, watershed, chunk, meanderSeed);
     }
 
     @Override

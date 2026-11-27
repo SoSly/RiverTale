@@ -8,7 +8,7 @@ import org.sosly.rivertale.config.SourceConfig;
 import org.sosly.rivertale.river.RiverSpline;
 import org.sosly.rivertale.river.Watershed;
 
-public class Seep implements FeatureHandler {
+public class Seep implements SourceFeature {
 
     @Override
     public boolean classify(Cell cell, Watershed watershed) {
@@ -28,7 +28,7 @@ public class Seep implements FeatureHandler {
     @Override
     public List<RiverSpline> buildSplines(Cell cell, List<Cell> entries, Optional<Cell> exit, long meanderSeed) {
         if (!entries.isEmpty() || exit.isEmpty()) {
-            return FeatureHandler.super.buildSplines(cell, entries, exit, meanderSeed);
+            return SourceFeature.super.buildSplines(cell, entries, exit, meanderSeed);
         }
         SourceChannel channel = new SourceChannel(cell, exit.get(), meanderSeed);
         return List.of(channel.toExit(channel.origin(0.4, 0)));

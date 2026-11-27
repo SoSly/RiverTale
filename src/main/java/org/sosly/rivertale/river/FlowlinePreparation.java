@@ -39,6 +39,12 @@ public final class FlowlinePreparation {
         Timer.Record timer = Store.getTimer(FlowlinePreparation.class, "prepare").start();
         try {
             FlowlinePreparation preparation = new FlowlinePreparation(tracer);
+            // Traces can reuse downstream paths. Establish those paths in geographic order,
+            // not in the order a chunk happens to discover its upstream regions.
+            for (RegionPos source : tracer.preparedSourceRegions().stream().sorted(FlowlinePreparation::compare).toList()) {
+                checkCancelled.run();
+                preparation.paths(source);
+            }
             roots.stream().sorted(FlowlinePreparation::compare).forEach(preparation::include);
             preparation.discover(checkCancelled);
             Store.getDistribution(FlowlinePreparation.class, "upstreamRegions").record(preparation.upstream.size());

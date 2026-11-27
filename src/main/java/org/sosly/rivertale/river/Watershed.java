@@ -133,7 +133,7 @@ public class Watershed {
         }
     }
 
-    Cell elevatedCell(CellPos pos) {
+    public Cell elevatedCell(CellPos pos) {
         return elevatedCells.get(pos);
     }
 

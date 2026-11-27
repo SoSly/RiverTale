@@ -98,6 +98,15 @@ class CommonConfigTest {
     }
 
     @Test
+    void loadsCarvingSearchRadiusFromToml() {
+        load("");
+        assertEquals(64, CommonConfig.get().carvingSearchRadius());
+
+        load("carvingSearchRadius = 288");
+        assertEquals(288, CommonConfig.get().carvingSearchRadius());
+    }
+
+    @Test
     void disablingChunkSavingIsOptIn() {
         load("");
         assertFalse(CommonConfig.get().disableChunkSaving());
@@ -127,6 +136,7 @@ class CommonConfigTest {
             riseRunRatio = 0.5
             sourceFlow = 2
             flowPerCell = 0.75
+            carvingSearchRadius = 0
             [sources]
             springMinGrade = 0.25
             [caches]
@@ -148,6 +158,7 @@ class CommonConfigTest {
         assertEquals(0.5, tuning.riseRunRatio());
         assertEquals(2, tuning.sourceFlow());
         assertEquals(0.75, tuning.flowPerCell());
+        assertEquals(0, tuning.carvingSearchRadius());
         assertEquals(0.25, tuning.sources().springMinGrade());
         assertSame(active, CommonConfig.get());
 

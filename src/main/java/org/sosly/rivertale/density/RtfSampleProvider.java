@@ -44,6 +44,18 @@ public class RtfSampleProvider implements SampleProvider {
     }
 
     @Override
+    public int estimatedHeight(int x, int z) {
+        Timer.Record timer = Store.getTimer(RtfSampleProvider.class, "centerlineHeight").start();
+        try {
+            Cell cell = new Cell();
+            heightmap.applyTerrain(cell, x, z);
+            return levels.scale(cell.height);
+        } finally {
+            timer.stop();
+        }
+    }
+
+    @Override
     public double sample(DensityField field, ChunkPos pos) {
         Sample sample = sampleCore(pos);
         return switch (field) {

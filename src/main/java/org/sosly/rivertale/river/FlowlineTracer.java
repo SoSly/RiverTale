@@ -39,6 +39,11 @@ public class FlowlineTracer {
         return data.region(pos);
     }
 
+    List<RegionPos> preparedSourceRegions() {
+        return data.sources().entrySet().stream().filter(entry -> !entry.getValue().isEmpty())
+            .map(Map.Entry::getKey).toList();
+    }
+
     List<CellPos> sources(RegionPos pos) {
         return data.sources(pos);
     }

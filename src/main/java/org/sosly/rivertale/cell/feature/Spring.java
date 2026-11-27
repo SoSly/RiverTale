@@ -10,7 +10,7 @@ import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.river.RiverSpline;
 import org.sosly.rivertale.river.Watershed;
 
-public class Spring implements FeatureHandler {
+public class Spring implements SourceFeature {
 
     @Override
     public boolean classify(Cell cell, Watershed watershed) {
@@ -44,7 +44,7 @@ public class Spring implements FeatureHandler {
     @Override
     public List<RiverSpline> buildSplines(Cell cell, List<Cell> entries, Optional<Cell> exit, long meanderSeed) {
         if (!entries.isEmpty() || exit.isEmpty()) {
-            return FeatureHandler.super.buildSplines(cell, entries, exit, meanderSeed);
+            return SourceFeature.super.buildSplines(cell, entries, exit, meanderSeed);
         }
         SourceChannel channel = new SourceChannel(cell, exit.get(), meanderSeed);
         return List.of(channel.toExit(channel.origin(-0.25, 0.125)));

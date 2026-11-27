@@ -153,6 +153,20 @@ class RtfSampleProviderTest {
     }
 
     @Test
+    void centerlineEstimatesSampleExactColumnsAndRecordTheirOwnCost() {
+        Timer timer = new Timer();
+        try (MockedStatic<Store> store = mockStatic(Store.class)) {
+            store.when(() -> Store.getTimer(RtfSampleProvider.class, "centerlineHeight")).thenReturn(timer);
+
+            assertEquals(192, provider.estimatedHeight(40, -28));
+            assertEquals(192, provider.estimatedHeight(41, -27));
+            assertEquals(List.of(40F, 41F), terrainX);
+            assertEquals(List.of(-28F, -27F), terrainZ);
+            assertEquals(2, timer.count());
+        }
+    }
+
+    @Test
     void recordsCoreSamplingCost() {
         Timer timer = new Timer();
         try (MockedStatic<Store> store = mockStatic(Store.class)) {

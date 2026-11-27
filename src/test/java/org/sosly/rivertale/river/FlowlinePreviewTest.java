@@ -93,7 +93,7 @@ class FlowlinePreviewTest {
         when(neverCrater.nextFloat()).thenReturn(1.0f);
         when(factory.at(anyInt(), anyInt(), anyInt())).thenReturn(neverCrater);
         when(randomState.getOrCreateRandomFactory(any())).thenReturn(factory);
-        RiverShaping.init(63, randomState);
+        RiverShaping.init(63, randomState, 0);
     }
 
     @AfterEach
@@ -244,7 +244,7 @@ class FlowlinePreviewTest {
             tick(server, 24);
             assertTrue(messages.isEmpty());
             tick(server, 25);
-            assertEquals(1, messages.size());
+            assertEquals(readyRegionCount(source.getRegion()), messages.size());
             Map<CellPos, Set<CellPos>> sentLinks = new HashMap<>();
             Set<CellPos> sentOutlets = new HashSet<>();
             for (Message message : messages) {
@@ -276,7 +276,7 @@ class FlowlinePreviewTest {
             when(player.blockPosition()).thenReturn(next.getWorldPosition(100));
             messages.clear();
             tick(server, 26);
-            assertEquals(2, messages.size());
+            assertEquals(readyRegionCount(next), messages.size());
             assertTrue(messages.stream().allMatch(Region.Packet.class::isInstance));
 
             messages.clear();
@@ -340,6 +340,10 @@ class FlowlinePreviewTest {
         when(player.blockPosition()).thenReturn(second.getWorldPosition(100));
         lifecycle.onPlayerTick(new TickEvent.PlayerTickEvent(TickEvent.Phase.END, player));
         awaitNeighborhood(second);
+    }
+
+    private long readyRegionCount(RegionPos center) {
+        return center.neighborhood().stream().filter(pos -> RiverShaping.getReady(pos, randomState) != null).count();
     }
 
     private void awaitNeighborhood(RegionPos center) {
