@@ -91,7 +91,7 @@ final class RiverNetwork {
             }
         }
         return new PreparedRiverData(data.regions(), cells, data.routing(), data.moves(), data.incoming(), data.sources(),
-            data.awayStepAllowance(), data.seaLevel(), data.lakes());
+            data.awayStepAllowance(), data.seaLevel(), data.lakes(), data.seaCuts());
     }
 
     private static boolean drainsOutside(Set<CellPos> footprint, Map<CellPos, CellPos> downstream) {

@@ -20,7 +20,8 @@ public record PreparedRiverData(
     Map<RegionPos, List<CellPos>> sources,
     int awayStepAllowance,
     int seaLevel,
-    Map<LakePlan.Inlet, LakePlan> lakes
+    Map<LakePlan.Inlet, LakePlan> lakes,
+    Map<CellPos, List<Step>> seaCuts
 ) {
     public PreparedRiverData(Map<RegionPos, Region> regions, Map<CellPos, CellData> cells, Map<RegionPos, Routing> routing,
                              Map<CellPos, List<Step>> moves, Map<CellPos, List<CellPos>> incoming,
@@ -28,7 +29,15 @@ public record PreparedRiverData(
         this(regions, cells, routing, moves, incoming, sources, awayStepAllowance, seaLevel, Map.of());
     }
 
+    public PreparedRiverData(Map<RegionPos, Region> regions, Map<CellPos, CellData> cells, Map<RegionPos, Routing> routing,
+                             Map<CellPos, List<Step>> moves, Map<CellPos, List<CellPos>> incoming,
+                             Map<RegionPos, List<CellPos>> sources, int awayStepAllowance, int seaLevel,
+                             Map<LakePlan.Inlet, LakePlan> lakes) {
+        this(regions, cells, routing, moves, incoming, sources, awayStepAllowance, seaLevel, lakes, Map.of());
+    }
+
     public PreparedRiverData {
+        seaCuts = immutableLists(seaCuts);
         lakes = Map.copyOf(lakes);
         regions = Map.copyOf(regions);
         cells = Map.copyOf(cells);
@@ -90,8 +99,13 @@ public record PreparedRiverData(
     }
 
     public record Routing(Set<RegionPos> allowedRegions, List<CellPos> termini, Set<CellPos> terminusCells,
-                          Set<CellPos> waterCells) {
+                          Set<CellPos> waterCells, Set<CellPos> oceanOutlets) {
+        public Routing(Set<RegionPos> allowedRegions, List<CellPos> termini, Set<CellPos> terminusCells, Set<CellPos> waterCells) {
+            this(allowedRegions, termini, terminusCells, waterCells, Set.of());
+        }
+
         public Routing {
+            oceanOutlets = Set.copyOf(oceanOutlets);
             allowedRegions = Set.copyOf(allowedRegions);
             termini = List.copyOf(termini);
             terminusCells = Set.copyOf(terminusCells);

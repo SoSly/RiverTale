@@ -71,8 +71,15 @@ class ShoreRoutingTest {
     }
 
     @Test
-    void waterIsExcludedEvenWhenNoLandRouteSucceedsForOcean() {
-        waterIsExcludedEvenWhenNoLandRouteSucceeds(BoundaryType.OCEAN);
+    void coastalCutReachesLandAtTheShoreWithoutEnteringWater() {
+        CommonConfig.set(new CommonConfig(8, 1, 1, false, false, 12,
+            5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
+
+        Flowline path = tracer(BoundaryType.OCEAN, 0).trace(source);
+
+        assertTrue(path.isValid());
+        assertEquals(List.of(source, shore), path.cells());
+        assertFalse(path.cells().contains(water));
     }
 
     @Test

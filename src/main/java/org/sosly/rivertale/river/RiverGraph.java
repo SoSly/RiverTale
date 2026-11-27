@@ -16,6 +16,7 @@ import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.Boundary;
+import org.sosly.rivertale.core.BoundaryType;
 import org.sosly.rivertale.core.CellPos;
 import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
@@ -43,6 +44,7 @@ final class RiverGraph {
     private final boolean enableNudging;
     private final int nudgingLimit;
     private final Map<CellPos, List<Step>> wallMoves = new HashMap<>();
+    private final Map<CellPos, List<Step>> seaCuts = new HashMap<>();
     private final Map<LakePlan.Inlet, LakePlan> lakes = new HashMap<>();
 
     RiverGraph(Function<RegionPos, Region> regionLoader, Function<RegionPos, Collection<Region>> regionProvider,
@@ -102,7 +104,7 @@ final class RiverGraph {
             preparedMoves.put(from, combined);
         });
         return new PreparedRiverData(preparedRegions, preparedCells, routing, preparedMoves, incoming, sources,
-            awayStepAllowance, RiverShaping.getSeaLevel(), lakes);
+            awayStepAllowance, RiverShaping.getSeaLevel(), lakes, seaCuts);
     }
 
     Routing routing(RegionPos pos) {
@@ -123,17 +125,21 @@ final class RiverGraph {
                 }
                 Set<CellPos> termini = new HashSet<>();
                 Set<CellPos> waterCells = new HashSet<>();
+                Set<CellPos> oceanOutlets = new HashSet<>();
                 for (Region region : regions) {
                     for (Boundary boundary : region.boundaries()) {
                         waterCells.add(boundary.water());
                         if (destinations.contains(region.pos()) && destinations.contains(boundary.land().getRegion())) {
                             termini.add(boundary.land());
+                            if (boundary.type() == BoundaryType.OCEAN) {
+                                oceanOutlets.add(boundary.land());
+                            }
                         }
                     }
                 }
                 List<CellPos> ordered = termini.stream().sorted(Comparator.comparingInt(CellPos::x)
                     .thenComparingInt(CellPos::z)).toList();
-                return new Routing(Set.copyOf(allowed), ordered, Set.copyOf(termini), Set.copyOf(waterCells));
+                return new Routing(allowed, ordered, termini, waterCells, oceanOutlets);
             } finally {
                 timer.stop();
             }
@@ -225,6 +231,32 @@ final class RiverGraph {
             }
             return candidates(key, nearestTerminus(key), local);
         });
+    }
+
+    List<Step> seaCuts(CellPos from) {
+        if (region(from.getRegion()).type() != RegionType.COASTAL) {
+            return List.of();
+        }
+        return seaCuts.computeIfAbsent(from, this::coastalCandidates);
+    }
+
+    private List<Step> coastalCandidates(CellPos from) {
+        Routing local = routing(from.getRegion());
+        if (!local.allows(from) || local.oceanOutlets().isEmpty() || local.oceanOutlets().contains(from)) {
+            return List.of();
+        }
+        CellPos target = local.oceanOutlets().stream().min(Comparator.<CellPos>comparingLong(outlet -> distanceSquared(from, outlet))
+            .thenComparingInt(CellPos::x).thenComparingInt(CellPos::z)).orElseThrow();
+        long distance = distanceSquared(from, target);
+        List<Step> cuts = new ArrayList<>();
+        for (FlowDirection direction : FlowDirection.D8) {
+            CellPos next = from.relative(direction);
+            if (makesProgress(next, target, distance, local)) {
+                cuts.add(new Step(next, 0, true));
+            }
+        }
+        cuts.sort(Comparator.comparingInt(step -> cell(step.pos()).height()));
+        return List.copyOf(cuts);
     }
 
     boolean entersDepression(CellPos from, CellPos to) {

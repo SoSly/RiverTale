@@ -99,8 +99,8 @@ class RoutingConfigTest {
     }
 
     private void terrain(CellPos outlet, Map<CellPos, Cell> cells) {
-        Region region = new Region(outlet.getRegion(), RegionType.COASTAL,
-            List.of(new Boundary(outlet, outlet.relative(FlowDirection.EAST), BoundaryType.OCEAN)));
+        Region region = new Region(outlet.getRegion(), RegionType.INLAND,
+            List.of(new Boundary(outlet, outlet.relative(FlowDirection.EAST), BoundaryType.BASIN)));
         Cell empty = cell();
         world.regions(List.of(region)).cells(pos -> cells.getOrDefault(pos, empty));
     }

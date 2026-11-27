@@ -108,7 +108,7 @@ class FlowlineTracerTest {
     void failedNudgeDoesNotFallBackToForcingAnArbitraryDirection() {
         CellPos source = new CellPos(1, 2);
         cells.put(source, cell(source, List.of(FlowDirection.WEST)));
-        Flowline path = tracer(List.of(region(new CellPos(6, 2), BoundaryType.OCEAN)), 0, source).trace(source);
+        Flowline path = tracer(List.of(region(new CellPos(6, 2), BoundaryType.BASIN)), 0, source).trace(source);
 
         assertFalse(path.isValid());
         assertNull(path.terminus());
@@ -119,7 +119,7 @@ class FlowlineTracerTest {
     void noDownhillDirectionsFarFromWaterInvalidatesThePath() {
         CellPos source = new CellPos(1, 2);
         cells.put(source, cell(source, List.of()));
-        Flowline path = tracer(List.of(region(new CellPos(6, 2), BoundaryType.OCEAN)), 0, source).trace(source);
+        Flowline path = tracer(List.of(region(new CellPos(6, 2), BoundaryType.BASIN)), 0, source).trace(source);
 
         assertFalse(path.isValid());
         assertEquals(List.of(source), path.cells());
@@ -141,7 +141,7 @@ class FlowlineTracerTest {
         CellPos source = new CellPos(1, 2);
         CellPos next = new CellPos(2, 2);
         cells.put(next, cell(next, List.of(FlowDirection.WEST)));
-        Flowline path = tracer(List.of(region(new CellPos(6, 2), BoundaryType.OCEAN)), 0, source).trace(source);
+        Flowline path = tracer(List.of(region(new CellPos(6, 2), BoundaryType.BASIN)), 0, source).trace(source);
 
         assertFalse(path.isValid());
         assertEquals(List.of(source), path.cells());
@@ -285,7 +285,7 @@ class FlowlineTracerTest {
     void beyondFiveCellsDoesNotForceAnEscape() {
         CellPos source = new CellPos(1, 2);
         cells.put(source, cell(source, List.of()));
-        Flowline path = fallbackTracer(new CellPos(6, 3), source).trace(source);
+        Flowline path = tracer(List.of(region(new CellPos(6, 3), BoundaryType.BASIN)), 5, source).trace(source);
 
         assertFalse(path.isValid());
         assertEquals(List.of(source), path.cells());
@@ -720,7 +720,7 @@ class FlowlineTracerTest {
     }
 
     private FlowlineTracer searchTracer(CellPos terminus, CellPos... sources) {
-        return prepare(List.of(region(terminus, BoundaryType.OCEAN)),
+        return prepare(List.of(region(terminus, BoundaryType.BASIN)),
             pos -> cells.getOrDefault(pos, cell(pos, List.of())), 0, 0, sources);
     }
     private FlowlineTracer fallbackTracer(CellPos terminus, CellPos... sources) {

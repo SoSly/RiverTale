@@ -190,7 +190,7 @@ class AwayStepTest {
         move(expected, FlowDirection.EAST, 4);
         connect(expected);
         Region destination = new Region(new RegionPos(0, 0), RegionType.COASTAL,
-            List.of(new Boundary(last(expected), last(expected).relative(FlowDirection.SOUTH), BoundaryType.OCEAN)));
+            List.of(new Boundary(last(expected), last(expected).relative(FlowDirection.SOUTH), BoundaryType.BASIN)));
         Region fluvial = new Region(new RegionPos(1, 0), RegionType.FLUVIAL);
         FlowlineTracer tracer = prepare(List.of(destination, fluvial), expected.get(0), expected.get(1));
 
@@ -278,8 +278,8 @@ class AwayStepTest {
     }
 
     private FlowlineTracer tracer(CellPos terminus, CellPos... sources) {
-        Region region = new Region(terminus.getRegion(), RegionType.COASTAL,
-            List.of(new Boundary(terminus, terminus.relative(FlowDirection.SOUTH), BoundaryType.OCEAN)));
+        Region region = new Region(terminus.getRegion(), RegionType.INLAND,
+            List.of(new Boundary(terminus, terminus.relative(FlowDirection.SOUTH), BoundaryType.BASIN)));
         return prepare(List.of(region), sources);
     }
 

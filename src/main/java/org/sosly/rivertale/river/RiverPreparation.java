@@ -23,6 +23,7 @@ public final class RiverPreparation {
     private final RiverGraph graph;
     private final Runnable checkCancelled;
     private final Set<CellPos> preparedWalls = new HashSet<>();
+    private final Set<CellPos> preparedCuts = new HashSet<>();
     private final Map<CellPos, Integer> reachable = new HashMap<>();
 
     private RiverPreparation(RiverGraph graph, Runnable checkCancelled) {
@@ -119,6 +120,7 @@ public final class RiverPreparation {
         ArrayDeque<Visit> pending = new ArrayDeque<>();
         roots.forEach(pos -> include(pos, 0, pending));
         Set<CellPos> targets = new HashSet<>();
+        Set<CellPos> cutStarts = new HashSet<>();
         while (!pending.isEmpty()) {
             checkCancelled.run();
             Visit current = pending.remove();
@@ -127,6 +129,7 @@ public final class RiverPreparation {
             }
             graph.cell(current.pos());
             targets.add(current.pos());
+            cutStarts.add(current.pos());
             for (Step step : graph.steps(current.pos())) {
                 int away = step.approaching() ? 0 : current.awaySteps() + 1;
                 if (away > graph.awayStepAllowance() || graph.isDivide(step.pos())) {
@@ -140,7 +143,24 @@ public final class RiverPreparation {
                 addCrossingCorners(current.pos(), step.pos(), targets);
             }
         }
+        prepareCuts(cutStarts, targets);
         return targets;
+    }
+
+    private void prepareCuts(Set<CellPos> starts, Set<CellPos> targets) {
+        ArrayDeque<CellPos> pending = new ArrayDeque<>(starts);
+        while (!pending.isEmpty()) {
+            checkCancelled.run();
+            CellPos from = pending.remove();
+            if (!preparedCuts.add(from)) {
+                continue;
+            }
+            for (Step step : graph.seaCuts(from)) {
+                targets.add(step.pos());
+                addCrossingCorners(from, step.pos(), targets);
+                pending.add(step.pos());
+            }
+        }
     }
 
     private void prepareWalls(CellPos entry, ArrayDeque<Visit> pending, Set<CellPos> targets) {

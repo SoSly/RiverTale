@@ -21,6 +21,7 @@ import org.sosly.rivertale.metric.Ratio;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
 import org.sosly.rivertale.region.Region;
+import org.sosly.rivertale.region.RegionType;
 import org.sosly.rivertale.river.PreparedRiverData.Routing;
 import org.sosly.rivertale.river.PreparedRiverData.Step;
 
@@ -85,6 +86,11 @@ public class FlowlineTracer {
 
     private boolean isTerminus(CellPos pos) {
         return routing(pos.getRegion()).terminusCells().contains(pos);
+    }
+
+    private boolean isCoastal(CellPos pos) {
+        Region region = data.regions().get(pos.getRegion());
+        return region != null && region.type() == RegionType.COASTAL;
     }
 
     public Flowline trace(CellPos source) {
@@ -179,6 +185,8 @@ public class FlowlineTracer {
     private record Arrival(CellPos cell, int awaySteps, boolean wall) {
     }
 
+    private enum Search { NATURAL, CUT }
+
     private final class Notes {
         private final CellPos source;
         private final Map<Arrival, Arrival> parents = new HashMap<>();
@@ -192,15 +200,22 @@ public class FlowlineTracer {
         private Node tip;
         private long returnCeiling;
         private Node lake;
+        private Arrival cutStart;
         private final Set<CellPos> blocked;
+        private final Search search;
 
         private Notes(CellPos source) {
             this(source, Set.of());
         }
 
         private Notes(CellPos source, Set<CellPos> blocked) {
+            this(source, blocked, Search.NATURAL);
+        }
+
+        private Notes(CellPos source, Set<CellPos> blocked, Search search) {
             this.source = source;
             this.blocked = blocked;
+            this.search = search;
             pending.add(new Node(new Arrival(source, 0, false), EMPTY_CHOICES, order++, null, null));
         }
 
@@ -226,22 +241,25 @@ public class FlowlineTracer {
                     parents.put(current.arrival, current.parent);
                     taken.put(current.arrival, current.step);
                 }
-                if (isTerminus(current.arrival.cell)) {
+                if (reachedOutlet(current.arrival.cell)) {
                     List<CellPos> cells = path(current.arrival, List.of());
                     publish(cells);
                     return finish(cells, stepsBetween(cells));
                 }
+                if (search == Search.NATURAL && !data.seaCuts().getOrDefault(current.arrival.cell, List.of()).isEmpty()) {
+                    cutStart = current.arrival;
+                }
                 Set<CellPos> ancestors = used(current.arrival);
                 ancestors.remove(current.arrival.cell);
                 ancestors.addAll(blocked);
-                List<CellPos> joined = blocked.isEmpty() ? follow(current.arrival, new HashSet<>(ancestors)) : null;
+                List<CellPos> joined = search == Search.NATURAL && blocked.isEmpty() ? follow(current.arrival, new HashSet<>(ancestors)) : null;
                 if (joined != null && joined.size() > 1) {
                     List<CellPos> cells = path(current.arrival, joined.subList(1, joined.size()));
                     publish(cells);
                     return finish(cells, stepsBetween(cells));
                 }
-                List<Step> candidates = steps(current.arrival.cell);
-                if (current.parent != null) {
+                List<Step> candidates = searchSteps(current.arrival.cell);
+                if (search == Search.NATURAL && current.parent != null) {
                     LakePlan lake = data.lakes().get(new LakePlan.Inlet(current.parent.cell, current.arrival.cell));
                     if (lake != null) {
                         pending.add(new Node(current.arrival, extend(current.choices, candidates.size()), order++, current.parent, null, lake));
@@ -251,7 +269,8 @@ public class FlowlineTracer {
                     Step step = candidates.get(index);
                     Arrival next = advance(current.arrival, step);
                     if ((step.wall() && !current.arrival.wall) || next.awaySteps > awayStepAllowance || isDivide(step.pos()) || ancestors.contains(step.pos())
-                        || (!blocked.isEmpty() && current.arrival.equals(start) && data.cell(step.pos()).height() >= data.cell(source).height())) {
+                        || (search == Search.NATURAL && !blocked.isEmpty() && current.arrival.equals(start)
+                             && data.cell(step.pos()).height() >= data.cell(source).height())) {
                         continue;
                     }
                     if (expanded.contains(next)) {
@@ -261,6 +280,20 @@ public class FlowlineTracer {
                 }
             }
             return null;
+        }
+
+        private boolean reachedOutlet(CellPos pos) {
+            if (search == Search.CUT) {
+                return routing(pos.getRegion()).oceanOutlets().contains(pos);
+            }
+            return isTerminus(pos);
+        }
+
+        private List<Step> searchSteps(CellPos pos) {
+            if (search == Search.CUT) {
+                return data.seaCuts().getOrDefault(pos, List.of());
+            }
+            return steps(pos);
         }
 
         private boolean canSwitchTo(Node next) {
@@ -307,7 +340,7 @@ public class FlowlineTracer {
         }
 
         private void publish(List<CellPos> cells) {
-            if (!blocked.isEmpty()) {
+            if (search == Search.CUT || !blocked.isEmpty()) {
                 return;
             }
             List<Step> chosen = stepsBetween(cells);
@@ -324,7 +357,7 @@ public class FlowlineTracer {
                 CellPos from = cells.get(i);
                 CellPos to = cells.get(i + 1);
                 Step match = null;
-                for (Step step : steps(from)) {
+                for (Step step : searchSteps(from)) {
                     if (step.pos().equals(to)) {
                         match = step;
                         break;
@@ -404,6 +437,8 @@ public class FlowlineTracer {
 
     private record OutletTask(LakeFill.Spill spill, Passage passage, Flowline basin) {}
 
+    private record CutStart(Passage passage, List<CellPos> cells) {}
+
     private record Segment(Notes notes, Passage passage, OutletTask inlet, ArrayDeque<OutletTask> outlets) {
         Segment(Notes notes, Passage passage, OutletTask inlet) {
             this(notes, passage, inlet, new ArrayDeque<>());
@@ -414,6 +449,7 @@ public class FlowlineTracer {
         private final Set<SpillSearch.Outlet> examined = new HashSet<>();
         private final ArrayDeque<Segment> stack = new ArrayDeque<>();
         private Flowline fallback;
+        private CutStart cut;
 
         Flowline find(CellPos source) {
             stack.push(new Segment(new Notes(source), new Passage(List.of(), List.of(), Set.of()), null));
@@ -428,16 +464,43 @@ public class FlowlineTracer {
                 if (route != null) {
                     return new Flowline(segment.passage.through(route.cells()), route.terminus(), true, segment.passage.lakes());
                 }
+                if (segment.notes.cutStart != null) {
+                    List<CellPos> cells = segment.notes.path(segment.notes.cutStart, List.of());
+                    cut = new CutStart(segment.passage, cells);
+                }
                 if (segment.notes.lake != null) {
                     prepareOutlets(segment);
                     continue;
                 }
                 stack.pop();
                 if (!stack.isEmpty() && !mayRetryAfter(segment)) {
-                    return segment.inlet.basin;
+                    if (segment.inlet.basin != null) {
+                        return segment.inlet.basin;
+                    }
+                    break;
                 }
             }
+            Flowline forced = cut == null ? null : cutToSea(cut);
+            if (forced != null) {
+                return forced;
+            }
             return fallback == null ? new Flowline(List.of(source), null, false) : fallback;
+        }
+
+        private Flowline cutToSea(CutStart start) {
+            Passage passage = start.passage();
+            List<CellPos> incoming = start.cells();
+            List<CellPos> approach = incoming.subList(0, incoming.size() - 1);
+            Set<CellPos> blocked = new HashSet<>(passage.blocked());
+            blocked.addAll(approach);
+            Notes notes = new Notes(incoming.get(incoming.size() - 1), blocked, Search.CUT);
+            Flowline outlet = notes.advanceToLakeOrOutlet();
+            if (outlet == null) {
+                return null;
+            }
+            List<CellPos> channel = passage.through(approach);
+            channel.addAll(outlet.cells());
+            return new Flowline(channel, outlet.terminus(), true, passage.lakes());
         }
 
         private boolean mayRetryAfter(Segment segment) {
@@ -467,9 +530,9 @@ public class FlowlineTracer {
             }
             List<CellPos> incoming = notes.path(candidate.arrival, List.of());
             CellPos shore = incoming.stream().filter(plan.closed()::containsKey).findFirst().orElseThrow();
-            Flowline basin = new Flowline(prefix.through(incoming.subList(0, incoming.indexOf(shore) + 1)), shore, true,
+            Flowline basin = isCoastal(shore) ? null : new Flowline(prefix.through(incoming.subList(0, incoming.indexOf(shore) + 1)), shore, true,
                 prefix.flooded(Feature.ENDORHEIC, plan.closed()));
-            if (fallback == null || basin.lakes().size() > fallback.lakes().size()) {
+            if (basin != null && (fallback == null || basin.lakes().size() > fallback.lakes().size())) {
                 fallback = basin;
             }
             ArrayDeque<OutletTask> inland = new ArrayDeque<>();

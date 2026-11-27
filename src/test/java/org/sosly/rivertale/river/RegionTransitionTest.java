@@ -59,7 +59,7 @@ class RegionTransitionTest {
                     || (from == RegionType.FLUVIAL && to == RegionType.COASTAL);
                 String crossing = from + " -> " + to;
 
-                assertEquals(expected, tracer.trace(source).isValid(), crossing);
+                assertEquals(expected, tracer.trace(source).cells().contains(entry), crossing);
                 assertEquals(expected, tracer.predecessors(entry).contains(source), crossing);
                 UpstreamSearch upstream = new UpstreamSearch(tracer);
                 Set<RegionPos> found = upstream.expand(List.of(outlet));
@@ -78,7 +78,9 @@ class RegionTransitionTest {
         FlowlineTracer tracer = tracer(List.of(origin, neighbor), neighbor, 0, source);
 
         assertFalse(tracer.predecessors(nudge).contains(source));
-        assertEquals(List.of(source), tracer.trace(source).cells());
+        Flowline path = tracer.trace(source);
+        assertTrue(path.isValid());
+        assertTrue(path.cells().stream().allMatch(pos -> pos.getRegion().equals(source.getRegion())));
     }
 
     @Test
