@@ -33,7 +33,10 @@ public class ClientRegionCache {
     private long meanderSeed;
     private WatershedPreview preview;
 
-    public record Cell(CellPos pos, Feature feature, int y, OptionalInt averageY, OptionalDouble flow) {
+    public record Cell(CellPos pos, Feature feature, int y, OptionalInt averageY, OptionalDouble flow, int overFill) {
+        public Cell(CellPos pos, Feature feature, int y, OptionalInt averageY, OptionalDouble flow) {
+            this(pos, feature, y, averageY, flow, 0);
+        }
     }
 
     public record Edge(CellPos from, CellPos to, int fromY, int toY) {
@@ -97,8 +100,9 @@ public class ClientRegionCache {
             int[] heights = tag.getIntArray("heights");
             int[] averages = tag.getIntArray("averageYByIndex");
             long[] flows = tag.getLongArray("flowByIndex");
+            int[] fills = tag.getIntArray("overFillByIndex");
             if (side < 8 || side > 64 || ids.length != side * side || ids.length != heights.length
-                || averages.length % 2 != 0 || flows.length % 2 != 0) {
+                || averages.length % 2 != 0 || flows.length % 2 != 0 || fills.length % 2 != 0) {
                 throw new IllegalArgumentException("Invalid preview cell arrays");
             }
 
@@ -108,6 +112,7 @@ public class ClientRegionCache {
             List<Cell> cells = new ArrayList<>(ids.length);
             int averageIndex = 0;
             int flowIndex = 0;
+            int fillIndex = 0;
             for (int i = 0; i < ids.length; i++) {
                 int featureId = Byte.toUnsignedInt(ids[i]);
                 if (featureId >= features.length) {
@@ -124,9 +129,14 @@ public class ClientRegionCache {
                     flow = OptionalDouble.of(Double.longBitsToDouble(flows[flowIndex + 1]));
                     flowIndex += 2;
                 }
-                cells.add(new Cell(pos, features[featureId], heights[i], average, flow));
+                int depth = 0;
+                if (fillIndex < fills.length && fills[fillIndex] == i) {
+                    depth = fills[fillIndex + 1];
+                    fillIndex += 2;
+                }
+                cells.add(new Cell(pos, features[featureId], heights[i], average, flow, depth));
             }
-            if (averageIndex != averages.length || flowIndex != flows.length) {
+            if (averageIndex != averages.length || flowIndex != flows.length || fillIndex != fills.length) {
                 throw new IllegalArgumentException("Invalid preview cell indices");
             }
             return cells;

@@ -19,9 +19,17 @@ public record PreparedRiverData(
     Map<CellPos, List<CellPos>> incoming,
     Map<RegionPos, List<CellPos>> sources,
     int awayStepAllowance,
-    int seaLevel
+    int seaLevel,
+    Map<LakePlan.Inlet, LakePlan> lakes
 ) {
+    public PreparedRiverData(Map<RegionPos, Region> regions, Map<CellPos, CellData> cells, Map<RegionPos, Routing> routing,
+                             Map<CellPos, List<Step>> moves, Map<CellPos, List<CellPos>> incoming,
+                             Map<RegionPos, List<CellPos>> sources, int awayStepAllowance, int seaLevel) {
+        this(regions, cells, routing, moves, incoming, sources, awayStepAllowance, seaLevel, Map.of());
+    }
+
     public PreparedRiverData {
+        lakes = Map.copyOf(lakes);
         regions = Map.copyOf(regions);
         cells = Map.copyOf(cells);
         routing = Map.copyOf(routing);
@@ -95,6 +103,9 @@ public record PreparedRiverData(
         }
     }
 
-    public record Step(CellPos pos, long nudgingRise, boolean approaching) {
+    public record Step(CellPos pos, long nudgingRise, boolean approaching, boolean wall) {
+        public Step(CellPos pos, long nudgingRise, boolean approaching) {
+            this(pos, nudgingRise, approaching, false);
+        }
     }
 }

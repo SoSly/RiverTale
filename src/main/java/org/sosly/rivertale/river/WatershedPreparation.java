@@ -52,7 +52,7 @@ public final class WatershedPreparation {
     private void discover() {
         while (!pending.isEmpty()) {
             Flowline path = pending.remove();
-            for (CellPos cell : path.cells()) {
+            for (CellPos cell : occupiedCells(path)) {
                 cells.add(cell);
                 inspect(cell);
                 cellPaths.getOrDefault(cell, Set.of()).forEach(this::include);
@@ -78,7 +78,7 @@ public final class WatershedPreparation {
         if (!path.isValid() || !indexed.add(path)) {
             return;
         }
-        boolean connected = indexPositions(path, path.cells(), cells, cellPaths);
+        boolean connected = indexPositions(path, occupiedCells(path), cells, cellPaths);
         connected |= indexPositions(path, diagonalSquares(path), crossings, crossingPaths);
         if (connected) {
             include(path);
@@ -93,6 +93,15 @@ public final class WatershedPreparation {
             connected |= selected.contains(pos);
         }
         return connected;
+    }
+
+    private Collection<CellPos> occupiedCells(Flowline path) {
+        if (path.lakes().isEmpty()) {
+            return path.cells();
+        }
+        Set<CellPos> positions = new HashSet<>(path.cells());
+        path.lakes().forEach(lake -> positions.addAll(lake.depths().keySet()));
+        return positions;
     }
 
     private Set<CellPos> diagonalSquares(Flowline path) {

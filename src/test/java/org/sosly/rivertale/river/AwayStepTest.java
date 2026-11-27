@@ -37,7 +37,8 @@ class AwayStepTest {
     @BeforeEach
     void setUp() {
         originalConfig = CommonConfig.get();
-        CommonConfig.set(new CommonConfig(64, 1, 1, true, false, 12, 5, 10, SourceConfig.DEFAULT, CacheConfig.DEFAULT));
+        CommonConfig.set(new CommonConfig(64, 1, 1, true, false, 12, 5, 10, 0.25, 1, 0.5,
+            SourceConfig.DEFAULT, CacheConfig.DEFAULT, false, 64, 4, 10, Integer.MAX_VALUE));
         Store.clear();
         world = new RiverWorld();
     }
@@ -176,7 +177,7 @@ class AwayStepTest {
         flow(nudgedRoute.get(0), 110, List.of(FlowDirection.EAST));
         FlowlineTracer tracer = tracer(last(nudgedRoute), source);
 
-        assertFalse(tracer.trace(source).isValid());
+        assertFalse(tracer.data().steps(source).stream().anyMatch(step -> step.pos().equals(nudgedRoute.get(0))));
         assertFalse(tracer.predecessors(nudgedRoute.get(0)).contains(source));
     }
 

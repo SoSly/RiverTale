@@ -1,5 +1,6 @@
 package org.sosly.rivertale.world;
 
+import java.util.Arrays;
 import java.util.List;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
@@ -15,10 +16,20 @@ final class ChunkCarving {
     static void apply(ChunkAccess chunk, ChunkPos pos, List<CarveProposal> proposals) {
         double[][] weightedHeights = new double[16][16];
         double[][] weights = new double[16][16];
+        double[] ceilings = null;
         for (CarveProposal proposal : proposals) {
             int x = proposal.x() - pos.getMinBlockX();
             int z = proposal.z() - pos.getMinBlockZ();
             if (x < 0 || x >= 16 || z < 0 || z >= 16 || proposal.influence() <= 0) {
+                continue;
+            }
+            if (proposal.bedCeiling()) {
+                if (ceilings == null) {
+                    ceilings = new double[256];
+                    Arrays.fill(ceilings, Double.POSITIVE_INFINITY);
+                }
+                int index = x * 16 + z;
+                ceilings[index] = Math.min(ceilings[index], proposal.bedY());
                 continue;
             }
             double influence = proposal.influence();
@@ -28,9 +39,12 @@ final class ChunkCarving {
         }
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                if (weights[x][z] > 0) {
-                    int bedY = (int) Math.round(weightedHeights[x][z] / weights[x][z]);
-                    cutColumn(chunk, x, z, bedY);
+                double bed = weights[x][z] > 0 ? weightedHeights[x][z] / weights[x][z] : Double.POSITIVE_INFINITY;
+                if (ceilings != null) {
+                    bed = Math.min(bed, ceilings[x * 16 + z]);
+                }
+                if (Double.isFinite(bed)) {
+                    cutColumn(chunk, x, z, (int) Math.round(bed));
                 }
             }
         }

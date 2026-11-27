@@ -42,12 +42,17 @@ final class RiverPreviewEncoding {
         byte[] features = new byte[positions.size()];
         int[] heights = new int[positions.size()];
         IntArrayList averageYByIndex = new IntArrayList();
+        IntArrayList overFillByIndex = new IntArrayList();
         LongArrayList flowByIndex = new LongArrayList();
         for (int i = 0; i < positions.size(); i++) {
             CellPos pos = positions.get(i);
             CellData cell = data.cells().get(pos);
             Watershed watershed = data.watershedAt(pos);
             OptionalInt cellY = assignedHeight(pos, watershed);
+            if (cell.cell().overFill() > 0) {
+                overFillByIndex.add(i);
+                overFillByIndex.add(cell.cell().overFill());
+            }
             features[i] = (byte) cell.feature().ordinal();
             heights[i] = cellY.orElse(cell.height());
             if (cellY.isPresent()) {
@@ -65,6 +70,9 @@ final class RiverPreviewEncoding {
         cells.putByteArray("features", features);
         cells.putIntArray("heights", heights);
         cells.putIntArray("averageYByIndex", averageYByIndex.toIntArray());
+        if (!overFillByIndex.isEmpty()) {
+            cells.putIntArray("overFillByIndex", overFillByIndex.toIntArray());
+        }
         cells.putLongArray("flowByIndex", flowByIndex.toLongArray());
         return cells;
     }

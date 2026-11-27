@@ -1,6 +1,9 @@
 package org.sosly.rivertale.river;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,10 +27,14 @@ import org.sosly.rivertale.river.PreparedRiverData.Step;
 public class FlowlineTracer {
     private final PreparedRiverData data;
     private final int awayStepAllowance;
+    private final int maxBacktrack = CommonConfig.get().maxBacktrackCells();
+    private final int maxBacktrackRise = CommonConfig.get().maxBacktrackRise();
+    private final SpillSearch spillSearch;
     private final Map<Arrival, Step> outlets = new ConcurrentHashMap<>();
 
     public FlowlineTracer(PreparedRiverData data) {
         this.data = data;
+        this.spillSearch = new SpillSearch(data);
         this.awayStepAllowance = data.awayStepAllowance();
     }
 
@@ -133,7 +140,7 @@ public class FlowlineTracer {
         if (isTerminus(source)) {
             return new Flowline(List.of(source), source, true);
         }
-        return new Notes(source).find();
+        return new LakeRoutes().find(source);
     }
 
     private void recordChosen(List<Step> chosen, List<Integer> awayAtCell) {
@@ -161,7 +168,15 @@ public class FlowlineTracer {
         Store.getDistribution(FlowlineTracer.class, "maxConsecutiveAwaySteps").record(longestRun);
     }
 
-    private record Arrival(CellPos cell, int awaySteps) {
+    private Arrival advance(Arrival from, Step step) {
+        int away = step.approaching() ? 0 : from.awaySteps + 1;
+        int change = data.cell(step.pos()).height() - data.cell(from.cell).height();
+        boolean wall = change < 0 ? data.cell(step.pos()).flowDirections().isEmpty()
+            : from.wall && step.approaching() && change <= CommonConfig.get().nudgingLimit();
+        return new Arrival(step.pos(), away, wall);
+    }
+
+    private record Arrival(CellPos cell, int awaySteps, boolean wall) {
     }
 
     private final class Notes {
@@ -171,23 +186,42 @@ public class FlowlineTracer {
         private final Set<Arrival> expanded = new HashSet<>();
         private final PriorityQueue<Node> pending = new PriorityQueue<>(FlowlineTracer::byPreference);
         private int order;
+        private int[] committed = EMPTY_CHOICES;
+        private int committedDepth;
+        private int furthest;
+        private Node tip;
+        private long returnCeiling;
+        private Node lake;
+        private final Set<CellPos> blocked;
 
         private Notes(CellPos source) {
-            this.source = source;
+            this(source, Set.of());
         }
 
-        private Flowline find() {
-            Arrival start = new Arrival(source, 0);
-            List<CellPos> stored = follow(start, new HashSet<>());
-            if (stored != null) {
-                return finish(stored, stepsBetween(stored));
-            }
-            pending.add(new Node(start, EMPTY_CHOICES, order++, null, null));
+        private Notes(CellPos source, Set<CellPos> blocked) {
+            this.source = source;
+            this.blocked = blocked;
+            pending.add(new Node(new Arrival(source, 0, false), EMPTY_CHOICES, order++, null, null));
+        }
+
+        private Flowline advanceToLakeOrOutlet() {
+            Arrival start = new Arrival(source, 0, false);
+            lake = null;
             while (!pending.isEmpty()) {
-                Node current = pending.poll();
+                Node current = pending.remove();
+                if (!withinWindow(current.choices) || !canSwitchTo(current)) {
+                    continue;
+                }
+                if (current.lake != null) {
+                    lake = current;
+                    return null;
+                }
                 if (!expanded.add(current.arrival)) {
                     continue;
                 }
+                tip = current;
+                returnCeiling = (long) data.cell(current.arrival.cell).height() + maxBacktrackRise;
+                advanceWindow(current.choices, current.choices.length);
                 if (current.step != null) {
                     parents.put(current.arrival, current.parent);
                     taken.put(current.arrival, current.step);
@@ -199,27 +233,66 @@ public class FlowlineTracer {
                 }
                 Set<CellPos> ancestors = used(current.arrival);
                 ancestors.remove(current.arrival.cell);
-                List<CellPos> joined = follow(current.arrival, ancestors);
+                ancestors.addAll(blocked);
+                List<CellPos> joined = blocked.isEmpty() ? follow(current.arrival, new HashSet<>(ancestors)) : null;
                 if (joined != null && joined.size() > 1) {
                     List<CellPos> cells = path(current.arrival, joined.subList(1, joined.size()));
                     publish(cells);
                     return finish(cells, stepsBetween(cells));
                 }
                 List<Step> candidates = steps(current.arrival.cell);
+                if (current.parent != null) {
+                    LakePlan lake = data.lakes().get(new LakePlan.Inlet(current.parent.cell, current.arrival.cell));
+                    if (lake != null) {
+                        pending.add(new Node(current.arrival, extend(current.choices, candidates.size()), order++, current.parent, null, lake));
+                    }
+                }
                 for (int index = 0; index < candidates.size(); index++) {
                     Step step = candidates.get(index);
-                    int away = step.approaching() ? 0 : current.arrival.awaySteps + 1;
-                    if (away > awayStepAllowance || isDivide(step.pos()) || used(current.arrival).contains(step.pos())) {
+                    Arrival next = advance(current.arrival, step);
+                    if ((step.wall() && !current.arrival.wall) || next.awaySteps > awayStepAllowance || isDivide(step.pos()) || ancestors.contains(step.pos())
+                        || (!blocked.isEmpty() && current.arrival.equals(start) && data.cell(step.pos()).height() >= data.cell(source).height())) {
                         continue;
                     }
-                    Arrival next = new Arrival(step.pos(), away);
                     if (expanded.contains(next)) {
                         continue;
                     }
                     pending.add(new Node(next, extend(current.choices, index), order++, current.arrival, step));
                 }
             }
-            return new Flowline(List.of(source), null, false);
+            return null;
+        }
+
+        private boolean canSwitchTo(Node next) {
+            if (tip == null || tip.arrival.equals(next.parent) || (next.lake != null && tip.arrival.equals(next.arrival))) {
+                return true;
+            }
+            int fork = Arrays.mismatch(tip.choices, next.choices);
+            return fork < 0 || canReturnToDepth(fork);
+        }
+
+        private boolean canReturnToDepth(int fork) {
+            Arrival cursor = tip.arrival;
+            for (int i = tip.choices.length; i >= fork; i--) {
+                if (data.cell(cursor.cell).height() > returnCeiling) {
+                    return false;
+                }
+                cursor = parents.get(cursor);
+            }
+            return true;
+        }
+
+        private boolean withinWindow(int[] choices) {
+            return choices.length >= committedDepth && Arrays.equals(choices, 0, committedDepth, committed, 0, committedDepth);
+        }
+
+        private void advanceWindow(int[] choices, int depth) {
+            furthest = Math.max(furthest, depth);
+            int floor = depth - maxBacktrack;
+            if (floor > committedDepth) {
+                committed = choices;
+                committedDepth = floor;
+            }
         }
 
         private Flowline finish(List<CellPos> cells, List<Step> chosen) {
@@ -234,11 +307,14 @@ public class FlowlineTracer {
         }
 
         private void publish(List<CellPos> cells) {
+            if (!blocked.isEmpty()) {
+                return;
+            }
             List<Step> chosen = stepsBetween(cells);
-            int away = 0;
-            for (int i = 0; i < chosen.size(); i++) {
-                outlets.putIfAbsent(new Arrival(cells.get(i), away), chosen.get(i));
-                away = chosen.get(i).approaching() ? 0 : away + 1;
+            Arrival arrival = new Arrival(cells.get(0), 0, false);
+            for (Step step : chosen) {
+                outlets.putIfAbsent(arrival, step);
+                arrival = advance(arrival, step);
             }
         }
 
@@ -302,13 +378,137 @@ public class FlowlineTracer {
                 if (step == null) {
                     return null;
                 }
-                int away = step.approaching() ? 0 : cursor.awaySteps + 1;
-                if (away > awayStepAllowance || isDivide(step.pos())) {
+                Arrival next = advance(cursor, step);
+                if ((step.wall() && !cursor.wall) || next.awaySteps > awayStepAllowance || isDivide(step.pos())) {
                     return null;
                 }
-                cursor = new Arrival(step.pos(), away);
+                cursor = next;
             }
             return null;
+        }
+    }
+
+    private record Passage(List<CellPos> channel, List<Flowline.Lake> lakes, Set<CellPos> blocked) {
+        List<CellPos> through(List<CellPos> tail) {
+            List<CellPos> cells = new ArrayList<>(channel);
+            cells.addAll(tail);
+            return cells;
+        }
+
+        List<Flowline.Lake> flooded(Feature feature, Map<CellPos, Integer> depths) {
+            List<Flowline.Lake> result = new ArrayList<>(lakes);
+            result.add(new Flowline.Lake(feature, depths));
+            return result;
+        }
+    }
+
+    private record OutletTask(LakeFill.Spill spill, Passage passage, Flowline basin) {}
+
+    private record Segment(Notes notes, Passage passage, OutletTask inlet, ArrayDeque<OutletTask> outlets) {
+        Segment(Notes notes, Passage passage, OutletTask inlet) {
+            this(notes, passage, inlet, new ArrayDeque<>());
+        }
+    }
+
+    private final class LakeRoutes {
+        private final Set<SpillSearch.Outlet> examined = new HashSet<>();
+        private final ArrayDeque<Segment> stack = new ArrayDeque<>();
+        private Flowline fallback;
+
+        Flowline find(CellPos source) {
+            stack.push(new Segment(new Notes(source), new Passage(List.of(), List.of(), Set.of()), null));
+            while (!stack.isEmpty()) {
+                Segment segment = stack.element();
+                if (!segment.outlets.isEmpty()) {
+                    OutletTask task = segment.outlets.remove();
+                    stack.push(new Segment(new Notes(task.spill.lip(), task.passage.blocked()), task.passage, task));
+                    continue;
+                }
+                Flowline route = segment.notes.advanceToLakeOrOutlet();
+                if (route != null) {
+                    return new Flowline(segment.passage.through(route.cells()), route.terminus(), true, segment.passage.lakes());
+                }
+                if (segment.notes.lake != null) {
+                    prepareOutlets(segment);
+                    continue;
+                }
+                stack.pop();
+                if (!stack.isEmpty() && !mayRetryAfter(segment)) {
+                    return segment.inlet.basin;
+                }
+            }
+            return fallback == null ? new Flowline(List.of(source), null, false) : fallback;
+        }
+
+        private boolean mayRetryAfter(Segment segment) {
+            Notes tail = segment.notes;
+            List<CellPos> crossing = segment.inlet.spill.route();
+            int distance = tail.furthest + crossing.size() - 1;
+            if (distance > maxBacktrack || !tail.canReturnToDepth(0)
+                || crossing.stream().anyMatch(pos -> data.cell(pos).height() > tail.returnCeiling)) {
+                return false;
+            }
+            Notes parent = stack.element().notes;
+            Node candidate = parent.lake;
+            int entryDepth = candidate.choices.length - 1;
+            parent.advanceWindow(candidate.choices, entryDepth + distance);
+            parent.tip = new Node(candidate.arrival, Arrays.copyOf(candidate.choices, entryDepth), 0, candidate.parent, null);
+            parent.returnCeiling = tail.returnCeiling;
+            return true;
+        }
+
+        private void prepareOutlets(Segment segment) {
+            Notes notes = segment.notes;
+            Node candidate = notes.lake;
+            Passage prefix = segment.passage;
+            LakePlan plan = candidate.lake;
+            if (!Collections.disjoint(prefix.blocked(), plan.closed().keySet())) {
+                return;
+            }
+            List<CellPos> incoming = notes.path(candidate.arrival, List.of());
+            CellPos shore = incoming.stream().filter(plan.closed()::containsKey).findFirst().orElseThrow();
+            Flowline basin = new Flowline(prefix.through(incoming.subList(0, incoming.indexOf(shore) + 1)), shore, true,
+                prefix.flooded(Feature.ENDORHEIC, plan.closed()));
+            if (fallback == null || basin.lakes().size() > fallback.lakes().size()) {
+                fallback = basin;
+            }
+            ArrayDeque<OutletTask> inland = new ArrayDeque<>();
+            for (LakeFill.Spill spill : plan.spills()) {
+                enqueue(prefix, incoming, spill, basin, segment.outlets, inland);
+            }
+            segment.outlets.addAll(inland);
+        }
+
+        private void enqueue(Passage prefix, List<CellPos> incoming, LakeFill.Spill spill, Flowline basin,
+                             ArrayDeque<OutletTask> pending, ArrayDeque<OutletTask> inland) {
+            if (prefix.blocked().contains(spill.lip()) || !Collections.disjoint(prefix.blocked(), spill.overFill().keySet())) {
+                return;
+            }
+            Set<CellPos> exclude = new HashSet<>(prefix.blocked());
+            exclude.addAll(incoming);
+            exclude.addAll(spill.overFill().keySet());
+            exclude.remove(spill.lip());
+            SpillSearch.Outlet outlet = spillSearch.outlet(spill.lip(), exclude);
+            if (!examined.add(outlet)) {
+                return;
+            }
+            List<CellPos> channel = new ArrayList<>(incoming);
+            for (CellPos pos : spill.route().subList(1, spill.route().size())) {
+                int repeated = channel.indexOf(pos);
+                if (repeated >= 0) {
+                    channel.subList(repeated + 1, channel.size()).clear();
+                } else {
+                    channel.add(pos);
+                }
+            }
+            channel.remove(channel.size() - 1);
+            Passage passage = new Passage(prefix.through(channel), prefix.flooded(Feature.KETTLE, spill.overFill()), exclude);
+            OutletTask task = new OutletTask(spill, passage, basin);
+            if (outlet.possibleShore()) {
+                pending.add(task);
+            } else {
+                inland.add(task);
+            }
         }
     }
 
@@ -335,6 +535,9 @@ public class FlowlineTracer {
         return Integer.compare(left.order, right.order);
     }
 
-    private record Node(Arrival arrival, int[] choices, int order, Arrival parent, Step step) {
+    private record Node(Arrival arrival, int[] choices, int order, Arrival parent, Step step, LakePlan lake) {
+        Node(Arrival arrival, int[] choices, int order, Arrival parent, Step step) {
+            this(arrival, choices, order, parent, step, null);
+        }
     }
 }

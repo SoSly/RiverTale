@@ -38,7 +38,24 @@ final class CourseCarver {
     }
 
     static List<CarveProposal> carve(List<RiverSpline> reaches, double inflow, double outflow, ChunkPos chunk, int cellBlocks) {
-        List<Segment> nearby = nearbySegments(reaches, chunk, SAMPLES_PER_CELL_BLOCK * cellBlocks);
+        return carveSegments(nearbySegments(reaches, chunk, SAMPLES_PER_CELL_BLOCK * cellBlocks), inflow, outflow, chunk);
+    }
+
+    static List<CarveProposal> inlet(Vec3 crossing, Vec3 center, double flow, ChunkPos chunk) {
+        Segment bed = new Segment(crossing, center, 0, 1);
+        if (Math.min(crossing.x, center.x) > chunk.getMaxBlockX() + 0.5 + MAX_HALF_WIDTH
+            || Math.max(crossing.x, center.x) < chunk.getMinBlockX() + 0.5 - MAX_HALF_WIDTH
+            || Math.min(crossing.z, center.z) > chunk.getMaxBlockZ() + 0.5 + MAX_HALF_WIDTH
+            || Math.max(crossing.z, center.z) < chunk.getMinBlockZ() + 0.5 - MAX_HALF_WIDTH) {
+            return List.of();
+        }
+        return carveSegments(List.of(bed), flow, flow, chunk).stream()
+            .filter(cut -> (cut.x() + 0.5 - crossing.x) * (center.x - crossing.x)
+                + (cut.z() + 0.5 - crossing.z) * (center.z - crossing.z) >= 0)
+            .map(CarveProposal::asBedCeiling).toList();
+    }
+
+    private static List<CarveProposal> carveSegments(List<Segment> nearby, double inflow, double outflow, ChunkPos chunk) {
         if (nearby.isEmpty()) {
             return List.of();
         }

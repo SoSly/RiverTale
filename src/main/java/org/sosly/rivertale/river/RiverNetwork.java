@@ -41,9 +41,11 @@ final class RiverNetwork {
         checkCancelled.run();
         List<Flowline> flowlines = WatershedPreparation.gather(traced);
         checkCancelled.run();
+        List<Watershed> topology = WatershedBuilder.build(flowlines);
+        data = withLakes(data, flowlines, topology);
         List<Watershed> watersheds = new ArrayList<>();
         CommonConfig config = CommonConfig.get();
-        for (Watershed watershed : WatershedBuilder.build(flowlines)) {
+        for (Watershed watershed : topology) {
             checkCancelled.run();
             watersheds.add(watershed.withElevations(data, config.riseRunRatio())
                 .withFlowAccumulation(config.sourceFlow(), config.flowPerCell()));
@@ -58,6 +60,48 @@ final class RiverNetwork {
                 watershedsByRegion.getOrDefault(pos, List.of())));
         }
         return result;
+    }
+
+    static PreparedRiverData withLakes(PreparedRiverData data, List<Flowline> paths, List<Watershed> topology) {
+        if (paths.stream().allMatch(path -> path.lakes().isEmpty())) {
+            return data;
+        }
+        Map<CellPos, CellPos> downstream = new HashMap<>();
+        for (Watershed watershed : topology) {
+            for (CellPos pos : watershed.allCells()) {
+                downstream.put(pos, watershed.downstream(pos));
+            }
+        }
+        Map<CellPos, CellData> cells = new HashMap<>(data.cells());
+        for (Flowline path : paths) {
+            for (Flowline.Lake lake : path.lakes()) {
+                Set<CellPos> footprint = lake.depths().keySet();
+                if (footprint.stream().noneMatch(downstream::containsKey)) {
+                    continue;
+                }
+                Feature feature = drainsOutside(footprint, downstream) ? Feature.KETTLE : Feature.ENDORHEIC;
+                lake.depths().forEach((pos, depth) -> {
+                    CellData raw = cells.get(pos);
+                    Cell cell = raw.cell();
+                    if (cell.overFill() > depth || (cell.overFill() == depth && cell.feature() == Feature.ENDORHEIC)) {
+                        return;
+                    }
+                    cells.put(pos, new CellData(cell.withOverFill(depth).withFeature(feature), raw.height()));
+                });
+            }
+        }
+        return new PreparedRiverData(data.regions(), cells, data.routing(), data.moves(), data.incoming(), data.sources(),
+            data.awayStepAllowance(), data.seaLevel(), data.lakes());
+    }
+
+    private static boolean drainsOutside(Set<CellPos> footprint, Map<CellPos, CellPos> downstream) {
+        for (CellPos pos : footprint) {
+            CellPos next = downstream.get(pos);
+            if (next != null && !footprint.contains(next)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Map<CellPos, CellData> qualifyWatersheds(List<Watershed> watersheds, PreparedRiverData data, Runnable checkCancelled) {

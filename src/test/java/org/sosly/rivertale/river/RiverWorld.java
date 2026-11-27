@@ -80,7 +80,8 @@ final class RiverWorld implements AutoCloseable {
     static void configureRouting(int fallback, int away) {
         CommonConfig c = CommonConfig.get();
         CommonConfig.set(new CommonConfig(c.regionSize(), c.cellSize(), c.samplesPerCell(), c.enableMetrics(),
-            c.enableNudging(), c.nudgingLimit(), fallback, away, c.sources(), c.caches()));
+            c.enableNudging(), c.nudgingLimit(), fallback, away, c.riseRunRatio(), c.sourceFlow(), c.flowPerCell(),
+            c.sources(), c.caches(), c.disableChunkSaving(), c.carvingSearchRadius(), c.maxLakeCells(), c.maxBacktrackCells(), c.maxBacktrackRise()));
     }
 
     RiverWorld regions(Collection<Region> values) {

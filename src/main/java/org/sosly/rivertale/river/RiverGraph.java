@@ -42,6 +42,8 @@ final class RiverGraph {
     private final int awayStepAllowance;
     private final boolean enableNudging;
     private final int nudgingLimit;
+    private final Map<CellPos, List<Step>> wallMoves = new HashMap<>();
+    private final Map<LakePlan.Inlet, LakePlan> lakes = new HashMap<>();
 
     RiverGraph(Function<RegionPos, Region> regionLoader, Function<RegionPos, Collection<Region>> regionProvider,
                Function<CellPos, Cell> cellLoader, int fallback, int awayStepAllowance) {
@@ -85,8 +87,22 @@ final class RiverGraph {
         Store.getDistribution(RiverPreparation.class, "regions").record(preparedRegions.size());
         Store.getDistribution(RiverPreparation.class, "cells").record(preparedCells.size());
         Store.getDistribution(RiverPreparation.class, "candidateCells").record(moves.size());
-        return new PreparedRiverData(preparedRegions, preparedCells, routing, moves, incoming, sources,
-            awayStepAllowance, RiverShaping.getSeaLevel());
+        Map<CellPos, List<Step>> preparedMoves = new HashMap<>(moves);
+        wallMoves.forEach((from, walls) -> {
+            List<Step> combined = new ArrayList<>(steps(from));
+            for (Step wall : walls) {
+                if (combined.stream().noneMatch(step -> step.pos().equals(wall.pos()))) {
+                    combined.add(wall);
+                    List<CellPos> previous = incoming.get(wall.pos());
+                    if (previous != null && !previous.contains(from)) {
+                        previous.add(from);
+                    }
+                }
+            }
+            preparedMoves.put(from, combined);
+        });
+        return new PreparedRiverData(preparedRegions, preparedCells, routing, preparedMoves, incoming, sources,
+            awayStepAllowance, RiverShaping.getSeaLevel(), lakes);
     }
 
     Routing routing(RegionPos pos) {
@@ -209,6 +225,76 @@ final class RiverGraph {
             }
             return candidates(key, nearestTerminus(key), local);
         });
+    }
+
+    boolean entersDepression(CellPos from, CellPos to) {
+        return cell(to).height() < cell(from).height() && cell(to).flowDirections().isEmpty() && !isTerminus(to);
+    }
+
+    List<Step> wallSteps(CellPos from) {
+        return wallMoves.computeIfAbsent(from, pos -> {
+            if (!enableNudging || !hasDestinations(pos.getRegion()) || isTerminus(pos)) {
+                return List.of();
+            }
+            CellPos target = nearestTerminus(pos);
+            long distance = distanceSquared(pos, target);
+            List<Step> walls = new ArrayList<>();
+            for (FlowDirection dir : FlowDirection.D8) {
+                CellPos next = pos.relative(dir);
+                if (!makesProgress(next, target, distance, routing(pos.getRegion())) || isDivide(next)) {
+                    continue;
+                }
+                long rise = (long) cell(next).height() - cell(pos).height();
+                if (rise >= 0 && rise <= nudgingLimit) {
+                    walls.add(new Step(next, rise, true, true));
+                }
+            }
+            walls.sort(Comparator.comparingLong(Step::nudgingRise).thenComparingLong(step -> distanceSquared(step.pos(), target)));
+            return walls;
+        });
+    }
+
+    LakePlan lake(CellPos from, Step step) {
+        CellPos entry = step.pos();
+        int cap = CommonConfig.get().maxLakeCells();
+        int bottom = cell(entry).height();
+        if (cap == 0 || bottom >= cell(from).height() || isTerminus(entry) || !cell(entry).flowDirections().isEmpty()) {
+            return null;
+        }
+        return lakes.computeIfAbsent(new LakePlan.Inlet(from, entry), key -> {
+            List<Step> choices = steps(from);
+            int ceiling = Integer.MAX_VALUE;
+            for (int i = choices.indexOf(step) + 1; i < choices.size(); i++) {
+                CellPos alternate = choices.get(i).pos();
+                if (!isDivide(alternate) && cell(alternate).height() >= bottom) {
+                    ceiling = cell(alternate).height();
+                    break;
+                }
+            }
+            List<LakeFill.Spill> exits = new ArrayList<>();
+            LakeFill fill = new LakeFill(this::lakeNeighbors, pos -> cell(pos).height());
+            LakeFill.Result result = fill.resolve(entry, ceiling, cap, spill -> {
+                CellPos lip = spill.lip();
+                if (isTerminus(lip) || steps(lip).stream().anyMatch(exit -> !spill.overFill().containsKey(exit.pos())
+                    && !isDivide(exit.pos()) && cell(exit.pos()).height() < cell(lip).height())) {
+                    exits.add(spill);
+                }
+                return false;
+            });
+            return new LakePlan(exits, result.closed());
+        });
+    }
+
+    private List<CellPos> lakeNeighbors(CellPos from) {
+        Routing local = routing(from.getRegion());
+        List<CellPos> neighbors = new ArrayList<>();
+        for (FlowDirection dir : FlowDirection.D8) {
+            CellPos next = from.relative(dir);
+            if (!next.getRegion().containsOutOfBoundsCells() && local.allows(next) && !isDivide(next)) {
+                neighbors.add(next);
+            }
+        }
+        return neighbors;
     }
 
     private CellPos nearestTerminus(CellPos from) {

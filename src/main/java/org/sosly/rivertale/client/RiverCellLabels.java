@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import org.sosly.rivertale.cell.CellType;
 import org.sosly.rivertale.cell.feature.Feature;
 
 @OnlyIn(Dist.CLIENT)
@@ -39,7 +40,7 @@ final class RiverCellLabels {
 
     private static void renderLabel(ClientRegionCache.Cell cell, PoseStack pose, Vec3 camera, Font font,
                                     MultiBufferSource buffer) {
-        if (cell.averageY().isEmpty() && cell.feature() != Feature.NONE) {
+        if (cell.averageY().isEmpty() && cell.feature() != Feature.NONE && cell.feature().type != CellType.LAKE) {
             return;
         }
 
@@ -58,6 +59,10 @@ final class RiverCellLabels {
         }
         if (cell.flow().isPresent()) {
             draw(font, buffer, pose, "Flow: " + cell.flow().getAsDouble(), 0, 3 * LINE_SPACING, GRAY);
+        }
+        if (cell.feature().type == CellType.LAKE) {
+            int row = cell.flow().isPresent() ? 4 : 2;
+            draw(font, buffer, pose, "OverFill: " + cell.overFill(), 0, row * LINE_SPACING, CYAN);
         }
         pose.popPose();
     }

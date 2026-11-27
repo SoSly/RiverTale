@@ -17,8 +17,17 @@ public record Cell(
     Set<ChunkPos> samplePositions,
     List<FlowDirection> flowDirections,
     Feature feature,
-    OptionalInt cellY
+    OptionalInt cellY,
+    int overFill
 ) {
+    public Cell(CellPos pos, Set<ChunkPos> samplePositions, List<FlowDirection> flowDirections, Feature feature, OptionalInt cellY) {
+        this(pos, samplePositions, flowDirections, feature, cellY, 0);
+    }
+
+    public Cell withOverFill(int depth) {
+        return new Cell(pos, samplePositions, flowDirections, feature, cellY, depth);
+    }
+
     public Cell(CellPos pos, Set<ChunkPos> samplePositions, List<FlowDirection> flowDirections, Feature feature) {
         this(pos, samplePositions, flowDirections, feature, OptionalInt.empty());
     }
@@ -142,14 +151,14 @@ public record Cell(
     }
 
     public Cell withFlowDirections(List<FlowDirection> flowDirections) {
-        return new Cell(pos, samplePositions, flowDirections, feature, cellY);
+        return new Cell(pos, samplePositions, flowDirections, feature, cellY, overFill);
     }
 
     public Cell withFeature(Feature feature) {
-        return new Cell(pos, samplePositions, flowDirections, feature, cellY);
+        return new Cell(pos, samplePositions, flowDirections, feature, cellY, overFill);
     }
 
     public Cell withCellY(int height) {
-        return new Cell(pos, samplePositions, flowDirections, feature, OptionalInt.of(height));
+        return new Cell(pos, samplePositions, flowDirections, feature, OptionalInt.of(height), overFill);
     }
 }

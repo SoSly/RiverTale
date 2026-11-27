@@ -1,11 +1,24 @@
 package org.sosly.rivertale.river;
 
 import java.util.List;
+import java.util.Map;
+import org.sosly.rivertale.cell.feature.Feature;
 import javax.annotation.Nullable;
 import org.sosly.rivertale.core.CellPos;
 
-public record Flowline(List<CellPos> cells, @Nullable CellPos terminus, boolean isValid) {
+public record Flowline(List<CellPos> cells, @Nullable CellPos terminus, boolean isValid, List<Lake> lakes) {
+    public record Lake(Feature feature, Map<CellPos, Integer> depths) {
+        public Lake {
+            depths = Map.copyOf(depths);
+        }
+    }
+
+    public Flowline(List<CellPos> cells, @Nullable CellPos terminus, boolean isValid) {
+        this(cells, terminus, isValid, List.of());
+    }
+
     public Flowline {
+        lakes = List.copyOf(lakes);
         cells = List.copyOf(cells);
     }
 

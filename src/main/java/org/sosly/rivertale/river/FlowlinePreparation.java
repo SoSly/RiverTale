@@ -84,6 +84,7 @@ public final class FlowlinePreparation {
     private void index(Flowline path) {
         Set<RegionPos> traversed = new HashSet<>();
         path.cells().forEach(cell -> traversed.add(cell.getRegion()));
+        path.lakes().forEach(lake -> lake.depths().keySet().forEach(cell -> traversed.add(cell.getRegion())));
         for (RegionPos region : traversed) {
             crossing.computeIfAbsent(region, key -> new HashSet<>()).add(path);
             if (upstream.contains(region)) {
@@ -99,6 +100,9 @@ public final class FlowlinePreparation {
                 lastEntry = i;
                 break;
             }
+        }
+        if (lastEntry < 0 && !path.cells().isEmpty()) {
+            include(path.cells().get(0).getRegion());
         }
         for (int i = 0; i <= lastEntry; i++) {
             include(path.cells().get(i).getRegion());

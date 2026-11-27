@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.core.FlowDirection;
 import org.sosly.rivertale.core.RegionPos;
 import org.sosly.rivertale.metric.Store;
 import org.sosly.rivertale.metric.Timer;
@@ -21,6 +22,7 @@ import org.sosly.rivertale.world.RiverShaping;
 public final class RiverPreparation {
     private final RiverGraph graph;
     private final Runnable checkCancelled;
+    private final Set<CellPos> preparedWalls = new HashSet<>();
     private final Map<CellPos, Integer> reachable = new HashMap<>();
 
     private RiverPreparation(RiverGraph graph, Runnable checkCancelled) {
@@ -69,6 +71,16 @@ public final class RiverPreparation {
         while (!pending.isEmpty()) {
             checkCancelled.run();
             RegionPos pos = pending.remove();
+            if (CommonConfig.get().maxLakeCells() > 0) {
+                for (FlowDirection dir : FlowDirection.D4) {
+                    RegionPos upstream = pos.relative(dir);
+                    if (!upstream.containsOutOfBoundsCells() && !found.contains(upstream)
+                        && graph.routing(upstream).allowedRegions().contains(pos)) {
+                        found.add(upstream);
+                        pending.add(upstream);
+                    }
+                }
+            }
             for (RegionPos upstream : search.expand(graph.region(pos).cells(), checkCancelled)) {
                 if (found.add(upstream)) {
                     pending.add(upstream);
@@ -121,10 +133,48 @@ public final class RiverPreparation {
                     continue;
                 }
                 include(step.pos(), away, pending);
+                if (graph.entersDepression(current.pos(), step.pos())) {
+                    prepareWalls(step.pos(), pending, targets);
+                }
+                prepareLake(current.pos(), step, pending, targets);
                 addCrossingCorners(current.pos(), step.pos(), targets);
             }
         }
         return targets;
+    }
+
+    private void prepareWalls(CellPos entry, ArrayDeque<Visit> pending, Set<CellPos> targets) {
+        ArrayDeque<CellPos> front = new ArrayDeque<>();
+        front.add(entry);
+        while (!front.isEmpty()) {
+            checkCancelled.run();
+            CellPos from = front.remove();
+            if (!preparedWalls.add(from)) {
+                continue;
+            }
+            for (Step wall : graph.wallSteps(from)) {
+                include(wall.pos(), 0, pending);
+                addCrossingCorners(from, wall.pos(), targets);
+                front.add(wall.pos());
+            }
+        }
+    }
+
+    private void prepareLake(CellPos from, Step step, ArrayDeque<Visit> pending, Set<CellPos> targets) {
+        LakePlan plan = graph.lake(from, step);
+        if (plan == null) {
+            return;
+        }
+        targets.addAll(plan.closed().keySet());
+        for (LakeFill.Spill spill : plan.spills()) {
+            targets.addAll(spill.overFill().keySet());
+            List<CellPos> route = spill.route();
+            for (int i = 1; i < route.size(); i++) {
+                targets.add(route.get(i));
+                addCrossingCorners(route.get(i - 1), route.get(i), targets);
+            }
+            include(spill.lip(), 0, pending);
+        }
     }
 
     private void include(CellPos pos, int away, ArrayDeque<Visit> pending) {

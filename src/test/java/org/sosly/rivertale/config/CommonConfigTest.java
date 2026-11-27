@@ -133,6 +133,8 @@ class CommonConfigTest {
             nudgingLimit = 12
             fallbackApproachCells = 0
             awayStepAllowance = 2
+            maxBacktrackRise = 6
+            maxBacktrackCells = 8
             riseRunRatio = 0.5
             sourceFlow = 2
             flowPerCell = 0.75
@@ -155,6 +157,8 @@ class CommonConfigTest {
         assertEquals(12, tuning.nudgingLimit());
         assertEquals(0, tuning.fallbackApproachCells());
         assertEquals(2, tuning.awayStepAllowance());
+        assertEquals(6, tuning.maxBacktrackRise());
+        assertEquals(8, tuning.maxBacktrackCells());
         assertEquals(0.5, tuning.riseRunRatio());
         assertEquals(2, tuning.sourceFlow());
         assertEquals(0.75, tuning.flowPerCell());

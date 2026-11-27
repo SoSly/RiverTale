@@ -3,6 +3,7 @@ package org.sosly.rivertale.world;
 import com.mojang.serialization.Lifecycle;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.Set;
 import net.minecraft.SharedConstants;
@@ -27,6 +28,7 @@ import org.sosly.rivertale.cell.Cell;
 import org.sosly.rivertale.cell.feature.Feature;
 import org.sosly.rivertale.config.CommonConfig;
 import org.sosly.rivertale.core.CellPos;
+import org.sosly.rivertale.river.PreparedRiverData.CellData;
 import org.sosly.rivertale.river.Watershed;
 import org.sosly.rivertale.terrain.CarveProposal;
 
@@ -99,6 +101,48 @@ class ChunkCarvingTest {
         assertEquals(78, rightFirst.getHeight(Heightmap.Types.WORLD_SURFACE_WG, 0, z));
         assertSameSurface(leftFirst, leftSecond);
         assertSameSurface(rightFirst, rightSecond);
+    }
+
+    @Test
+    void riverBedEntersLakeWithoutClimbingOverTheShore() {
+        CellPos lakePos = new CellPos(0, 0);
+        Cell river = new Cell(new CellPos(-1, 0), Set.of()).withFeature(Feature.RUN).withCellY(80);
+        int z = lakePos.getMiddleBlockZ();
+        for (Feature type : List.of(Feature.KETTLE, Feature.ENDORHEIC)) {
+            Cell lake = new Cell(lakePos, Set.of()).withFeature(type).withCellY(80).withOverFill(4);
+            CellData data = new CellData(lake, 79);
+            Watershed watershed = mock(Watershed.class);
+            when(watershed.downstream(river.pos())).thenReturn(lakePos);
+            when(watershed.upstream(lakePos)).thenReturn(Set.of(river.pos()));
+            for (Cell cell : List.of(river, lake)) {
+                when(watershed.elevatedCell(cell.pos())).thenReturn(cell);
+                when(watershed.flow(cell.pos())).thenReturn(OptionalDouble.of(24));
+            }
+            int previous = 78;
+            for (int chunkX = -1; chunkX <= lakePos.getMiddleBlockX() >> 4; chunkX++) {
+                ChunkPos pos = new ChunkPos(chunkX, z >> 4);
+                ProtoChunk chunk = chunk(pos);
+                List<CarveProposal> cuts = new ArrayList<>(Feature.RUN.handler.carve(river, watershed, pos, 42));
+                cuts.addAll(LakeCarver.carve(lakePos, data, Map.of(lakePos, data), pos));
+                cuts.addAll(type.handler.carve(lake, watershed, pos, 42));
+                for (int x = 0; x < 16; x++) {
+                    fillColumn(chunk, x, z & 15, 86);
+                }
+                ChunkCarving.apply(chunk, pos, cuts);
+                for (int x = Math.max(-1, pos.getMinBlockX()); x <= Math.min(lakePos.getMiddleBlockX(), pos.getMaxBlockX()); x++) {
+                    int bed = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x & 15, z & 15);
+                    assertTrue(bed <= previous, type + " inlet rose from " + previous + " to " + bed + " at x=" + x);
+                    if (x == -1 || x == 0) {
+                        assertEquals(78, bed);
+                    }
+                    previous = bed;
+                }
+            }
+            assertEquals(79 - CommonConfig.get().maxLakeCells(), previous);
+            ChunkPos shore = new ChunkPos(0, 0);
+            assertTrue(type.handler.carve(lake, watershed, shore, 42).stream()
+                .noneMatch(cut -> cut.x() == 0 && cut.z() == 0));
+        }
     }
 
     private void assertSameSurface(ProtoChunk first, ProtoChunk second) {

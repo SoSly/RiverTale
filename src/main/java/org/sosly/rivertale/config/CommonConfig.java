@@ -25,8 +25,14 @@ public record CommonConfig(
     SourceConfig sources,
     CacheConfig caches,
     boolean disableChunkSaving,
-    int carvingSearchRadius
+    int carvingSearchRadius,
+    int maxLakeCells,
+    int maxBacktrackCells,
+    int maxBacktrackRise
 ) {
+    private static final int DEFAULT_MAX_BACKTRACK_CELLS = 4;
+    private static final int DEFAULT_MAX_BACKTRACK_RISE = 4;
+    private static final int DEFAULT_MAX_LAKE_CELLS = 4;
     private static final int DEFAULT_REGION_SIZE = 24;
     private static final int DEFAULT_CELL_SIZE = 4;
     private static final int DEFAULT_SAMPLES_PER_CELL = 5;
@@ -69,7 +75,25 @@ public record CommonConfig(
             awayStepAllowance, riseRunRatio, sourceFlow, flowPerCell, sources, caches, false, DEFAULT_CARVING_SEARCH_RADIUS);
     }
 
+    public CommonConfig(int regionSize, int cellSize, int samplesPerCell, boolean enableMetrics, boolean enableNudging,
+                        int nudgingLimit, int fallbackApproachCells, int awayStepAllowance, double riseRunRatio,
+                        double sourceFlow, double flowPerCell, SourceConfig sources, CacheConfig caches,
+                        boolean disableChunkSaving, int carvingSearchRadius) {
+        this(regionSize, cellSize, samplesPerCell, enableMetrics, enableNudging, nudgingLimit, fallbackApproachCells,
+            awayStepAllowance, riseRunRatio, sourceFlow, flowPerCell, sources, caches, disableChunkSaving,
+            carvingSearchRadius, DEFAULT_MAX_LAKE_CELLS, DEFAULT_MAX_BACKTRACK_CELLS, DEFAULT_MAX_BACKTRACK_RISE);
+    }
+
     public CommonConfig {
+        if (maxBacktrackRise < 0) {
+            throw new IllegalArgumentException("maxBacktrackRise must be nonnegative");
+        }
+        if (maxBacktrackCells < 0) {
+            throw new IllegalArgumentException("maxBacktrackCells must be nonnegative");
+        }
+        if (maxLakeCells < 0) {
+            throw new IllegalArgumentException("maxLakeCells must be nonnegative");
+        }
         Objects.requireNonNull(sources, "sources");
         Objects.requireNonNull(caches, "caches");
         if (fallbackApproachCells < 0 || awayStepAllowance < 0 || awayStepAllowance == Integer.MAX_VALUE) {
@@ -132,6 +156,9 @@ public record CommonConfig(
         public static final ForgeConfigSpec.BooleanValue ENABLE_METRICS;
         public static final ForgeConfigSpec.BooleanValue ENABLE_NUDGING;
         public static final ForgeConfigSpec.IntValue NUDGING_LIMIT;
+        private static final ForgeConfigSpec.IntValue MAX_LAKE_CELLS;
+        private static final ForgeConfigSpec.IntValue MAX_BACKTRACK_CELLS;
+        private static final ForgeConfigSpec.IntValue MAX_BACKTRACK_RISE;
         public static final ForgeConfigSpec.IntValue FALLBACK_APPROACH_CELLS;
         public static final ForgeConfigSpec.IntValue AWAY_STEP_ALLOWANCE;
         public static final ForgeConfigSpec.DoubleValue RISE_RUN_RATIO;
@@ -174,6 +201,15 @@ public record CommonConfig(
             NUDGING_LIMIT = builder
                 .comment("Maximum uphill rise in blocks per nudged step, measured between sampled average cell heights. Zero allows flat or downhill nudges. Direct approaches are unaffected.")
                 .defineInRange("nudgingLimit", DEFAULT_NUDGING_LIMIT, 0, Integer.MAX_VALUE);
+
+            MAX_BACKTRACK_CELLS = builder.comment("Maximum river steps to undo when trying another branch. Lakes are upstream boundaries.")
+                .defineInRange("maxBacktrackCells", DEFAULT_MAX_BACKTRACK_CELLS, 0, Integer.MAX_VALUE);
+
+            MAX_BACKTRACK_RISE = builder.comment("Maximum height above the dead end, in blocks, of any cell on the return path (inclusive).")
+                .defineInRange("maxBacktrackRise", DEFAULT_MAX_BACKTRACK_RISE, 0, Integer.MAX_VALUE);
+
+            MAX_LAKE_CELLS = builder.comment("Maximum cells in one tentative lake, excluding the spill lip. Zero disables fill-and-spill.")
+                .defineInRange("maxLakeCells", DEFAULT_MAX_LAKE_CELLS, 0, Integer.MAX_VALUE);
 
             FALLBACK_APPROACH_CELLS = builder
                 .comment("Direct fallback radius in cells, after downhill and nudged alternatives fail. Zero disables fallback. Fallback may climb without the nudging limit.")
@@ -226,7 +262,10 @@ public record CommonConfig(
                 SOURCES.load(),
                 CACHES.load(),
                 DISABLE_CHUNK_SAVING.get(),
-                CARVING_SEARCH_RADIUS.get()
+                CARVING_SEARCH_RADIUS.get(),
+                MAX_LAKE_CELLS.get(),
+                MAX_BACKTRACK_CELLS.get(),
+                MAX_BACKTRACK_RISE.get()
             ));
         }
 
@@ -256,7 +295,10 @@ public record CommonConfig(
                 SOURCES.load(values),
                 active.caches(),
                 active.disableChunkSaving(),
-                values.get(CARVING_SEARCH_RADIUS)
+                values.get(CARVING_SEARCH_RADIUS),
+                values.get(MAX_LAKE_CELLS),
+                values.get(MAX_BACKTRACK_CELLS),
+                values.get(MAX_BACKTRACK_RISE)
             );
         }
     }

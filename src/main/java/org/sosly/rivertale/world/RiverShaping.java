@@ -102,6 +102,13 @@ public class RiverShaping {
 
     private static void carveRegion(RiverRegion region, CellPos min, CellPos max, ChunkPos chunk, long meanderSeed,
                                     Function<Feature, FeatureHandler> handlers, List<CarveProposal> proposals) {
+        CellPos owner = new CellPos(chunk.getMiddleBlockPosition(0));
+        if (region.region().pos().contains(owner)) {
+            CellData lake = region.cells().get(owner);
+            if (lake != null && (lake.feature() == Feature.KETTLE || lake.feature() == Feature.ENDORHEIC)) {
+                proposals.addAll(LakeCarver.carve(owner, lake, region.cells(), chunk));
+            }
+        }
         if (region.watersheds().isEmpty()) {
             return;
         }
